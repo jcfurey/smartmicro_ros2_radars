@@ -110,6 +110,7 @@ struct HWConfig
 {
   std::uint32_t hw_dev_id{};
   std::string hw_iface_name{};
+  std::string hw_ip_address{};
   std::string hw_type{};
   std::uint32_t baudrate{};
   std::uint32_t port{};

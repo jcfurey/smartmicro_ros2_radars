@@ -34,5 +34,5 @@ int main(int argc, char ** argv)
   }
   rclcpp::shutdown();
   std::cout << "Loaded and destroyed " << loaded << " panels" << std::endl;
-  return loaded == 5 ? 0 : 1;
+  return loaded == 6 ? 0 : 1;
 }

@@ -1,5 +1,11 @@
 <library path="smart_rviz_plugin">
   <class
+      name="smart_rviz_plugin/UMRR-96 Configuration"
+      type="smart_rviz_plugin::Umrr96Config"
+      base_class_type="rviz_common::Panel">
+    <description>UMRR-96 live settings, verified tuning, and target stream health.</description>
+  </class>
+  <class
       name="smart_rviz_plugin/Smart Recorder"
       type="smart_rviz_plugin::SmartRadarRecorder"
       base_class_type="rviz_common::Panel">

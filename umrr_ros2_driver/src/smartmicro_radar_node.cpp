@@ -156,6 +156,7 @@ constexpr auto kHwDevLinkTag = "type";
 constexpr auto kClientLinkTag = "link_type";
 constexpr auto kHwDevIdTag = "dev_id";
 constexpr auto kHwDevIfaceNameTag = "iface_name";
+constexpr auto kHwDevIpAddressTag = "ip_address";
 
 constexpr auto kHwDevPortTag = "hw_port";
 
@@ -6121,6 +6122,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
       }
       current_adapter.hw_iface_name =
         this->declare_parameter(prefix_2 + ".hw_iface_name", kDefaultHwDevIface);
+      current_adapter.hw_ip_address =
+        this->declare_parameter(prefix_2 + ".hw_ip_address", std::string{});
       current_adapter.hw_type = this->declare_parameter(prefix_2 + ".hw_type", kDefaultHwLinkType);
       current_adapter.baudrate = this->declare_parameter(prefix_2 + ".baudrate", 500000);
       current_adapter.port = this->declare_parameter(prefix_2 + ".port", kDefaultPort);
@@ -6194,6 +6197,11 @@ void SmartmicroRadarNode::update_config_files_from_params()
     hw_item[kHwDevLinkTag] = adapter.hw_type;
     hw_item[kHwDevIdTag] = adapter.hw_dev_id;
     hw_item[kHwDevIfaceNameTag] = adapter.hw_iface_name;
+    // Clear a previous adapter/run's address when interface-based selection is requested.
+    hw_item.erase(kHwDevIpAddressTag);
+    if (adapter.hw_type == "eth" && !adapter.hw_ip_address.empty()) {
+      hw_item[kHwDevIpAddressTag] = adapter.hw_ip_address;
+    }
     hw_item[kBaudRateTag] = adapter.baudrate;
     hw_items.push_back(hw_item);
   }

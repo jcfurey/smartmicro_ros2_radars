@@ -1,6 +1,6 @@
 # Building on ROS 2 Lyrical
 
-The driver, messages, point-cloud wrapper and all five RViz panels build on the
+The driver, messages, point-cloud wrapper and all six RViz panels build on the
 tested host: Ubuntu 26.04.1 x86_64, ROS 2 Lyrical, GCC 15.2, CMake 4.2.3 and
 Qt 6.10.2. Smart Access Automotive 3.13.0 uses its supplied
 `lib-linux-x86_64-gcc_9` libraries; the directory can be overridden with
@@ -60,6 +60,9 @@ colcon test-result --test-result-base build/smart_rviz_plugin --verbose
 The test uses Qt's offscreen platform, loads every registered smartmicro panel,
 and immediately destroys each instance. A timeout detects shutdown hangs. It
 needs permission to open local ROS sockets, but no display server or radar.
+The UMRR-96 panel test uses mock ROS services to check staging without writes,
+verified application, restoring starting values, readback mismatch, malformed
+replies, responsive timeouts, and destruction with an outstanding request.
 
 On 2026-09-24, a separate UMRR-96 v1.2.2 loopback replay used the repository's
 native simulator and `targetlist_port_v2_1_0.bin`. It received three
@@ -73,10 +76,15 @@ The existing driver launch test expects the multi-sensor Docker network from
 `docker-compose.yml`. It was not run as part of this host build. The upstream
 wrapper's legacy test CMake also predates Lyrical, so the initial dependency
 build above disables its tests. Firmware download and hardware parameter writes
-were not exercised. GCC 15 warns about an out-of-bounds float-to-integer read
+were not exercised in the initial build checks. Later UMRR-96 hardware tuning
+and panel work is recorded in the [bringup notes](umrr96-bringup.md).
+GCC 15 warns about an out-of-bounds float-to-integer read
 in the supplied SDK `Instruction.h`; that vendor header has not been patched.
 
 ## Sensor configuration
+
+For the connected UMRR-96 ending in `8553`, use the
+[hardware bringup instructions](umrr96-bringup.md) and saved sensor configuration.
 
 The shipped default launch file uses an example for a different radar and
 host network interface. Before connecting the UMRR-96, prepare a YAML file

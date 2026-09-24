@@ -1,0 +1,399 @@
+{
+  "started_at": "2026-09-24T18:03:26.996124+00:00",
+  "sensor_id": 230739,
+  "persisted": false,
+  "restored": true,
+  "trials": [
+    {
+      "label": "baseline_start",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 0,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 20.0,
+      "frames": 166,
+      "cloud_hz": 8.333100196758187,
+      "mean_targets": 29.843373493975903,
+      "min_targets": 26,
+      "max_targets": 36,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 4,
+      "mean_targets_under_5m": 6.391566265060241,
+      "minimum_range_m": 1.530237078666687,
+      "maximum_range_m": 19.18051528930664,
+      "median_snr": 43.34808349609375,
+      "azimuth_limits_rad": [
+        -1.3438235521316528,
+        1.1718122959136963
+      ],
+      "mean_sensor_cycle_time": 0.1199776991663209
+    },
+    {
+      "label": "can_targets_disabled",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 0,
+        "output_control_target_list_can": 0
+      },
+      "seconds": 20.0,
+      "frames": 364,
+      "cloud_hz": 18.181413255836258,
+      "mean_targets": 29.818681318681318,
+      "min_targets": 26,
+      "max_targets": 34,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 4,
+      "mean_targets_under_5m": 6.837912087912088,
+      "minimum_range_m": 1.5324888229370117,
+      "maximum_range_m": 19.17952537536621,
+      "median_snr": 43.347015380859375,
+      "azimuth_limits_rad": [
+        -1.3400609493255615,
+        1.340228796005249
+      ],
+      "mean_sensor_cycle_time": 0.054978497131922086
+    },
+    {
+      "label": "baseline_after_can_targets_disabled",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 0,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 10.0,
+      "frames": 83,
+      "cloud_hz": 8.333304518222155,
+      "mean_targets": 31.85542168674699,
+      "min_targets": 27,
+      "max_targets": 36,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 4,
+      "mean_targets_under_5m": 7.265060240963855,
+      "minimum_range_m": 1.5332428216934204,
+      "maximum_range_m": 19.174631118774414,
+      "median_snr": 42.66161346435547,
+      "azimuth_limits_rad": [
+        -1.3399708271026611,
+        1.342003583908081
+      ],
+      "mean_sensor_cycle_time": 0.11997451749910791
+    },
+    {
+      "label": "antenna_1",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 1,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 20.0,
+      "frames": 167,
+      "cloud_hz": 8.333167137267054,
+      "mean_targets": 29.724550898203592,
+      "min_targets": 27,
+      "max_targets": 33,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 3,
+      "mean_targets_under_5m": 6.982035928143713,
+      "minimum_range_m": 1.533298134803772,
+      "maximum_range_m": 18.52984619140625,
+      "median_snr": 42.61376190185547,
+      "azimuth_limits_rad": [
+        -1.2707408666610718,
+        1.124413251876831
+      ],
+      "mean_sensor_cycle_time": 0.11997448514678521
+    },
+    {
+      "label": "baseline_after_antenna_1",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 0,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 10.0,
+      "frames": 83,
+      "cloud_hz": 8.33295806822076,
+      "mean_targets": 33.795180722891565,
+      "min_targets": 29,
+      "max_targets": 36,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 4,
+      "mean_targets_under_5m": 7.337349397590361,
+      "minimum_range_m": 1.5349775552749634,
+      "maximum_range_m": 19.173622131347656,
+      "median_snr": 43.078025817871094,
+      "azimuth_limits_rad": [
+        -1.3396669626235962,
+        1.3377989530563354
+      ],
+      "mean_sensor_cycle_time": 0.1199745300663523
+    },
+    {
+      "label": "antenna_2",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 2,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 20.0,
+      "frames": 167,
+      "cloud_hz": 8.333118493239722,
+      "mean_targets": 28.479041916167663,
+      "min_targets": 25,
+      "max_targets": 32,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 4,
+      "mean_targets_under_5m": 6.0119760479041915,
+      "minimum_range_m": 1.541841745376587,
+      "maximum_range_m": 19.07266616821289,
+      "median_snr": 40.17965316772461,
+      "azimuth_limits_rad": [
+        -1.342418909072876,
+        1.3400219678878784
+      ],
+      "mean_sensor_cycle_time": 0.11997443138660785
+    },
+    {
+      "label": "baseline_after_antenna_2",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 0,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 10.0,
+      "frames": 83,
+      "cloud_hz": 8.333464808138089,
+      "mean_targets": 30.879518072289155,
+      "min_targets": 28,
+      "max_targets": 34,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 4,
+      "mean_targets_under_5m": 6.445783132530121,
+      "minimum_range_m": 1.5322544574737549,
+      "maximum_range_m": 19.178016662597656,
+      "median_snr": 43.5362548828125,
+      "azimuth_limits_rad": [
+        -1.3435370922088623,
+        1.307478666305542
+      ],
+      "mean_sensor_cycle_time": 0.11997453024588435
+    },
+    {
+      "label": "sweep_512mhz",
+      "settings": {
+        "frequency_sweep_idx": 1,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 0,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 20.0,
+      "frames": 167,
+      "cloud_hz": 8.333356783867908,
+      "mean_targets": 28.82634730538922,
+      "min_targets": 25,
+      "max_targets": 34,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 2,
+      "mean_targets_under_5m": 2,
+      "minimum_range_m": 1.490416407585144,
+      "maximum_range_m": 53.76584243774414,
+      "median_snr": 35.34693908691406,
+      "azimuth_limits_rad": [
+        -1.332004427909851,
+        1.275638222694397
+      ],
+      "mean_sensor_cycle_time": 0.11997448519139947
+    },
+    {
+      "label": "baseline_after_sweep_512mhz",
+      "settings": {
+        "frequency_sweep_idx": 2,
+        "range_toggle_mode": 0,
+        "tx_antenna_idx": 0,
+        "output_control_target_list_can": 1
+      },
+      "seconds": 10.0,
+      "frames": 83,
+      "cloud_hz": 8.333306230610184,
+      "mean_targets": 30.6144578313253,
+      "min_targets": 28,
+      "max_targets": 33,
+      "mean_targets_under_1m": 0,
+      "mean_targets_under_3m": 4,
+      "mean_targets_under_5m": 6.686746987951807,
+      "minimum_range_m": 1.5309410095214844,
+      "maximum_range_m": 19.181800842285156,
+      "median_snr": 43.36963653564453,
+      "azimuth_limits_rad": [
+        -1.2709834575653076,
+        1.3432703018188477
+      ],
+      "mean_sensor_cycle_time": 0.11997449424970581
+    }
+  ],
+  "writes": [
+    {
+      "requested": {
+        "output_control_target_list_can": 0
+      },
+      "at": "2026-09-24T18:03:49.571650+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "output_control_target_list_can": {
+            "response_type": 1,
+            "value": 0
+          }
+        }
+      }
+    },
+    {
+      "requested": {
+        "output_control_target_list_can": 1
+      },
+      "at": "2026-09-24T18:04:11.755605+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "output_control_target_list_can": {
+            "response_type": 1,
+            "value": 1
+          }
+        }
+      }
+    },
+    {
+      "requested": {
+        "tx_antenna_idx": 1
+      },
+      "at": "2026-09-24T18:04:23.987821+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "tx_antenna_idx": {
+            "response_type": 1,
+            "value": 1
+          }
+        }
+      }
+    },
+    {
+      "requested": {
+        "tx_antenna_idx": 0
+      },
+      "at": "2026-09-24T18:04:46.187751+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "tx_antenna_idx": {
+            "response_type": 1,
+            "value": 0
+          }
+        }
+      }
+    },
+    {
+      "requested": {
+        "tx_antenna_idx": 2
+      },
+      "at": "2026-09-24T18:04:58.427892+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "tx_antenna_idx": {
+            "response_type": 1,
+            "value": 2
+          }
+        }
+      }
+    },
+    {
+      "requested": {
+        "tx_antenna_idx": 0
+      },
+      "at": "2026-09-24T18:05:20.629174+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "tx_antenna_idx": {
+            "response_type": 1,
+            "value": 0
+          }
+        }
+      }
+    },
+    {
+      "requested": {
+        "frequency_sweep_idx": 1
+      },
+      "at": "2026-09-24T18:05:32.869767+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "frequency_sweep_idx": {
+            "response_type": 1,
+            "value": 1
+          }
+        }
+      }
+    },
+    {
+      "requested": {
+        "frequency_sweep_idx": 2
+      },
+      "at": "2026-09-24T18:05:55.068764+00:00",
+      "response": {
+        "section": "auto_interface_0dim",
+        "sensor_id": 230739,
+        "success": true,
+        "values": {
+          "frequency_sweep_idx": {
+            "response_type": 1,
+            "value": 2
+          }
+        }
+      }
+    }
+  ],
+  "baseline_settings": {
+    "frequency_sweep_idx": 2,
+    "range_toggle_mode": 0,
+    "tx_antenna_idx": 0,
+    "output_control_target_list_can": 1
+  },
+  "final_readback": {
+    "frequency_sweep_idx": 2,
+    "range_toggle_mode": 0,
+    "tx_antenna_idx": 0,
+    "output_control_target_list_can": 1
+  },
+  "finished_at": "2026-09-24T18:06:07.430445+00:00",
+  "notes": [
+    "Twenty-second trials with ten-second returns to baseline; indoor scene was not a controlled target fixture.",
+    "UMRR-96 does not populate the generic ROS target header antenna/sweep fields. Their zero defaults have been omitted; parameter settings were checked through readback.",
+    "Minimum observed range describes targets in this scene, not the minimum detection capability of the sensor.",
+    "No EEPROM-save or reset commands were sent. The four tuning parameters were restored and verified."
+  ]
+}

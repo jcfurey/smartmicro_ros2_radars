@@ -40,6 +40,7 @@ set(smart_rviz_plugin_SRCS
   src/smart_download.cpp
   src/smart_status.cpp
   src/smart_faults.cpp
+  src/umrr96_config.cpp
 )
 
 set(smart_rviz_plugin_HDRS
@@ -48,6 +49,7 @@ set(smart_rviz_plugin_HDRS
   include/smart_rviz_plugin/smart_download.hpp
   include/smart_rviz_plugin/smart_status.hpp
   include/smart_rviz_plugin/smart_faults.hpp
+  include/smart_rviz_plugin/umrr96_config.hpp
 )
 
 add_library(smart_rviz_plugin SHARED
@@ -117,6 +119,20 @@ if(BUILD_TESTING)
     COMMAND $<TARGET_FILE:panel_loading_smoke>
     TIMEOUT 20
     ENV QT_QPA_PLATFORM=offscreen
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+  )
+  add_executable(umrr96_panel_smoke test/umrr96_panel_smoke.cpp)
+  target_link_libraries(umrr96_panel_smoke
+    ${umrr_ros2_msgs_TARGETS}
+    pluginlib::pluginlib
+    rclcpp::rclcpp
+    rviz_common::rviz_common
+    ${SMART_RVIZ_QT}::Widgets
+  )
+  ament_add_test(umrr96_panel_smoke
+    COMMAND $<TARGET_FILE:umrr96_panel_smoke>
+    TIMEOUT 30
+    ENV QT_QPA_PLATFORM=offscreen ROS_DOMAIN_ID=174 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
     GENERATE_RESULT_FOR_RETURN_CODE_ZERO
   )
 endif()

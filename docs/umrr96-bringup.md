@@ -1,0 +1,270 @@
+# UMRR-96 hardware bringup on cam-ripper
+
+The radar connected on 2026-09-24 retained its factory network settings even
+though it was plugged into the host's 10.2.2.x Ethernet segment. A packet capture
+showed it repeatedly requesting its receiver address via ARP.
+
+| Setting | Observed value |
+| --- | --- |
+| Radar IP | `192.168.11.11` |
+| Radar MAC | `90:df:b7:00:88:ef` |
+| Receiver IP / UDP port | `192.168.11.17:55555` |
+| Host interface | `enp68s0f0` |
+| Host primary IP | `10.2.2.74/24` |
+| Wire client ID | `0x00038553` (`230739` decimal), matching label suffix `8553` |
+| Target-list port version | `2.1` |
+| Readback receiver | `192.168.11.17:55556` |
+| Firmware readback | `5.2.2` |
+
+## Start the driver
+
+From the workspace root, after completing the [Lyrical build](lyrical.md):
+
+```bash
+# Add a secondary address to the active connection without saving the profile.
+nmcli device modify enp68s0f0 +ipv4.addresses 192.168.11.17/24
+ping -c 2 192.168.11.11
+
+source /opt/ros/lyrical/setup.bash
+source install/local_setup.bash
+ros2 run umrr_ros2_driver smartmicro_radar_node_exe \
+  --ros-args -r __node:=smart_radar \
+  --params-file src/smartmicro_ros2_radars/umrr_ros2_driver/param/radar.params.umrr96_38553.yaml
+```
+
+The secondary address is temporary and may need to be reapplied after a reboot
+or connection reactivation. To remove it after stopping the driver:
+
+```bash
+nmcli device modify enp68s0f0 -ipv4.addresses 192.168.11.17/24
+```
+
+The SDK normally binds to the interface's first IPv4 address. The optional
+`adapters.adapter_0.hw_ip_address` parameter selects the local address explicitly;
+this setup requires `192.168.11.17`. Omitting the parameter or setting it to an
+empty string retains automatic interface address selection. The driver removes
+any previously generated explicit address when the parameter is empty.
+
+The target cloud is published on `/smart_radar/port_targets_0`, with frame
+`umrr96`. Target metadata is on `/smart_radar/port_targetheader_0`. In another
+terminal with the same ROS environment:
+
+```bash
+ros2 topic hz /smart_radar/port_targets_0
+ros2 topic echo /smart_radar/port_targetheader_0 --once
+```
+
+## Live RViz view
+
+After adding the secondary host address and sourcing the workspace as above,
+start the data driver, parameter readback node, and RViz together:
+
+```bash
+ros2 launch umrr_ros2_driver umrr96_live.launch.py
+```
+
+The saved view uses fixed frame `umrr96`, a one-meter grid, and bright live targets
+colored by return power. The dim gray layer, `Recent targets (2 seconds)`, retains
+two seconds of past detections for context; it is not additional instantaneous
+sensor resolution. Toggle that display off for a single-frame view. Closing RViz
+also stops both driver processes. Stop any separately running radar driver before
+using this launch file.
+
+The **UMRR-96 Configuration** panel opens with the live view. It reads the current
+settings and firmware, displays target count/rate/cycle time, and lets you stage
+changes before pressing **Apply changes**. Every application is checked with a
+fresh readback. **Short-range Ethernet preset** stages antenna 0, sweep 2, range
+toggling off, and CAN target output off. **Starting values** stages the first
+values read when the panel opened; press Apply to restore them. Opening or
+closing the panel does not write sensor settings, and no EEPROM save is offered.
+The live metrics correspond to sensor topic index 0.
+
+The panel's live readback and firmware display were verified on this sensor.
+At the end of the session, the last verified panel settings were sweep 2,
+range switching off, antenna 0, and CAN target output off. Both radar processes
+and RViz exited cleanly on shutdown; shutting down the nodes does not reset the
+sensor's temporary settings.
+
+## Read parameters and status
+
+With `umrr96_live.launch.py` running, read up to ten entries per request:
+
+```bash
+ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode \
+  '{sensor_id: 230739, section_name: auto_interface_0dim, params: [frequency_sweep_idx, range_toggle_mode, tx_antenna_idx], param_types: [3, 3, 3]}'
+
+ros2 service call /smart_radar/get_radar_status umrr_ros2_msgs/srv/GetStatus \
+  '{sensor_id: 230739, section_name: auto_interface, statuses: [sw_version_major, sw_version_minor, sw_version_patch, product_serial], status_types: [1, 1, 1, 0]}'
+```
+
+The existing service response field `res` now contains JSON with the actual sensor
+reply, rather than an acknowledgement that the SDK queued a request. For example:
+
+```json
+{
+  "sensor_id": 230739,
+  "section": "auto_interface_0dim",
+  "success": true,
+  "values": {"frequency_sweep_idx": {"response_type": 1, "value": 2}}
+}
+```
+
+`GetMode.param_types` maps `0/1/2/3` to `float32/uint32/uint16/uint8`.
+`GetStatus.status_types` maps `0/1/2/3` to `uint32/uint16/uint8/int32`.
+Names must be unique, and their types must match the SDK interface definitions.
+Invalid requests, sensor rejections, and timeouts return `success: false` with an
+error description. The default reply timeout is two seconds, controlled by
+`/smart_radar_readback.timeout_ms`. Calls are handled sequentially.
+
+This firmware responds to **CAN-format instructions over Ethernet**. Port-format
+instructions did not receive replies. However, configuring the same SDK client
+for CAN instructions prevented it from decoding target-list port 66. The launch
+file therefore runs a separate readback process on host UDP port 55556, with its
+own temporary SDK configuration. The original data process keeps port-format
+decoding on UDP port 55555. Instruction replies return to the readback socket;
+the sensor's data destination does not change.
+
+The readback node supports UMRR-96 Type 153 interface 1.2.2 and one sensor per
+process. Its host interface, addresses, ports, sensor ID, and timeout are set in
+the `/smart_radar_readback` section of the saved YAML. The launch remaps the
+original driver's read and mode-setting services under `/smart_radar/data_receiver/`
+and puts the new services at the usual `/smart_radar/get_radar_*` and
+`/smart_radar/set_radar_mode` names. Launching only the original data executable
+does not enable the new control behavior.
+
+### Temporary tuning
+
+The control process accepts these `uint8` tuning parameters through `SetMode`:
+
+| Parameter | Valid values |
+| --- | --- |
+| `frequency_sweep_idx` | `0`–`2` |
+| `range_toggle_mode` | `0`–`3` |
+| `tx_antenna_idx` | `0`–`2` |
+| `output_control_target_list_can` | `0`–`1` |
+
+The service validates the whole request before sending any instructions, then
+returns the sensor acknowledgement as JSON. Read back the parameter to verify
+the applied value. It sends no EEPROM-save or reset commands. For example, when
+using only Ethernet for target data:
+
+```bash
+ros2 service call /smart_radar/set_radar_mode umrr_ros2_msgs/srv/SetMode \
+  '{sensor_id: 230739, section_name: auto_interface_0dim, params: [output_control_target_list_can], values: ["0"], value_types: [3]}'
+
+ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode \
+  '{sensor_id: 230739, section_name: auto_interface_0dim, params: [output_control_target_list_can], param_types: [3]}'
+```
+
+Use value `"1"` to restore CAN target output. Other parameter writes and save/reset
+commands are outside the new control service's scope.
+
+The hardware comparison script records the current settings, tests CAN target
+output off, antenna indices 1 and 2, and sweep index 1, with a return to baseline
+after each trial. It measures cloud rate, targets per frame, close-range counts,
+range coverage, SNR, and the sensor's reported cycle time. Keep the scene and
+sensor still during the test:
+
+```bash
+python3 src/smartmicro_ros2_radars/umrr_ros2_driver/test/compare_umrr96_settings.py \
+  --seconds 20 --baseline-seconds 10 --output /tmp/umrr96-comparison.json
+```
+
+The script verifies restoration on normal completion, errors, Ctrl-C, and SIGTERM.
+It cannot restore settings if the process is forcibly killed or communication is
+lost; the report records the starting values and any restoration failure.
+
+### Tuning results, 2026-09-24
+
+The [recorded comparison](umrr96_38553_tuning.json) contains 1,363 clouds across
+nine measurement windows. Each alternate setting was measured for 20 seconds,
+with a ten-second return to baseline between trials. All eight writes received
+successful acknowledgements, and readback confirmed each trial and restoration.
+Only one parameter differed from baseline in each trial.
+
+| Configuration | Clouds/s | Mean targets/frame | Mean targets within 5 m/frame |
+| --- | ---: | ---: | ---: |
+| Baseline: antenna 0, sweep 2, CAN output on | 8.33 | 29.8–33.8 across windows | 6.4–7.3 |
+| CAN target output off | 18.18 | 29.8 | 6.8 |
+| Antenna 1 | 8.33 | 29.7 | 7.0 |
+| Antenna 2 | 8.33 | 28.5 | 6.0 |
+| Sweep 1, 512 MHz | 8.33 | 28.8 | 2.0 |
+
+Disabling CAN target output reduced the reported cycle time from approximately
+120 ms to 55 ms. Re-enabling it restored 120 ms and 8.33 Hz. This is a repeatable
+timing effect of the CAN-output setting; it does not identify the underlying CAN
+hardware or firmware fault. It gives more frequent Ethernet clouds, with no
+clear increase in targets per frame. CAN-format instruction readback over
+Ethernet continued working with CAN target output disabled.
+
+Neither alternate antenna gave a clear close-range density improvement in this
+scene. Sweep 1 reached approximately 53.8 m versus 19.2 m for sweep 2, but reduced
+targets within 5 m to two per frame. For this Ethernet-only short-range test, the
+recommended next configuration is antenna 0, sweep 2, range toggling off, and CAN
+target output off. The experiment restored the original settings, including CAN
+output on, and did not save anything to EEPROM.
+
+These are scene comparisons, not a calibrated minimum-range test. No targets
+were observed below 1 m, which does not establish the sensor's minimum range.
+The UMRR-96 callback does not populate the generic ROS target header's antenna
+and sweep indices; their zero defaults were excluded from the report. Mode
+verification used parameter readback instead.
+
+### Baseline for density tuning
+
+All 29 parameters and 14 status values returned successfully while live targets
+continued arriving. The full dated snapshot is
+[umrr96_38553_readback.json](umrr96_38553_readback.json). Selected values:
+
+| Readback | Value |
+| --- | --- |
+| Firmware | `5.2.2` |
+| Product serial | `230739` (`0x00038553`) |
+| `frequency_sweep_idx` | `2` (1536 MHz, the widest documented sweep) |
+| `range_toggle_mode` | `0` (off) |
+| `tx_antenna_idx` | `0` |
+| `prf_selector_manual` | `0` (PRF switching active) |
+| Speed validation limits, all three sweeps | `-20.0` to `20.0` |
+| Target-list output, Ethernet / CAN | `1` / `1` (both enabled) |
+| Object-list output, Ethernet / CAN | `0` / `0` (both disabled) |
+
+The sweep mapping comes from the bundled UMRR-96 1.2.2 interface definition.
+This rules out a narrow sweep selection as the explanation for the sparse cloud;
+it does not establish the cause of the limited target count. No sensor settings
+were changed during readback.
+
+An offline check exercises malformed requests, repeated timeouts, shutdown, and
+temporary configuration cleanup against a silent loopback UDP peer:
+
+```bash
+ROS_DOMAIN_ID=174 python3 \
+  src/smartmicro_ros2_radars/umrr_ros2_driver/test/readback_smoke.py
+```
+
+## Hardware verification and remaining checks
+
+The first successful 12-second run received 101 clouds and 101 headers at about
+8.4 Hz, with 29–37 targets per cloud. All 3,344 target XYZ coordinates were finite;
+all clouds had the expected 18 fields and 72-byte point layout. The reported
+cycle time was approximately 120 ms. The driver stopped cleanly with exit code 0.
+The test used ROS domain 173 with DDS restricted to loopback, and restored the
+generated SDK configuration files afterward.
+
+`umrr96_v1_2_2` successfully decoded the live target stream. Later readback through
+the separate CAN-format instruction process confirmed both firmware and product
+serial. The firmware reports automotive interface version `1.0`; that status is
+distinct from the SDK interface library version `1.2.2` and target-list port
+version `2.1`.
+
+Separate sensor debug packets from UDP source port 1234 reported cycle timing
+exceeding 120 ms and datastream cycle overruns, with fault tuples
+`ModID/FGroup/FCode` of `16/1/106`, `119/1/105`, and `37/1/115`. These messages
+were present before starting the ROS driver. Data reception passes, but the
+sensor's timing faults still need investigation; they are not a confirmed
+diagnosis of the underlying cause. Initial bringup and readback used no sensor
+writes; later tuning trials changed temporary parameters and restored them.
+
+Session evidence is under `/tmp/umrr96-hardware/` (report, driver log and sensor
+debug messages) and `/tmp/umrr96-readback/` (readback checks and control capture).
+The discovery capture is `/tmp/umrr96-discovery/radar.pcap`.
+These temporary files are not retained across host cleanup or reboot.

@@ -170,6 +170,14 @@ rclcpp_components_register_node(smartmicro_radar_node
     EXECUTABLE smartmicro_radar_node_exe
 )
 
+ament_auto_add_executable(smartmicro_radar_readback_node
+    src/smartmicro_radar_readback_node.cpp)
+target_include_directories(smartmicro_radar_readback_node PRIVATE smartmicro/include)
+target_compile_definitions(smartmicro_radar_readback_node PRIVATE
+    SMARTMICRO_SDK_LIBRARY_PATH="${CMAKE_INSTALL_PREFIX}/lib")
+target_link_libraries(smartmicro_radar_readback_node
+    smart_access com_lib osal nlohmann_json::nlohmann_json)
+
 if(BUILD_TESTING)
     find_package(launch_testing_ament_cmake)
     add_launch_test(test/radar_node_test.launch.py TIMEOUT "100")

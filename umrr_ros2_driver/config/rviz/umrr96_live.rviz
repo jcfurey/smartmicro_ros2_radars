@@ -1,0 +1,155 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+  Property Tree Widget:
+    Expanded:
+    - /Global Options1
+    - /Live targets1
+    Splitter Ratio: 0.5
+- Class: rviz_common/Views
+  Name: Views
+- Class: smart_rviz_plugin/UMRR-96 Configuration
+  Name: UMRR-96 Configuration
+  Sensor ID: '230739'
+Visualization Manager:
+  Class: ''
+  Displays:
+  - Alpha: 0.45
+    Cell Size: 1
+    Class: rviz_default_plugins/Grid
+    Color: 80; 90; 105
+    Enabled: true
+    Line Style:
+      Line Width: 0.029999999329447746
+      Value: Lines
+    Name: Grid
+    Normal Cell Count: 0
+    Offset:
+      X: 0
+      Y: 0
+      Z: 0
+    Plane: XY
+    Plane Cell Count: 40
+    Reference Frame: <Fixed Frame>
+    Value: true
+  - Alpha: 0.25
+    Autocompute Intensity Bounds: true
+    Autocompute Value Bounds:
+      Max Value: 10
+      Min Value: -10
+      Value: true
+    Axis: Z
+    Channel Name: power
+    Class: rviz_default_plugins/PointCloud2
+    Color: 115; 145; 175
+    Color Transformer: FlatColor
+    Decay Time: 2.0
+    Enabled: true
+    Invert Rainbow: false
+    Max Color: 255; 255; 255
+    Max Intensity: 88.71018981933594
+    Min Color: 0; 0; 0
+    Min Intensity: 83.2554702758789
+    Name: Recent targets (2 seconds)
+    Position Transformer: XYZ
+    Selectable: true
+    Size (Pixels): 4
+    Size (m): 0.009999999776482582
+    Style: Points
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Best Effort
+      Value: /smart_radar/port_targets_0
+    Use Fixed Frame: true
+    Use rainbow: true
+    Value: true
+  - Alpha: 1
+    Autocompute Intensity Bounds: true
+    Autocompute Value Bounds:
+      Max Value: 10
+      Min Value: -10
+      Value: true
+    Axis: Z
+    Channel Name: power
+    Class: rviz_default_plugins/PointCloud2
+    Color: 255; 255; 255
+    Color Transformer: Intensity
+    Decay Time: 0
+    Enabled: true
+    Invert Rainbow: false
+    Max Color: 255; 255; 255
+    Max Intensity: 88.71018981933594
+    Min Color: 0; 0; 0
+    Min Intensity: 83.2554702758789
+    Name: Live targets
+    Position Transformer: XYZ
+    Selectable: true
+    Size (Pixels): 10
+    Size (m): 0.009999999776482582
+    Style: Points
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Best Effort
+      Value: /smart_radar/port_targets_0
+    Use Fixed Frame: true
+    Use rainbow: true
+    Value: true
+  - Class: rviz_default_plugins/Axes
+    Enabled: true
+    Length: 1
+    Name: Axes
+    Radius: 0.025
+    Reference Frame: <Fixed Frame>
+    Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 22; 27; 35
+    Fixed Frame: umrr96
+    Frame Rate: 30
+  Name: root
+  Tools:
+  - Class: rviz_default_plugins/Interact
+    Hide Inactive Objects: true
+  - Class: rviz_default_plugins/MoveCamera
+  - Class: rviz_default_plugins/Select
+  - Class: rviz_default_plugins/FocusCamera
+  - Class: rviz_default_plugins/Measure
+    Line color: 128; 128; 0
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 26.0
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 8.0
+        Y: 0.0
+        Z: 0.0
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 1.3
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
+      Yaw: 3.14159265
+    Saved: null
+Window Geometry:
+  Height: 900
+  Width: 1350
+  X: 80
+  Y: 80
+  Hide Left Dock: false
+  Hide Right Dock: false

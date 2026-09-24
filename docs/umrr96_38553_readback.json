@@ -1,0 +1,231 @@
+{
+  "captured_at": "2026-09-24T17:53:25.290730+00:00",
+  "sensor_id": 230739,
+  "instruction_serialization": "can_based",
+  "data_serialization": "port_based",
+  "transport": "Ethernet",
+  "sections": {
+    "auto_interface": {
+      "auto_interface_version_major": {
+        "response_type": 1,
+        "value": 1,
+        "data_type": "u32"
+      },
+      "auto_interface_version_minor": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u32"
+      },
+      "sw_generation": {
+        "response_type": 1,
+        "value": 5,
+        "data_type": "u16"
+      },
+      "sw_version_major": {
+        "response_type": 1,
+        "value": 5,
+        "data_type": "u16"
+      },
+      "sw_version_minor": {
+        "response_type": 1,
+        "value": 2,
+        "data_type": "u16"
+      },
+      "sw_version_patch": {
+        "response_type": 1,
+        "value": 2,
+        "data_type": "u16"
+      },
+      "customer_id": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u16"
+      },
+      "product_serial": {
+        "response_type": 1,
+        "value": 230739,
+        "data_type": "u32"
+      },
+      "product_gen": {
+        "response_type": 1,
+        "value": 150,
+        "data_type": "u32"
+      },
+      "product_mod_high": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u32"
+      },
+      "product_mod_low": {
+        "response_type": 1,
+        "value": 3,
+        "data_type": "u32"
+      },
+      "product_rev": {
+        "response_type": 1,
+        "value": 1,
+        "data_type": "u32"
+      },
+      "systime_low_dword": {
+        "response_type": 1,
+        "value": 2833538583,
+        "data_type": "u32"
+      },
+      "systime_high_dword": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u32"
+      }
+    },
+    "auto_interface_0dim": {
+      "tx_antenna_idx": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "center_frequency_idx": {
+        "response_type": 1,
+        "value": 1,
+        "data_type": "u8"
+      },
+      "frequency_sweep_idx": {
+        "response_type": 1,
+        "value": 2,
+        "data_type": "u8"
+      },
+      "range_toggle_mode": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "prf_selector_manual": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "prf_set_selector": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "prf_manual_value_idx": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "tv_min_speed_sweep_idx_0": {
+        "response_type": 1,
+        "value": -20.0,
+        "data_type": "f32"
+      },
+      "tv_min_speed_sweep_idx_1": {
+        "response_type": 1,
+        "value": -20.0,
+        "data_type": "f32"
+      },
+      "tv_min_speed_sweep_idx_2": {
+        "response_type": 1,
+        "value": -20.0,
+        "data_type": "f32"
+      },
+      "tv_max_speed_sweep_idx_0": {
+        "response_type": 1,
+        "value": 20.0,
+        "data_type": "f32"
+      },
+      "tv_max_speed_sweep_idx_1": {
+        "response_type": 1,
+        "value": 20.0,
+        "data_type": "f32"
+      },
+      "tv_max_speed_sweep_idx_2": {
+        "response_type": 1,
+        "value": 20.0,
+        "data_type": "f32"
+      },
+      "output_control_target_list_can": {
+        "response_type": 1,
+        "value": 1,
+        "data_type": "u8"
+      },
+      "output_control_object_list_can": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "output_control_target_list_eth": {
+        "response_type": 1,
+        "value": 1,
+        "data_type": "u8"
+      },
+      "output_control_object_list_eth": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "ip_source_address": {
+        "response_type": 1,
+        "value": 3232238347,
+        "data_type": "u32"
+      },
+      "subnet_mask": {
+        "response_type": 1,
+        "value": 4294967040,
+        "data_type": "u32"
+      },
+      "ip_dest_address": {
+        "response_type": 1,
+        "value": 3232238353,
+        "data_type": "u32"
+      },
+      "ip_dest_port": {
+        "response_type": 1,
+        "value": 55555,
+        "data_type": "u16"
+      },
+      "sync_mode": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "sync_slave_identifier": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "sync_group_identifier": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "sync_nof_devices_1st_group": {
+        "response_type": 1,
+        "value": 1,
+        "data_type": "u8"
+      },
+      "sync_nof_devices_2nd_group": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "sync_interface": {
+        "response_type": 1,
+        "value": 2,
+        "data_type": "u8"
+      },
+      "time_sync_mode": {
+        "response_type": 1,
+        "value": 0,
+        "data_type": "u8"
+      },
+      "time_sync_nof_devices": {
+        "response_type": 1,
+        "value": 1,
+        "data_type": "u8"
+      }
+    }
+  },
+  "clouds_received_during_readback": 7,
+  "latest_cloud_width": 31,
+  "all_reads_successful": true
+}

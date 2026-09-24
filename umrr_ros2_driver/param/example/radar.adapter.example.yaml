@@ -20,6 +20,9 @@
               hw_type: "eth"
               hw_dev_id: 3
               hw_iface_name: "eth0"
+              # Optional local IPv4 bind address for an interface with multiple addresses.
+              # Omit or leave empty to let the SDK select the interface's first IPv4 address.
+              hw_ip_address: ""
               port: 55555
           adapter_2:
               hw_type: "can"

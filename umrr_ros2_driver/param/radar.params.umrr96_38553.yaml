@@ -1,0 +1,42 @@
+# UMRR-96 on cam-ripper. Add 192.168.11.17/24 to enp68s0f0 before starting.
+# See docs/umrr96-bringup.md for setup and hardware verification limits.
+/smart_radar:
+  ros__parameters:
+    master_data_serial_type: port_based
+    master_inst_serial_type: port_based
+    adapters:
+      adapter_0:
+        hw_type: eth
+        hw_dev_id: 4
+        hw_iface_name: enp68s0f0
+        hw_ip_address: 192.168.11.17
+        port: 55555
+    sensors:
+      sensor_0:
+        link_type: eth
+        pub_type: target
+        model: umrr96_v1_2_2
+        dev_id: 4
+        # Wire client ID 0x00038553; matches the label's 8553 suffix.
+        id: 230739
+        frame_id: umrr96
+        history_size: 10
+        ip: 192.168.11.11
+        port: 55555
+        # Keep the data SDK client port-based; readback uses the separate node below.
+        inst_type: port_based
+        data_type: port_based
+        uifname: umrr96_t153_automotive
+        uifmajorv: 1
+        uifminorv: 2
+        uifpatchv: 2
+
+/smart_radar_readback:
+  ros__parameters:
+    sensor_id: 230739
+    interface_name: enp68s0f0
+    host_ip: 192.168.11.17
+    host_port: 55556
+    sensor_ip: 192.168.11.11
+    sensor_port: 55555
+    timeout_ms: 2000
