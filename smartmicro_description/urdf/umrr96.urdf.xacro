@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<robot name="umrr96_standalone" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="umrr96_macro.urdf.xacro"/>
+  <xacro:arg name="sensor_name" default="umrr96"/>
+  <xacro:arg name="frame_id" default="$(arg sensor_name)"/>
+  <xacro:arg name="measurement_xyz" default="0 0 0"/>
+  <xacro:arg name="measurement_rpy" default="0 0 0"/>
+  <xacro:umrr96_sensor name="$(arg sensor_name)" frame_id="$(arg frame_id)"
+      measurement_xyz="$(arg measurement_xyz)" measurement_rpy="$(arg measurement_rpy)"/>
+</robot>

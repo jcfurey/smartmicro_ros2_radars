@@ -54,6 +54,23 @@ ros2 topic hz /smart_radar/port_targets_0
 ros2 topic echo /smart_radar/port_targetheader_0 --once
 ```
 
+The [standalone sensor description](../smartmicro_description/README.md) can run
+alongside an existing driver:
+
+```bash
+ros2 launch smartmicro_description umrr96_description.launch.py
+```
+
+It publishes `umrr96_link -> umrr96` and the latched description topic
+`/umrr96/robot_description`. Enable **Sensor housing** in the saved RViz configs
+or add a RobotModel display on that topic. The root is the sensor housing;
+this does not provide robot odometry or calibrated mounting extrinsics.
+Build/source `smartmicro_description` first as described in its README.
+For a new live session, `umrr96_live.launch.py publish_description:=true` includes
+the publisher. Its `description_frame_id` must match `sensor_0.frame_id` in the
+driver YAML (both default to `umrr96`). Use one publisher for the sensor joints;
+leave that option false if a standalone or full robot description already owns them.
+
 ### Timestamps, runtime configuration and diagnostics
 
 Clouds and their matching metadata now use the ROS clock when the SDK callback

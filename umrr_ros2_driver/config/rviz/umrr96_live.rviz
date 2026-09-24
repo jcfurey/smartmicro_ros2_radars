@@ -14,6 +14,20 @@ Panels:
 Visualization Manager:
   Class: ''
   Displays:
+  - Class: rviz_default_plugins/RobotModel
+    Name: Sensor housing
+    Enabled: false
+    Alpha: 1
+    Description Source: Topic
+    Description Topic:
+      Depth: 1
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /umrr96/robot_description
+    Visual Enabled: true
+    Collision Enabled: false
+    TF Prefix: ''
   - Alpha: 0.45
     Cell Size: 1
     Class: rviz_default_plugins/Grid

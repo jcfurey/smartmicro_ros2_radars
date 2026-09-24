@@ -1,0 +1,764 @@
+{
+  "bag": "results/umrr96-investigation-20260924/live",
+  "source_files": {
+    "0_live_2026_09_24-17_44_48.mcap": {
+      "bytes": 4904365,
+      "sha256": "b734494b6acad789c803f706bfd898da80f7917d91e935a141d8d41cbc57d751"
+    },
+    "metadata.yaml": {
+      "bytes": 6423,
+      "sha256": "9100120fd1aab9c005b79d62f78da6e12246d2754cfefd52059c5da31d97d214"
+    }
+  },
+  "topics": {
+    "/smart_radar/filter_status": 809,
+    "/smart_radar/timing_0": 808,
+    "/smart_radar/umrr96_raw_quality_0": 808,
+    "/smart_radar/port_targets_0": 808,
+    "/smart_radar/port_targetheader_0": 808,
+    "/smart_radar/filtered_targets_0": 808,
+    "/diagnostics": 87
+  },
+  "cloud_layout": [
+    {
+      "name": "x",
+      "offset": 0,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "y",
+      "offset": 4,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "z",
+      "offset": 8,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "radial_speed",
+      "offset": 12,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "power",
+      "offset": 16,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "rcs",
+      "offset": 20,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "noise",
+      "offset": 24,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "snr",
+      "offset": 28,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "azimuth_angle",
+      "offset": 32,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "elevation_angle",
+      "offset": 36,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "range",
+      "offset": 40,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "variance_range",
+      "offset": 44,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "variance_speed",
+      "offset": 48,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "variance_azimuth_angle",
+      "offset": 52,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "variance_elevation_angle",
+      "offset": 56,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "false_alarm_probability",
+      "offset": 60,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "flags",
+      "offset": 64,
+      "datatype": 6,
+      "count": 1
+    },
+    {
+      "name": "peak_idx",
+      "offset": 68,
+      "datatype": 4,
+      "count": 1
+    }
+  ],
+  "start_utc": "2026-09-24T22:44:48.835374+00:00",
+  "end_utc": "2026-09-24T22:45:33.291273+00:00",
+  "raw_frames": 808,
+  "detections": 21451,
+  "span_seconds": 44.455899707,
+  "hz": 18.15282123000044,
+  "detections_per_frame": {
+    "count": 808,
+    "finite": 808,
+    "min": 21.0,
+    "p05": 23.0,
+    "median": 26.0,
+    "p95": 30.0,
+    "max": 33.0,
+    "mean": 26.548267326732674
+  },
+  "all_core_fields_finite_detections": 21451,
+  "all_fields_skip_nans_true_retained": 0,
+  "fields": {
+    "x": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 1.8019015789031982,
+      "p05": 3.3721901178359985,
+      "median": 7.122488498687744,
+      "p95": 16.331236839294434,
+      "max": 18.681386947631836,
+      "mean": 8.876091576118268
+    },
+    "y": {
+      "count": 21451,
+      "finite": 21451,
+      "min": -18.749889373779297,
+      "p05": -9.110137939453125,
+      "median": 2.344101905822754,
+      "p95": 7.0586206912994385,
+      "max": 16.394065856933594,
+      "mean": 1.0065105028249386
+    },
+    "z": {
+      "count": 21451,
+      "finite": 21451,
+      "min": -5.288631439208984,
+      "p05": -2.813443660736084,
+      "median": 0.2412053644657135,
+      "p95": 1.8592190146446228,
+      "max": 4.963604927062988,
+      "mean": -0.06615174065563771
+    },
+    "radial_speed": {
+      "count": 21451,
+      "finite": 21451,
+      "min": -0.012552817352116108,
+      "p05": -0.0019821044988930225,
+      "median": 0.00020168004266452044,
+      "p95": 0.00243091001175344,
+      "max": 0.016286591067910194,
+      "mean": 0.00020720864868193755
+    },
+    "power": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 112.40630340576172,
+      "p05": 117.70742797851562,
+      "median": 135.29241943359375,
+      "p95": 145.9650115966797,
+      "max": 146.21287536621094,
+      "mean": 131.99415381096676
+    },
+    "rcs": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 0.0008205081103369594,
+      "p05": 0.06587379053235054,
+      "median": 1.5100830793380737,
+      "p95": 2268.4544677734375,
+      "max": 240687.21875,
+      "mean": 1252.800275317012
+    },
+    "noise": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 92.64509582519531,
+      "p05": 93.61323547363281,
+      "median": 94.22871398925781,
+      "p95": 94.94388580322266,
+      "max": 95.74183654785156,
+      "mean": 94.25725618443963
+    },
+    "snr": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 18.237648010253906,
+      "p05": 23.644390106201172,
+      "median": 40.514854431152344,
+      "p95": 51.127235412597656,
+      "max": 53.017356872558594,
+      "mean": 37.736897626527124
+    },
+    "azimuth_angle": {
+      "count": 21451,
+      "finite": 21451,
+      "min": -1.3433160781860352,
+      "p05": -1.0450282096862793,
+      "median": 0.3206305503845215,
+      "p95": 0.9021176397800446,
+      "max": 1.3408503532409668,
+      "mean": 0.10194312773306624
+    },
+    "elevation_angle": {
+      "count": 21451,
+      "finite": 21451,
+      "min": -0.27922725677490234,
+      "p05": -0.2719637155532837,
+      "median": 0.04757782816886902,
+      "p95": 0.16040579229593277,
+      "max": 0.27914759516716003,
+      "mean": 0.0005650556227527436
+    },
+    "range": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 2.921638011932373,
+      "p05": 3.390886902809143,
+      "median": 9.545271873474121,
+      "p95": 18.496228218078613,
+      "max": 19.320568084716797,
+      "mean": 10.773184267703561
+    },
+    "variance_range": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 0.0003795534430537373,
+      "p05": 0.00037960508780088276,
+      "median": 0.00038114390918053687,
+      "p95": 0.00046143629879225045,
+      "max": 0.0006641471409238875,
+      "mean": 0.0003978569322185104
+    },
+    "variance_speed": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 0.0004451761196833104,
+      "p05": 0.0004453526344150305,
+      "median": 0.0004918297054246068,
+      "p95": 0.0005786061228718609,
+      "max": 0.0008756317547522485,
+      "mean": 0.0004953099079532566
+    },
+    "variance_azimuth_angle": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 6.955491699045524e-05,
+      "p05": 7.001770791248418e-05,
+      "median": 8.32207515486516e-05,
+      "p95": 0.00040311341581400484,
+      "max": 0.0017665239283815026,
+      "mean": 0.00013275994464676116
+    },
+    "variance_elevation_angle": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 5.68767027289141e-05,
+      "p05": 5.6903150834841654e-05,
+      "median": 5.7770899729803205e-05,
+      "p95": 5.923843855271116e-05,
+      "max": 6.388209294527769e-05,
+      "mean": 5.7902085749792374e-05
+    },
+    "false_alarm_probability": {
+      "count": 21451,
+      "finite": 0,
+      "min": null,
+      "p05": null,
+      "median": null,
+      "p95": null,
+      "max": null,
+      "mean": null
+    },
+    "flags": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 4294967295.0,
+      "p05": 4294967295.0,
+      "median": 4294967295.0,
+      "p95": 4294967295.0,
+      "max": 4294967295.0,
+      "mean": 4294967295.0
+    },
+    "peak_idx": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 0.0,
+      "p05": 1.0,
+      "median": 18.0,
+      "p95": 40.0,
+      "max": 46.0,
+      "mean": 20.097617826674746
+    }
+  },
+  "invariants": {
+    "range_vs_xyz_m": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 6.8407501885303645e-12,
+      "p05": 2.0269788736371197e-08,
+      "median": 2.4627539918498087e-07,
+      "p95": 1.0387732825023477e-06,
+      "max": 2.629375412510626e-06,
+      "mean": 3.5292287288500644e-07
+    },
+    "snr_vs_power_minus_noise_db": {
+      "count": 21451,
+      "finite": 21451,
+      "min": 0.0,
+      "p05": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "max": 0.0,
+      "mean": 0.0
+    }
+  },
+  "metadata_matched_to_cloud": {
+    "headers": 808,
+    "timing": 808,
+    "raw_quality": 808,
+    "filtered": 808
+  },
+  "mismatches": {
+    "header_target_count": 0,
+    "quality_array_length": 0,
+    "filtered_bytes_differ": 0
+  },
+  "ros_stamp_nonincreasing_intervals": 0,
+  "device_nonincreasing_intervals": 0,
+  "receive_intervals_seconds": {
+    "count": 807,
+    "finite": 807,
+    "min": 0.053335713,
+    "p05": 0.054957233,
+    "median": 0.055002753,
+    "p95": 0.055998144300000004,
+    "max": 0.0570494,
+    "mean": 0.055087855894671627
+  },
+  "device_intervals_seconds": {
+    "count": 807,
+    "finite": 807,
+    "min": 0.054946,
+    "p05": 0.054985,
+    "median": 0.055002,
+    "p95": 0.055996,
+    "max": 0.057005,
+    "mean": 0.05508765179677819
+  },
+  "relative_delay_change_seconds": {
+    "count": 807,
+    "finite": 807,
+    "min": -0.0019617290000000023,
+    "p05": -0.0009384573999999998,
+    "median": 1.5400000000220793e-07,
+    "p95": 0.0009476108999999964,
+    "max": 0.0020494,
+    "mean": 2.0409789343204465e-07
+  },
+  "recorder_minus_cloud_stamp_seconds": {
+    "count": 808,
+    "finite": 808,
+    "min": 5.6928e-05,
+    "p05": 6.7308e-05,
+    "median": 0.00014028,
+    "p95": 0.0002027915,
+    "max": 0.002458731,
+    "mean": 0.00014274428094059407
+  },
+  "reported_cycle_seconds": {
+    "count": 808,
+    "finite": 808,
+    "min": 0.054937999695539474,
+    "p05": 0.05496399849653244,
+    "median": 0.054979998618364334,
+    "p95": 0.055973999202251434,
+    "max": 0.05697700008749962,
+    "mean": 0.05506551107576135
+  },
+  "acquisition_setup_raw": {
+    "49": 808
+  },
+  "pfa_raw": {
+    "count": 21451,
+    "finite": 21451,
+    "min": 0.0,
+    "p05": 0.0,
+    "median": 0.0,
+    "p95": 0.0,
+    "max": 0.0,
+    "mean": 0.0
+  },
+  "flags_raw": {
+    "0": 21451
+  },
+  "snr_threshold_retention": {
+    "0": 1.0,
+    "6": 1.0,
+    "12": 1.0,
+    "20": 0.9989744067875623,
+    "30": 0.7015989930539369,
+    "40": 0.5018880238683511,
+    "50": 0.11113700992960701
+  },
+  "existing_filters_offline": {
+    "off": {
+      "retained_fraction": 1.0,
+      "per_frame": {
+        "count": 808,
+        "finite": 808,
+        "min": 21.0,
+        "p05": 23.0,
+        "median": 26.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "mean": 26.548267326732674
+      },
+      "rejections": {
+        "rejected_quality": 0,
+        "rejected_motion": 0,
+        "rejected_temporal": 0
+      }
+    },
+    "quality": {
+      "retained_fraction": 1.0,
+      "per_frame": {
+        "count": 808,
+        "finite": 808,
+        "min": 21.0,
+        "p05": 23.0,
+        "median": 26.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "mean": 26.548267326732674
+      },
+      "rejections": {
+        "rejected_quality": 0,
+        "rejected_motion": 0,
+        "rejected_temporal": 0
+      }
+    },
+    "mapping": {
+      "retained_fraction": 0.9476015104190947,
+      "per_frame": {
+        "count": 808,
+        "finite": 808,
+        "min": 0.0,
+        "p05": 22.0,
+        "median": 25.0,
+        "p95": 28.0,
+        "max": 32.0,
+        "mean": 25.157178217821784
+      },
+      "rejections": {
+        "rejected_quality": 0,
+        "rejected_motion": 0,
+        "rejected_temporal": 1124
+      }
+    },
+    "moving": {
+      "retained_fraction": 0.0,
+      "per_frame": {
+        "count": 808,
+        "finite": 808,
+        "min": 0.0,
+        "p05": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "mean": 0.0
+      },
+      "rejections": {
+        "rejected_quality": 0,
+        "rejected_motion": 21451,
+        "rejected_temporal": 0
+      }
+    }
+  },
+  "geometry_quality_gated": {
+    "condition_U_xy": {
+      "count": 808,
+      "finite": 808,
+      "min": 1.4431755549045957,
+      "p05": 1.5938114693261167,
+      "median": 1.8410169757031327,
+      "p95": 2.133819639107596,
+      "max": 2.261787071374252,
+      "mean": 1.8478714914255225
+    },
+    "condition_U_xyz": {
+      "count": 808,
+      "finite": 808,
+      "min": 5.121374032317391,
+      "p05": 5.616084362953593,
+      "median": 6.379697849216422,
+      "p95": 7.236172877990079,
+      "max": 7.758920657383792,
+      "mean": 6.390749946223409
+    }
+  },
+  "exploratory_planar_doppler_fit": {
+    "assumptions": [
+      "positive receding sign UNVERIFIED",
+      "radar vertical velocity zero",
+      "dominant stationary scene",
+      "not ground truth or validated odometry"
+    ],
+    "ransac_seed": 0,
+    "ransac_trials": 64,
+    "residual_threshold_mps": 0.3,
+    "minimum_consensus": 6,
+    "maximum_condition_U_xy": 100,
+    "successful_frames": 808,
+    "distributions": {
+      "vx": {
+        "count": 808,
+        "finite": 808,
+        "min": -0.0012144030329498399,
+        "p05": -0.0007701730206686289,
+        "median": -0.00024149391337525392,
+        "p95": 0.0002758217973027748,
+        "max": 0.0009299590781452133,
+        "mean": -0.0002445712466843226
+      },
+      "vy": {
+        "count": 808,
+        "finite": 808,
+        "min": -0.0017664995341020112,
+        "p05": -0.0009002595855328379,
+        "median": 3.9304294554288114e-05,
+        "p95": 0.0009867219905659549,
+        "max": 0.0022283327658579304,
+        "mean": 2.9258223820099275e-05
+      },
+      "consensus_fraction": {
+        "count": 808,
+        "finite": 808,
+        "min": 1.0,
+        "p05": 1.0,
+        "median": 1.0,
+        "p95": 1.0,
+        "max": 1.0,
+        "mean": 1.0
+      },
+      "consensus_rmse": {
+        "count": 808,
+        "finite": 808,
+        "min": 0.0004113607757967751,
+        "p05": 0.000744760062037107,
+        "median": 0.0012146616430353677,
+        "p95": 0.0019140868242367686,
+        "max": 0.0034827123644083162,
+        "mean": 0.0012663337421149098
+      },
+      "all_points_rmse": {
+        "count": 808,
+        "finite": 808,
+        "min": 0.0004113607757967751,
+        "p05": 0.000744760062037107,
+        "median": 0.0012146616430353677,
+        "p95": 0.0019140868242367686,
+        "max": 0.0034827123644083162,
+        "mean": 0.0012663337421149098
+      },
+      "consensus_condition": {
+        "count": 808,
+        "finite": 808,
+        "min": 1.4431755549045957,
+        "p05": 1.5938114693261167,
+        "median": 1.8410169757031327,
+        "p95": 2.133819639107596,
+        "max": 2.261787071374252,
+        "mean": 1.8478714914255225
+      }
+    }
+  },
+  "filter_status_first": {
+    "mode": "quality",
+    "input": 27,
+    "accepted": 27,
+    "rejected_quality": 0,
+    "rejected_motion": 0,
+    "rejected_temporal": 0,
+    "min_snr_db": 6.0,
+    "min_abs_speed": 0.25,
+    "grid_frame_id": "umrr96",
+    "grid_tf_dropped": 0,
+    "grid_tf_pending": 0,
+    "grid_timestamp_source": "ros_receive_time",
+    "ego_motion_compensated": false,
+    "density_decay_seconds": 2.0
+  },
+  "filter_status_last": {
+    "mode": "quality",
+    "input": 26,
+    "accepted": 26,
+    "rejected_quality": 0,
+    "rejected_motion": 0,
+    "rejected_temporal": 0,
+    "min_snr_db": 6.0,
+    "min_abs_speed": 0.25,
+    "grid_frame_id": "umrr96",
+    "grid_tf_dropped": 0,
+    "grid_tf_pending": 0,
+    "grid_timestamp_source": "ros_receive_time",
+    "ego_motion_compensated": false,
+    "density_decay_seconds": 2.0
+  },
+  "diagnostics": {
+    "smart_radar: Target stream 0": {
+      "samples": 44,
+      "levels": {
+        "0": 44
+      },
+      "first": {
+        "level": 0,
+        "message": "Receiving targets",
+        "values": {
+          "frames_received": "16346",
+          "last_receive_age_seconds": "0.0279635",
+          "frequency_hz": "17.9999",
+          "device_timestamp_us": "2529781874",
+          "timestamp_repeats": "0",
+          "timestamp_backwards": "0",
+          "timestamp_zero": "0",
+          "receive_interval_seconds": "0.0549953",
+          "device_interval_seconds": "0.054989",
+          "relative_delay_change_seconds": "6.294e-06",
+          "max_positive_delay_change_seconds": "0.00184563",
+          "timestamp_source": "ros_receive_time",
+          "sensor_clock_synchronized": "False"
+        }
+      },
+      "last": {
+        "level": 0,
+        "message": "Receiving targets",
+        "values": {
+          "frames_received": "17127",
+          "last_receive_age_seconds": "0.00208155",
+          "frequency_hz": "19",
+          "device_timestamp_us": "2572807588",
+          "timestamp_repeats": "0",
+          "timestamp_backwards": "0",
+          "timestamp_zero": "0",
+          "receive_interval_seconds": "0.0549976",
+          "device_interval_seconds": "0.055",
+          "relative_delay_change_seconds": "-2.436e-06",
+          "max_positive_delay_change_seconds": "5.2281e-05",
+          "timestamp_source": "ros_receive_time",
+          "sensor_clock_synchronized": "False"
+        }
+      }
+    },
+    "smart_radar: UDP adapter 0": {
+      "samples": 44,
+      "levels": {
+        "0": 44
+      },
+      "first": {
+        "level": 0,
+        "message": "No new kernel UDP drops; not a liveness check",
+        "values": {
+          "local_port": "55555",
+          "kernel_counters_available": "True",
+          "sdk_queue_depth_available": "False",
+          "kernel_drops_total": "0",
+          "kernel_drops_since_last_check": "0",
+          "kernel_receive_memory_bytes": "0",
+          "socket_inode": "4081667"
+        }
+      },
+      "last": {
+        "level": 0,
+        "message": "No new kernel UDP drops; not a liveness check",
+        "values": {
+          "local_port": "55555",
+          "kernel_counters_available": "True",
+          "sdk_queue_depth_available": "False",
+          "kernel_drops_total": "0",
+          "kernel_drops_since_last_check": "0",
+          "kernel_receive_memory_bytes": "0",
+          "socket_inode": "4081667"
+        }
+      }
+    },
+    "smart_radar_readback: Control requests": {
+      "samples": 43,
+      "levels": {
+        "0": 9,
+        "1": 34
+      },
+      "first": {
+        "level": 0,
+        "message": "Last request succeeded; no automatic polling",
+        "values": {
+          "requests_sent_or_attempted": "6",
+          "invalid_requests": "0",
+          "failed_requests": "0",
+          "timeouts": "0",
+          "sensor_rejected_batches": "0",
+          "responses_received": "6",
+          "last_response_age_seconds": "785.363"
+        }
+      },
+      "last": {
+        "level": 1,
+        "message": "Timed out waiting for the sensor reply",
+        "values": {
+          "requests_sent_or_attempted": "11",
+          "invalid_requests": "0",
+          "failed_requests": "1",
+          "timeouts": "1",
+          "sensor_rejected_batches": "0",
+          "responses_received": "10",
+          "last_response_age_seconds": "34.1989"
+        }
+      }
+    }
+  },
+  "limitations": [
+    "No labeled targets or independent pose reference supplied",
+    "Capture was not a controlled stationary or motion experiment",
+    "No detection precision/recall or pose accuracy can be inferred",
+    "Delay variation and recorder delay are not acquisition latency",
+    "RCS/variance/Pfa/flag calibration is not established"
+  ]
+}

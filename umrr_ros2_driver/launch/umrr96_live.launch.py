@@ -4,11 +4,14 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, EmitEvent, IncludeLaunchDescription, RegisterEventHandler
+from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -53,6 +56,14 @@ def generate_launch_description():
             description='Radar driver parameters',
         ),
         DeclareLaunchArgument(
+            'publish_description', default_value='false', choices=['true', 'false'],
+            description='Publish the standalone sensor URDF; disable if another publisher owns its TF',
+        ),
+        DeclareLaunchArgument(
+            'description_frame_id', default_value='umrr96',
+            description='Must match sensor_0.frame_id in params_file when publishing the description',
+        ),
+        DeclareLaunchArgument(
             'view',
             default_value='grid',
             choices=['grid', 'fan', 'live'],
@@ -68,6 +79,12 @@ def generate_launch_description():
             target_action=rviz,
             on_exit=[EmitEvent(event=Shutdown(reason='RViz closed'))],
         )),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                FindPackageShare('smartmicro_description'), 'launch', 'umrr96_description.launch.py'])),
+            condition=IfCondition(LaunchConfiguration('publish_description')),
+            launch_arguments={'frame_id': LaunchConfiguration('description_frame_id')}.items(),
+        ),
         radar,
         readback,
         views,

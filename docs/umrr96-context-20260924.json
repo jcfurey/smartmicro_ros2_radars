@@ -1,0 +1,187 @@
+{
+  "at_utc": "2026-09-24T22:50:02.187682+00:00",
+  "sensor_writes": false,
+  "nodes": [
+    [
+      "umrr96_views",
+      "/"
+    ],
+    [
+      "umrr96_investigation_context",
+      "/"
+    ],
+    [
+      "umrr96_rviz",
+      "/"
+    ],
+    [
+      "transform_listener_impl_59b134e94570",
+      "/"
+    ],
+    [
+      "umrr96_config_0",
+      "/"
+    ],
+    [
+      "smart_radar_readback",
+      "/"
+    ],
+    [
+      "smart_radar",
+      "/"
+    ]
+  ],
+  "topics": [
+    {
+      "name": "/diagnostics",
+      "types": [
+        "diagnostic_msgs/msg/DiagnosticArray"
+      ],
+      "publishers": 2
+    },
+    {
+      "name": "/parameter_events",
+      "types": [
+        "rcl_interfaces/msg/ParameterEvent"
+      ],
+      "publishers": 6
+    },
+    {
+      "name": "/rosout",
+      "types": [
+        "rcl_interfaces/msg/Log"
+      ],
+      "publishers": 7
+    },
+    {
+      "name": "/smart_radar/density_cells",
+      "types": [
+        "sensor_msgs/msg/PointCloud2"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/density_grid",
+      "types": [
+        "visualization_msgs/msg/Marker"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/density_grid_array",
+      "types": [
+        "visualization_msgs/msg/MarkerArray"
+      ],
+      "publishers": 0
+    },
+    {
+      "name": "/smart_radar/fan_guides",
+      "types": [
+        "visualization_msgs/msg/MarkerArray"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/fan_image",
+      "types": [
+        "sensor_msgs/msg/Image"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/fan_targets",
+      "types": [
+        "sensor_msgs/msg/PointCloud2"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/filter_status",
+      "types": [
+        "std_msgs/msg/String"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/filtered_targets_0",
+      "types": [
+        "sensor_msgs/msg/PointCloud2"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/port_targetheader_0",
+      "types": [
+        "umrr_ros2_msgs/msg/PortTargetHeader"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/port_targets_0",
+      "types": [
+        "sensor_msgs/msg/PointCloud2"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/timing_0",
+      "types": [
+        "umrr_ros2_msgs/msg/RadarTiming"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/smart_radar/umrr96_raw_quality_0",
+      "types": [
+        "umrr_ros2_msgs/msg/Umrr96RawQuality"
+      ],
+      "publishers": 1
+    },
+    {
+      "name": "/tf",
+      "types": [
+        "tf2_msgs/msg/TFMessage"
+      ],
+      "publishers": 0
+    },
+    {
+      "name": "/tf_static",
+      "types": [
+        "tf2_msgs/msg/TFMessage"
+      ],
+      "publishers": 0
+    }
+  ],
+  "selected_settings": {
+    "error": "Timed out waiting for the sensor reply",
+    "section": "auto_interface_0dim",
+    "sensor_id": 230739,
+    "success": false
+  },
+  "full_profile_attempt": {
+    "started_at": "2026-09-24T22:44:57.848145+00:00",
+    "sensor_id": 230739,
+    "scene": "unknown",
+    "prf_trials": false,
+    "windows": [],
+    "restoration": "not_needed",
+    "statuses": {
+      "auto_interface_version_major": 1,
+      "auto_interface_version_minor": 0,
+      "product_serial": 230739,
+      "product_gen": 150,
+      "product_mod_high": 0,
+      "product_mod_low": 3,
+      "product_rev": 1,
+      "systime_low_dword": 2538464236,
+      "systime_high_dword": 0,
+      "sw_generation": 5,
+      "sw_version_major": 5,
+      "sw_version_minor": 2,
+      "sw_version_patch": 2,
+      "customer_id": 0
+    },
+    "success": false,
+    "error": "Control request failed: {'error': 'Timed out waiting for the sensor reply', 'section': 'auto_interface_0dim', 'sensor_id': 230739, 'success': False}"
+  }
+}

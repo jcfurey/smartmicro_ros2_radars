@@ -1,0 +1,27 @@
+{
+  "started_at": "2026-09-24T23:13:05.699550+00:00",
+  "success": true,
+  "sensor_settings_written": false,
+  "description_rviz_started": false,
+  "raw_clouds_received": 127,
+  "transformed_clouds": 117,
+  "cloud_frame": "umrr96",
+  "housing_frame": "umrr96_link",
+  "hz": 18.055402509942294,
+  "description_publishers": 1,
+  "tf_static_publishers": [
+    {
+      "name": "umrr96_state_publisher",
+      "namespace": "/"
+    }
+  ],
+  "measurement_transform": "identity convention; not phase-centre calibration",
+  "test_cases_passed": 10,
+  "added_world_or_robot_pose": false,
+  "session_file": "/tmp/umrr96-description-live/session.json",
+  "steady_state_after_tf_discovery": {
+    "received": 73,
+    "transformed": 73,
+    "errors": []
+  }
+}

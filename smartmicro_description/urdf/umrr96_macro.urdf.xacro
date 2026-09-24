@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!--
+    Type 153 mechanical envelope, metres/radians.
+    Source: local 2020-11-11 datasheet, dimension drawing on p. 8.
+    The front drawing spans 97 mm horizontally and 76 mm vertically. Its
+    left-side drawing gives 22.45 mm overall depth; the specification table
+    gives 17.7 mm nominal body depth. The connector adds 6.8 mm at +Y.
+
+    This is a simplified envelope, not a CAD manufacturing/clearance model.
+    The housing frame is centred on the nominal 97 x 76 x 17.7 mm envelope.
+    +X faces out of the radar front, +Y is left, +Z follows the TOP marking.
+    No antenna phase-centre location or optical-frame rotation is assumed.
+    The measurement origin/rotation must be calibrated for mounted fusion.
+
+    parent empty: the housing is the standalone root (no fake base/odom).
+    parent supplied: xyz/rpy mount the housing in an existing robot URDF.
+    Each instance must have unique name/frame_id and one TF publisher.
+  -->
+  <xacro:macro name="umrr96_sensor" params="
+      name:=umrr96 frame_id:='' parent:=''
+      xyz:='0 0 0' rpy:='0 0 0'
+      measurement_xyz:='0 0 0' measurement_rpy:='0 0 0'">
+    <xacro:property name="data_frame" value="${frame_id if frame_id else name}"/>
+    <xacro:property name="body_depth" value="0.0177"/>
+    <xacro:property name="body_width" value="0.097"/>
+    <xacro:property name="body_height" value="0.076"/>
+
+    <link name="${name}_link">
+      <!-- Nominal housing envelope; tabs/ribs/fasteners are not CAD detail. -->
+      <visual name="${name}_housing">
+        <geometry><box size="${body_depth} ${body_width} ${body_height}"/></geometry>
+        <material name="${name}_housing_material"><color rgba="0.30 0.33 0.36 1"/></material>
+      </visual>
+      <!-- Front-face colour inset for orientation only; not antenna geometry. -->
+      <visual name="${name}_front_indicator">
+        <origin xyz="${body_depth / 2 + 0.00025} 0 0" rpy="0 0 0"/>
+        <geometry><box size="0.0005 0.067 0.070"/></geometry>
+        <material name="${name}_front_material"><color rgba="0.10 0.12 0.14 1"/></material>
+      </visual>
+      <!-- Small top mark makes an upside-down mounting visible in RViz. -->
+      <visual name="${name}_top_indicator">
+        <origin xyz="${body_depth / 2 + 0.0006} 0 0.030" rpy="0 0 0"/>
+        <geometry><box size="0.0002 0.014 0.003"/></geometry>
+        <material name="${name}_top_material"><color rgba="1 0.50 0.05 1"/></material>
+      </visual>
+      <!-- Only the dimensioned lateral protrusion is modelled, not the plug. -->
+      <visual name="${name}_connector_envelope">
+        <origin xyz="0 ${body_width / 2 + 0.0034} 0" rpy="0 0 0"/>
+        <geometry><box size="0.02245 0.0068 0.018"/></geometry>
+        <material name="${name}_connector_material"><color rgba="0.12 0.13 0.14 1"/></material>
+      </visual>
+      <!-- Conservative bounding box including connector/projections. A cable
+           and mounting bracket must be added to the eventual robot model. -->
+      <collision name="${name}_overall_envelope">
+        <origin xyz="0 0.0034 0" rpy="0 0 0"/>
+        <geometry><box size="0.02245 0.1038 0.076"/></geometry>
+      </collision>
+      <!-- No inertial: <=153 g is an upper bound, and COM/inertia are unknown.
+           This description is for TF, visualization and coarse collision. -->
+    </link>
+
+    <xacro:if value="${parent != ''}">
+      <joint name="${name}_mount_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="${name}_link"/>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+      </joint>
+    </xacro:if>
+
+    <link name="${data_frame}"/>
+    <joint name="${name}_measurement_joint" type="fixed">
+      <parent link="${name}_link"/>
+      <child link="${data_frame}"/>
+      <origin xyz="${measurement_xyz}" rpy="${measurement_rpy}"/>
+    </joint>
+  </xacro:macro>
+</robot>

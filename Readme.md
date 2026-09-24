@@ -9,6 +9,11 @@ acquired by the sensor through the ROS2 pipeline. This package implements such a
 For the UMRR-96 Type 153 work, see [output priorities and current capabilities](docs/umrr96-output-priorities.md),
 including advanced tuning, repeatable measurements, raw quality metadata,
 TF-aware density grids and UDP loss diagnostics.
+The [density, filtering and navigation investigation](docs/umrr96-navigation-investigation.md)
+adds a fresh live capture, reproducible offline assessment and a validation plan
+for radar assisting lidar, cameras and IMU.
+The [UMRR-96 sensor description](smartmicro_description/README.md) provides a
+standalone URDF/TF launch and a reusable Xacro macro for a future robot mount.
 
 ## Get the Smart Access release
 ```bash
