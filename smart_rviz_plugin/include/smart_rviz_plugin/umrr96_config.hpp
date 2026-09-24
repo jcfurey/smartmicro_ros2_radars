@@ -3,6 +3,7 @@
 #define SMART_RVIZ_PLUGIN__UMRR96_CONFIG_HPP_
 
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -11,6 +12,8 @@
 #include <chrono>
 #include <deque>
 #include <rclcpp/rclcpp.hpp>
+#include <rcl_interfaces/srv/set_parameters_atomically.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <rviz_common/panel.hpp>
 #include <umrr_ros2_msgs/msg/port_target_header.hpp>
 #include <umrr_ros2_msgs/srv/get_mode.hpp>
@@ -46,6 +49,8 @@ private:
   void fail(const QString & message);
   void cancel_pending();
   void changed_sensor();
+  void apply_filter();
+  void filter_status(const std::string & text);
   uint32_t sensor_id() const;
   Values selected() const;
 
@@ -60,6 +65,17 @@ private:
   QPushButton * preset_{};
   QPushButton * starting_{};
   QTimer * timer_{};
+  QComboBox * filter_mode_{};
+  QDoubleSpinBox * filter_snr_{};
+  QDoubleSpinBox * filter_speed_{};
+  QPushButton * filter_apply_{};
+  QLabel * filter_actual_{};
+  QLabel * filter_feedback_{};
+  bool filter_ready_{false};
+  bool filter_dirty_{false};
+  bool filter_pending_{false};
+  int64_t filter_pending_id_{};
+  Clock::time_point filter_deadline_{};
   Values actual_{};
   Values initial_{};
   Values expected_{};
@@ -78,6 +94,8 @@ private:
   rclcpp::Client<GetMode>::SharedPtr getter_;
   rclcpp::Client<GetStatus>::SharedPtr status_;
   rclcpp::Client<SetMode>::SharedPtr setter_;
+  rclcpp::Client<rcl_interfaces::srv::SetParametersAtomically>::SharedPtr filter_setter_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr filter_status_sub_;
   rclcpp::Subscription<umrr_ros2_msgs::msg::PortTargetHeader>::SharedPtr header_;
 };
 }  // namespace smart_rviz_plugin

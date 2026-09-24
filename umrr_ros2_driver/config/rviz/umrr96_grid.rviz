@@ -98,6 +98,21 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /smart_radar/fan_guides
       Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Name: Radar fan image
+      Normalize Range: false
+      Min Value: 0
+      Max Value: 255
+      Median window: 5
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Transport Hint: raw
+        Value: /smart_radar/fan_image
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 22; 27; 35

@@ -65,6 +65,8 @@ needs permission to open local ROS sockets, but no display server or radar.
 The UMRR-96 panel test uses mock ROS services to check staging without writes,
 verified application, restoring starting values, readback mismatch, malformed
 replies, responsive timeouts, and destruction with an outstanding request.
+It also checks host-filter staging/application, all three filter modes, rejected
+parameter updates, and cancellation of pending filter requests.
 
 On 2026-09-24, a separate UMRR-96 v1.2.2 loopback replay used the repository's
 native simulator and `targetlist_port_v2_1_0.bin`. It received three

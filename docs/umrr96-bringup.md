@@ -77,6 +77,8 @@ separately running radar driver before using this launch file. The grid and fan
 configurations both include **Detection density** and **Fan targets** checkboxes;
 toggle these in Displays to switch or overlay the views without restarting.
 Scroll over the view to zoom, and use the middle mouse button to pan.
+All three configurations also open **Radar fan image**, an ordinary RViz Image
+display showing the raster fan separately from the 3D scene.
 
 The original `view:=live` configuration shows targets colored by return power,
 with a dim gray `Recent targets (2 seconds)` layer for historical context.
@@ -109,10 +111,48 @@ The default 20 m range and ±90° azimuth are display bounds, not a statement of
 the sensor's field of view. A wider sensor sweep does not automatically enlarge
 the display bounds.
 
+### 2D raster image
+
+`/smart_radar/fan_image` is a 960 x 640 `sensor_msgs/Image` with `rgb8` encoding.
+It contains a fan-shaped range/azimuth raster, labeled range rings, azimuth
+spokes, an SNR color legend, and input status. Forward is up and positive azimuth
+is left. Each detected range/azimuth bin is colored by its strongest SNR, clipped
+to 0–50 dB. Empty bins retain the background. The default display bins are
+0.25 m by 2 degrees; these do not imply physical radar resolution.
+
+The image renders the latest target list. It does not contain raw radar samples
+or interpolate energy between detected targets. It says **WAITING FOR DATA**
+before the first scan, then **NO RECENT SCAN** and clears detections after one
+second without input. A valid empty scan is shown as **LIVE | 0 targets**.
+Fresh images carry the source scan timestamp; waiting/stale images carry the
+render time. Rasterization runs at `publish_hz` only while an image subscriber
+is present, so faster scans may be skipped for display.
+
+The **Radar fan image** dock can be resized or floated independently of the
+grid. To view only the image in a separate image viewer (installed on this host):
+
+```bash
+ros2 run rqt_image_view rqt_image_view /smart_radar/fan_image
+```
+
+The data driver and `umrr96_views` must already be running, or be supplied by a
+replay. The image viewer itself does not start the radar. Image rendering,
+orientation, SNR selection, packed RGB output, and stale-data clearing have been
+checked with synthetic input. Live checks on 2026-09-24 also received the image
+at approximately 10 Hz and confirmed RViz's image subscription.
+
+Example image from the live sensor in Stable mapping mode:
+
+![Live UMRR-96 raster fan](images/umrr96-fan-image.png)
+
+### View parameters and topics
+
 The `/umrr96_views` section in
 [`radar.params.umrr96_38553.yaml`](../umrr_ros2_driver/param/radar.params.umrr96_38553.yaml)
 sets `cell_size`, `decay_seconds`, `density_full_scale`, `max_range`,
-`half_angle_degrees`, and `publish_hz`. These are startup parameters; restart the
+`half_angle_degrees`, `publish_hz`, `image_width`, `image_height`, and
+`image_angle_bin_degrees`. The image uses `cell_size` for its radial bin size.
+These are startup parameters; restart the
 views node after editing them. The node only subscribes to detections and never
 sends sensor commands. Its outputs use standard ROS messages:
 
@@ -121,6 +161,7 @@ sends sensor commands. Its outputs use standard ROS messages:
 | `/smart_radar/density_grid` | `visualization_msgs/Marker` | Colored cell cubes for RViz |
 | `/smart_radar/density_cells` | `sensor_msgs/PointCloud2` | Observed cell centers and float `density` |
 | `/smart_radar/fan_targets` | `sensor_msgs/PointCloud2` | Flat range/azimuth points with `snr` |
+| `/smart_radar/fan_image` | `sensor_msgs/Image` | Annotated RGB range/azimuth raster |
 | `/smart_radar/fan_guides` | `visualization_msgs/MarkerArray` | Range and angle labels; available to late subscribers |
 
 For an existing driver or rosbag replay, run only the derived views:
@@ -133,19 +174,84 @@ rviz2 -d src/smartmicro_ros2_radars/umrr_ros2_driver/config/rviz/umrr96_grid.rvi
 ```
 
 An offline test checks cell boundaries, hit counts, decay, clock reversal,
-projection, filtering, stale scans, reset, and late subscribers using synthetic
-ROS detections:
+projection, filtering, stale scans, reset, late subscribers, image pixels, and
+image messages, filter modes, atomic parameter updates, and preservation of
+original point bytes using synthetic ROS detections:
 
 ```bash
 ROS_DOMAIN_ID=176 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST python3 \
   src/smartmicro_ros2_radars/umrr_ros2_driver/test/test_umrr96_views.py -v
 ```
 
-All six tests passed on 2026-09-24. A ten-second live check then received 84
+The expanded 14-test suite passed on 2026-09-24. Before the image addition,
+a ten-second live check received 84
 source scans, matched all 83 corresponding fan scans received by the checker,
 and observed 100 grid updates. The source had 17–36 targets per scan; the final
 grid contained 231 cells with decayed hit history. The RViz grid and guide
 subscriptions were confirmed. Sensor settings were unchanged by these checks.
+
+### Selectable host filtering
+
+The **Host detection filtering** section of the UMRR-96 panel stages a mode,
+minimum SNR, and minimum radial speed. **Apply filter** changes them together,
+clears the grid/fan history, and begins accumulating the newly selected returns.
+It makes no sensor writes. Opening the panel only reads the current host filter.
+The current mode, accepted/input counts, and rejection counts are displayed
+separately from the staged values; the image also labels its active filter mode.
+
+| Mode | Behavior |
+| --- | --- |
+| **Off** (default) | Pass through all source detections; normal view bounds still apply. |
+| **Stable mapping** | Reject invalid/low-SNR returns, then require a nearby candidate in at least one of the previous two scans. Stationary returns are retained. |
+| **Moving returns** | Reject invalid/low-SNR returns and those below the minimum absolute radial speed. Both velocity signs are retained. |
+
+The initial thresholds are **6 dB SNR** and **0.25 m/s absolute radial speed**.
+These are adjustable starting points, not calibrated sensor limits. SNR is the
+driver's reported power minus noise. The speed threshold is used only in Moving
+returns mode. Enabled filters require finite XYZ, range, azimuth, SNR, and radial
+speed, a nonnegative range, and azimuth within ±pi.
+
+Stable mapping uses a 0.5 m range / 3 degree azimuth neighborhood and two-of-three
+scan confirmation. Same-scan duplicates cannot confirm each other. History older
+than 0.5 s, repeated timestamps, and backward timestamps reset confirmation.
+The first scan is therefore withheld. This assumes a stationary radar and can
+reject fast-moving targets. It does not compensate ego motion. Moving returns
+uses measured radial velocity relative to the sensor; it can miss lateral motion
+and cannot distinguish world motion from radar motion. It is a Doppler gate,
+not an object tracker. These host filters operate on detections already produced
+by the sensor, not raw range/Doppler samples.
+
+The raw `/smart_radar/port_targets_0` topic remains available. The filtered topic
+`/smart_radar/filtered_targets_0` preserves the original fields and byte values
+of each retained point. All grid, fan, and image outputs use the selected
+detections; the original 3D raw-cloud displays still show the source topic.
+`/smart_radar/filter_status` publishes a transient-local `std_msgs/String` JSON
+report with `mode`, `input`, `accepted`, `rejected_quality`, `rejected_motion`,
+`rejected_temporal`, and the thresholds. The generic uncertainty/false-alarm/flag
+fields are not used: this UMRR-96 callback currently fills them with unavailable
+sentinels, even though the SDK exposes corresponding accessors.
+
+The three host filter parameters can also be changed at runtime:
+
+```bash
+ros2 param set /umrr96_views filter_mode mapping  # off, mapping, moving
+ros2 param set /umrr96_views filter_min_snr_db 8.0
+ros2 param set /umrr96_views filter_min_abs_speed 0.5
+```
+
+Each accepted update clears history. The panel applies all three atomically.
+Edits are temporary; set the saved YAML defaults to retain a preferred startup
+configuration. After switching modes, compare accepted/rejected counts and raw
+detections before interpreting a cleaner-looking display as a better map.
+
+A live check on 2026-09-24 sampled all three modes and verified that filtered
+clouds retained their source field layouts and point bytes. Off retained an
+average 27.16/27.16 targets over 50 scans; Stable mapping retained 26.38/27.54
+over 50 scans. The 31 sampled Moving returns scans retained zero targets from
+the stationary scene at the 0.25 m/s threshold. These checks establish pipeline
+operation, not detection accuracy. The starting host mode was restored afterward;
+the check sent no sensor-setting commands. The expanded RViz panel regression
+also passed, including mode selection, rejected changes, timeout, and shutdown.
 
 ### Sensor control panel
 

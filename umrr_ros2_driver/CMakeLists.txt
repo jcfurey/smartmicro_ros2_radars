@@ -225,5 +225,7 @@ endif()
 
 install(PROGRAMS scripts/umrr96_views.py DESTINATION lib/${PROJECT_NAME}
     RENAME umrr96_views)
+install(FILES scripts/umrr96_fan_image.py scripts/umrr96_filter.py
+    DESTINATION lib/${PROJECT_NAME})
 
 ament_auto_package(INSTALL_TO_SHARE config launch param)

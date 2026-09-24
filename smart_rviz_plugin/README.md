@@ -43,12 +43,19 @@ Included in `ros2 launch umrr_ros2_driver umrr96_live.launch.py`, or add
   and CAN target output off. Click Apply to send the preset.
 - **Starting values** stages the first settings read during this panel session.
   Click Apply to restore them. Closing the panel does not restore settings.
+- **Host detection filtering** selects Off, Stable mapping, or Moving returns,
+  with adjustable minimum SNR and radial speed. **Apply filter** changes the host
+  view parameters atomically and clears accumulated history. It sends no sensor
+  commands. Current mode and accepted/rejected counts are displayed separately
+  from the staged values. The raw target topic stays available for comparison.
 
 Opening the panel or loading an RViz configuration never writes sensor settings.
 Only the sensor ID is saved in the RViz file; parameter values are read afresh.
 There is no EEPROM-save or reset action. Service calls are asynchronous and have
 bounded timeouts, so missing replies do not block the interface. This panel uses
-the UMRR-96 control process launched by `umrr96_live.launch.py`.
+the UMRR-96 control process and `umrr96_views` launched by `umrr96_live.launch.py`.
+See the [bringup notes](../docs/umrr96-bringup.md) for filter behavior and the
+separate RGB **Radar fan image** display included in the saved RViz configurations.
 
 ### Smart Recorder
 - Captures target/object data and exports CSV.

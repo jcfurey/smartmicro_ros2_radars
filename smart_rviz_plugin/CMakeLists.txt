@@ -29,6 +29,8 @@ else()
 endif()
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rcl_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(cv_bridge REQUIRED)
 
@@ -66,6 +68,8 @@ target_include_directories(smart_rviz_plugin PUBLIC
 
 target_link_libraries(smart_rviz_plugin
   ${umrr_ros2_msgs_TARGETS}
+  ${rcl_interfaces_TARGETS}
+  ${std_msgs_TARGETS}
   pluginlib::pluginlib
   rclcpp::rclcpp
   rviz_common::rviz_common
@@ -124,6 +128,8 @@ if(BUILD_TESTING)
   add_executable(umrr96_panel_smoke test/umrr96_panel_smoke.cpp)
   target_link_libraries(umrr96_panel_smoke
     ${umrr_ros2_msgs_TARGETS}
+    ${rcl_interfaces_TARGETS}
+    ${std_msgs_TARGETS}
     pluginlib::pluginlib
     rclcpp::rclcpp
     rviz_common::rviz_common

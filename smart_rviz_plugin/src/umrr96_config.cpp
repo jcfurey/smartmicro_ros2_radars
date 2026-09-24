@@ -131,6 +131,53 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   feedback_->setWordWrap(true);
   feedback_->setTextFormat(Qt::PlainText);
   layout->addWidget(feedback_);
+
+  auto filtering = new QGroupBox("Host detection filtering", this);
+  auto filter_layout = new QGridLayout(filtering);
+  filter_mode_ = new QComboBox(filtering);
+  filter_mode_->setObjectName("filter_mode");
+  filter_mode_->addItem("Off (raw detections)", "off");
+  filter_mode_->addItem("Stable mapping", "mapping");
+  filter_mode_->addItem("Moving returns", "moving");
+  filter_snr_ = new QDoubleSpinBox(filtering);
+  filter_snr_->setObjectName("filter_snr");
+  filter_snr_->setRange(-20, 80);
+  filter_snr_->setSuffix(" dB");
+  filter_speed_ = new QDoubleSpinBox(filtering);
+  filter_speed_->setObjectName("filter_speed");
+  filter_speed_->setRange(0, 30);
+  filter_speed_->setDecimals(2);
+  filter_speed_->setSingleStep(.05);
+  filter_speed_->setSuffix(" m/s");
+  filter_speed_->setToolTip("Minimum absolute radial speed in Moving returns mode only.");
+  filter_layout->addWidget(new QLabel("Mode", filtering), 0, 0);
+  filter_layout->addWidget(filter_mode_, 0, 1);
+  filter_layout->addWidget(new QLabel("Minimum SNR", filtering), 1, 0);
+  filter_layout->addWidget(filter_snr_, 1, 1);
+  filter_layout->addWidget(new QLabel("Minimum radial speed", filtering), 2, 0);
+  filter_layout->addWidget(filter_speed_, 2, 1);
+  filter_apply_ = new QPushButton("Apply filter", filtering);
+  filter_apply_->setObjectName("filter_apply");
+  filter_layout->addWidget(filter_apply_, 3, 0, 1, 2);
+  filter_actual_ = new QLabel("Waiting for view node…", filtering);
+  filter_actual_->setObjectName("filter_actual");
+  filter_actual_->setWordWrap(true);
+  filter_actual_->setTextFormat(Qt::PlainText);
+  filter_layout->addWidget(filter_actual_, 4, 0, 1, 2);
+  filter_feedback_ = new QLabel("Applies to grid, fan, and image. Changing filters clears history.", filtering);
+  filter_feedback_->setObjectName("filter_feedback");
+  filter_feedback_->setWordWrap(true);
+  filter_feedback_->setTextFormat(Qt::PlainText);
+  filter_layout->addWidget(filter_feedback_, 5, 0, 1, 2);
+  layout->addWidget(filtering);
+  connect(filter_mode_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+    this, [this] {filter_dirty_ = true;});
+  connect(filter_snr_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+    this, [this] {filter_dirty_ = true;});
+  connect(filter_speed_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+    this, [this] {filter_dirty_ = true;});
+  connect(filter_apply_, &QPushButton::clicked, this, &Umrr96Config::apply_filter);
+  filter_apply_->setEnabled(false);
   layout->addStretch();
 
   static std::atomic<unsigned> instance{0};
@@ -139,6 +186,11 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   getter_ = node_->create_client<GetMode>("/smart_radar/get_radar_mode");
   status_ = node_->create_client<GetStatus>("/smart_radar/get_radar_status");
   setter_ = node_->create_client<SetMode>("/smart_radar/set_radar_mode");
+  filter_setter_ = node_->create_client<rcl_interfaces::srv::SetParametersAtomically>(
+    "/umrr96_views/set_parameters_atomically");
+  filter_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
+    "/smart_radar/filter_status", rclcpp::QoS(1).transient_local(),
+    [this](std_msgs::msg::String::ConstSharedPtr msg) {filter_status(msg->data);});
   header_ = node_->create_subscription<umrr_ros2_msgs::msg::PortTargetHeader>(
     "/smart_radar/port_targetheader_0", rclcpp::SensorDataQoS(),
     [this](umrr_ros2_msgs::msg::PortTargetHeader::ConstSharedPtr msg) {
@@ -168,6 +220,7 @@ Umrr96Config::~Umrr96Config()
 {
   timer_->stop();
   cancel_pending();
+  if (filter_pending_) {filter_setter_->remove_pending_request(filter_pending_id_);}
   executor_.remove_node(node_);
 }
 
@@ -184,6 +237,17 @@ void Umrr96Config::tick()
   if (!rclcpp::ok()) {return;}
   executor_.spin_some(std::chrono::milliseconds(2));
   const auto now = Clock::now();
+  if (filter_pending_ && now > filter_deadline_) {
+    filter_setter_->remove_pending_request(filter_pending_id_);
+    filter_pending_ = false;
+    filter_feedback_->setText("Filter request timed out. Check the current mode before retrying.");
+  }
+  const bool filter_available = filter_ready_ && !filter_pending_ &&
+    filter_setter_->service_is_ready();
+  filter_apply_->setEnabled(filter_available);
+  filter_mode_->setEnabled(filter_available);
+  filter_snr_->setEnabled(filter_available);
+  filter_speed_->setEnabled(filter_available);
   while (!arrivals_.empty() && now - arrivals_.front() > std::chrono::seconds(2)) {
     arrivals_.pop_front();
   }
@@ -202,6 +266,57 @@ void Umrr96Config::tick()
     next_read_ = now + std::chrono::seconds(3);
     if (getter_->service_is_ready()) {read_settings();}
   }
+}
+
+void Umrr96Config::filter_status(const std::string & text)
+{
+  const auto document = QJsonDocument::fromJson(QByteArray::fromStdString(text));
+  if (!document.isObject()) {return;}
+  const auto data = document.object();
+  const auto mode = data.value("mode").toString();
+  const int index = filter_mode_->findData(mode);
+  if (index < 0 || !data.value("min_snr_db").isDouble() ||
+    !data.value("min_abs_speed").isDouble()) {return;}
+  filter_actual_->setText(QString("Current: %1 · kept %2 / %3\nRejected: quality %4 · motion %5 · persistence %6")
+    .arg(filter_mode_->itemText(index)).arg(data.value("accepted").toInt())
+    .arg(data.value("input").toInt()).arg(data.value("rejected_quality").toInt())
+    .arg(data.value("rejected_motion").toInt()).arg(data.value("rejected_temporal").toInt()));
+  if (!filter_ready_ || (!filter_dirty_ && !filter_pending_)) {
+    const QSignalBlocker mode_block(filter_mode_), snr_block(filter_snr_), speed_block(filter_speed_);
+    filter_mode_->setCurrentIndex(index);
+    filter_snr_->setValue(data.value("min_snr_db").toDouble());
+    filter_speed_->setValue(data.value("min_abs_speed").toDouble());
+  }
+  filter_ready_ = true;
+}
+
+void Umrr96Config::apply_filter()
+{
+  if (filter_pending_ || !filter_setter_->service_is_ready()) {return;}
+  using Service = rcl_interfaces::srv::SetParametersAtomically;
+  auto request = std::make_shared<Service::Request>();
+  request->parameters = {
+    rclcpp::Parameter("filter_mode", filter_mode_->currentData().toString().toStdString()).to_parameter_msg(),
+    rclcpp::Parameter("filter_min_snr_db", filter_snr_->value()).to_parameter_msg(),
+    rclcpp::Parameter("filter_min_abs_speed", filter_speed_->value()).to_parameter_msg()};
+  filter_pending_ = true;
+  filter_deadline_ = Clock::now() + std::chrono::seconds(3);
+  filter_feedback_->setText("Applying host filter…");
+  filter_pending_id_ = filter_setter_->async_send_request(request,
+    [this](rclcpp::Client<Service>::SharedFuture future) {
+      filter_pending_ = false;
+      try {
+        const auto result = future.get()->result;
+        if (result.successful) {
+          filter_dirty_ = false;
+          filter_feedback_->setText("Filter applied; view history cleared. Raw topic remains available.");
+        } else {
+          filter_feedback_->setText("Filter rejected: " + QString::fromStdString(result.reason));
+        }
+      } catch (const std::exception & error) {
+        filter_feedback_->setText(QString::fromUtf8(error.what()));
+      }
+    }).request_id;
 }
 
 uint32_t Umrr96Config::sensor_id() const

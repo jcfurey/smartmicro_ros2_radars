@@ -51,3 +51,10 @@
     decay_seconds: 2.0
     density_full_scale: 20.0
     publish_hz: 10.0
+    image_width: 960
+    image_height: 640
+    image_angle_bin_degrees: 2.0
+    # Host post-processing only; off preserves the original detections.
+    filter_mode: 'off'
+    filter_min_snr_db: 6.0
+    filter_min_abs_speed: 0.25
