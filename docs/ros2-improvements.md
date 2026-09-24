@@ -58,9 +58,15 @@ hardware configuration as part of this batch.
    complete launch/panel namespace coverage and a read-only installation fixture.
    Processing tests and concurrent data-process isolation are now covered; legacy
    Docker/network tests are opt-in separately.
-7. **Data quality:** verify vendor uncertainty/quality field semantics before
-   replacing current unavailable-value sentinels. For moving platforms, transform
-   detections into a fixed frame before accumulating the density grid.
+7. **Data quality:** the [SDK audit](sdk-audit.md) verified four nonzero variance
+   fields, peak indices and acquisition setup in captured UMRR-96 packets.
+   Expose those with provenance; confirm variance units/calibration and the
+   meaning of zero flags/false-alarm probability before using them as confidence.
+   For moving platforms, transform detections into a fixed frame before
+   accumulating the density grid.
+8. **SDK instruction correctness:** the SDK audit reproduces an out-of-bounds
+   F32 conversion in the vendor header. Add a reproducible fix and bit-pattern
+   tests before extending float parameter controls. The live SDK was left intact.
 
 ## Validation record
 

@@ -1,0 +1,113 @@
+{
+  "date": "2026-09-24",
+  "smart_access_bundle": "3.13.0",
+  "service_api": [
+    2,
+    9,
+    1
+  ],
+  "capture_sha256": "412f297cf23c8839745754998a7d1b892b3db55af6bbce56b9e50a9f4739261b",
+  "capture_sensor_id": 230739,
+  "frame_count": 30,
+  "detection_count": 953,
+  "port_versions": [
+    [
+      2,
+      1
+    ]
+  ],
+  "all_header_counts_match": true,
+  "acquisition_setup_values": [
+    49
+  ],
+  "fields": {
+    "variance_range": {
+      "numeric_count": 953,
+      "minimum": 0.00037950603291392326,
+      "maximum": 0.0005069806938990951,
+      "zeros": 0,
+      "distinct": 947
+    },
+    "variance_speed": {
+      "numeric_count": 953,
+      "minimum": 0.0004451148852240294,
+      "maximum": 0.0006684187101200223,
+      "zeros": 0,
+      "distinct": 952
+    },
+    "variance_azimuth": {
+      "numeric_count": 953,
+      "minimum": 6.94992850185372e-05,
+      "maximum": 0.001320838462561369,
+      "zeros": 0,
+      "distinct": 952
+    },
+    "variance_elevation": {
+      "numeric_count": 953,
+      "minimum": 5.687621523975395e-05,
+      "maximum": 5.9239795518806204e-05,
+      "zeros": 0,
+      "distinct": 923
+    },
+    "false_alarm_probability": {
+      "numeric_count": 953,
+      "minimum": 0.0,
+      "maximum": 0.0,
+      "zeros": 953,
+      "distinct": 1
+    },
+    "flags": {
+      "numeric_count": 953,
+      "minimum": 0,
+      "maximum": 0,
+      "zeros": 953,
+      "distinct": 1
+    },
+    "peak_idx": {
+      "numeric_count": 953,
+      "minimum": 0,
+      "maximum": 43,
+      "zeros": 30,
+      "distinct": 41
+    }
+  },
+  "connected_before_replay": true,
+  "connected_after_replay": true,
+  "time_sync_readback": {
+    "section": "auto_interface_0dim",
+    "sensor_id": 230739,
+    "success": true,
+    "values": {
+      "sync_group_identifier": {
+        "response_type": 1,
+        "value": 0
+      },
+      "sync_interface": {
+        "response_type": 1,
+        "value": 2
+      },
+      "sync_mode": {
+        "response_type": 1,
+        "value": 0
+      },
+      "sync_slave_identifier": {
+        "response_type": 1,
+        "value": 0
+      },
+      "time_sync_mode": {
+        "response_type": 1,
+        "value": 0
+      },
+      "time_sync_nof_devices": {
+        "response_type": 1,
+        "value": 1
+      }
+    }
+  },
+  "float_conversion_probe": {
+    "vendor_header_sha256": "1bfb51bfa7b2fe53c55f97a5cfe4db11424ab561e4c153253d77289aa4b1c9e2",
+    "sanitizer_result": "stack-buffer-overflow: READ of size 8 from 4-byte tmp at Instruction.h:178",
+    "isolated_memcpy_fix_output": "1 3fc00000",
+    "live_sdk_modified": false
+  }
+}
