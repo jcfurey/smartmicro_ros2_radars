@@ -1,0 +1,81 @@
+{
+  "generated_at": "2026-09-24T23:32:31.058303+00:00",
+  "topic": "/smart_radar/port_targets_0",
+  "sources": [
+    {
+      "file": "results/umrr96-investigation-20260924/live/0_live_2026_09_24-17_44_48.mcap",
+      "bytes": 4904365,
+      "sha256": "b734494b6acad789c803f706bfd898da80f7917d91e935a141d8d41cbc57d751"
+    },
+    {
+      "file": "results/umrr96-investigation-20260924/live/metadata.yaml",
+      "bytes": 6423,
+      "sha256": "9100120fd1aab9c005b79d62f78da6e12246d2754cfefd52059c5da31d97d214"
+    }
+  ],
+  "frames": {
+    "umrr96": 808
+  },
+  "scans": 808,
+  "reasons": {
+    "valid": 808
+  },
+  "counts": {
+    "input": 21451,
+    "accepted": 21451,
+    "rejected_nonfinite": 0,
+    "rejected_range": 0,
+    "rejected_snr": 0,
+    "inliers": 21451,
+    "outliers": 0
+  },
+  "fit_config": {
+    "doppler_sign": 1,
+    "residual_threshold": 0.2,
+    "min_inliers": 8,
+    "min_inlier_fraction": 0.6,
+    "max_condition": 30.0,
+    "ransac_trials": 128,
+    "noise_floor": 0.05,
+    "velocity_std_floor": 0.1,
+    "max_velocity_std": 1.0,
+    "max_speed": 15.0
+  },
+  "gate_config": {
+    "min_range": 0.15,
+    "max_range": 120.0,
+    "min_snr_db": 6.0
+  },
+  "fitted_speed_mps": {
+    "min": 0.00012138327935783051,
+    "median": 0.0013936353985553708,
+    "p95": 0.003681591400394264,
+    "max": 0.006268213397889517
+  },
+  "direction_condition": {
+    "min": 5.121374032317391,
+    "median": 6.379697849216422,
+    "p95": 7.236172877990079,
+    "max": 7.758920657383792
+  },
+  "residual_rmse_mps": {
+    "min": 0.00040439195728988157,
+    "median": 0.0011935666584888887,
+    "p95": 0.0018797937162221862,
+    "max": 0.003481713068562587
+  },
+  "model_max_velocity_std_mps": {
+    "min": 0.1149192805921131,
+    "median": 0.12270854170693615,
+    "p95": 0.12889311517295143,
+    "max": 0.13321490185646967
+  },
+  "processing_ms": {
+    "min": 5.568919994402677,
+    "median": 6.568573495314922,
+    "p95": 7.515389502077596,
+    "max": 11.734357998648193
+  },
+  "independent_reference_available": false,
+  "interpretation": "Numerical replay only; fit residuals are not velocity accuracy. Doppler sign, timing, extrinsics and covariance are uncalibrated. Historical replay does not exercise live freshness checks."
+}

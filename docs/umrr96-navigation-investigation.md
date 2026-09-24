@@ -357,3 +357,15 @@ geometry. The real MCAP passes the metadata/count/byte-preservation checks above
 Those tests validate the assessment calculations and observed transport behavior;
 **ROS 2 navigation, mapping and moving-platform odometry remain unvalidated on
 this physical setup**.
+
+Implementation follow-up, September 24: the standalone
+[sensor description](../smartmicro_description/README.md) now supplies the
+measurement-frame contract. The first
+[processing iteration](../smartmicro_processing/README.md) implements selected-field
+validation, byte-preserving quality subsets, robust 3D Doppler fitting with
+geometry/consensus checks, experimental covariance, residual classification and
+stale-data handling. Its 29 pytest cases, 808-scan replay and 181-scan live check
+establish software behavior and local throughput. The live estimates remain on
+a separate experimental topic; physical sign/time/extrinsic/covariance calibration,
+dependable tuning readback, pose-aware accumulation and navigation benefit remain
+open parts of the validation plan above.

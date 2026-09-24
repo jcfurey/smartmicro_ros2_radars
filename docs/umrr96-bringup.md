@@ -71,6 +71,14 @@ the publisher. Its `description_frame_id` must match `sensor_0.frame_id` in the
 driver YAML (both default to `umrr96`). Use one publisher for the sensor joints;
 leave that option false if a standalone or full robot description already owns them.
 
+The optional [experimental processing package](../smartmicro_processing/README.md)
+can also run beside the driver. After building and sourcing its independent
+overlay, launch `ros2 launch smartmicro_processing umrr96_processing.launch.py`.
+It publishes quality-gated and Doppler-classified copies plus experimental radar
+velocity under `/umrr96_processing/`, with status in `/diagnostics`. Use the
+existing publisher if that node is already running. These outputs still need
+controlled-motion calibration before connection to a navigation estimator.
+
 ### Timestamps, runtime configuration and diagnostics
 
 Clouds and their matching metadata now use the ROS clock when the SDK callback

@@ -1,0 +1,39 @@
+{
+  "started_at": "2026-09-24T23:34:50.470010+00:00",
+  "duration_seconds": 10,
+  "raw_frames": 181,
+  "complete_processed_frames": 181,
+  "unmatched_raw_frames": 0,
+  "scan_hz": 18.099093921993692,
+  "velocity_messages": 181,
+  "counts": {
+    "doppler_inliers": 4555,
+    "doppler_outliers": 0,
+    "unclassified_targets": 0,
+    "raw": 4555,
+    "quality": 4555
+  },
+  "diagnostic_states": {
+    "valid": 181
+  },
+  "processing_ms": {
+    "min": 6.438709002395626,
+    "median": 7.51289999607252,
+    "p95": 8.780634998402093,
+    "max": 14.922114001819864
+  },
+  "velocity_receive_stamp_age_ms": {
+    "min": 6.516775,
+    "median": 7.634396,
+    "p95": 9.076987399999998,
+    "max": 19.592436
+  },
+  "byte_preservation_and_partition_checks": true,
+  "covariance_finite_positive_and_angular_unobserved": true,
+  "independent_reference_available": false,
+  "calibrated": false,
+  "sensor_settings_written": false,
+  "existing_driver_restarted": false,
+  "session_file": "/tmp/umrr96-processing-live/session.json",
+  "success": true
+}

@@ -14,6 +14,9 @@ adds a fresh live capture, reproducible offline assessment and a validation plan
 for radar assisting lidar, cameras and IMU.
 The [UMRR-96 sensor description](smartmicro_description/README.md) provides a
 standalone URDF/TF launch and a reusable Xacro macro for a future robot mount.
+The [experimental processing package](smartmicro_processing/README.md) adds
+measurement-field validation, robust 3D Doppler velocity, separate residual-based
+return groups and freshness diagnostics for passive live or recorded comparisons.
 
 ## Get the Smart Access release
 ```bash
