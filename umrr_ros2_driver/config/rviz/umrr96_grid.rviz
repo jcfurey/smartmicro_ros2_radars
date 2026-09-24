@@ -6,8 +6,10 @@ Panels:
       Expanded:
         - /Global Options1
         - /Detection density1
+        - /RobotModel1
+        - /RobotModel1/Description Topic1
       Splitter Ratio: 0.5
-    Tree Height: 607
+    Tree Height: 550
   - Class: rviz_common/Views
     Expanded:
       - /Current View1
@@ -19,20 +21,6 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
-    - Class: rviz_default_plugins/RobotModel
-      Name: Sensor housing
-      Enabled: false
-      Alpha: 1
-      Description Source: Topic
-      Description Topic:
-        Depth: 1
-        Durability Policy: Transient Local
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /umrr96/robot_description
-      Visual Enabled: true
-      Collision Enabled: false
-      TF Prefix: ''
     - Alpha: 0.2199999988079071
       Cell Size: 1
       Class: rviz_default_plugins/Grid
@@ -114,19 +102,54 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Name: Radar fan image
-      Normalize Range: false
-      Min Value: 0
       Max Value: 255
       Median window: 5
+      Min Value: 0
+      Name: Radar fan image
+      Normalize Range: false
       Topic:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Transport Hint: raw
+        Transport Override: ""
         Value: /smart_radar/fan_image
       Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /umrr96/robot_description
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        umrr96:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        umrr96_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: RobotModel
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
   Enabled: true
   Global Options:
     Background Color: 22; 27; 35
@@ -147,7 +170,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -1.6607962846755981
+      Angle: -1.7707961797714233
       Class: rviz_default_plugins/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -157,7 +180,7 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 122.6078872680664
+      Scale: 129.2298126220703
       Target Frame: <Fixed Frame>
       Value: TopDownOrtho (rviz_default_plugins)
       X: 9
@@ -169,7 +192,9 @@ Window Geometry:
   Height: 3318
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001c200000c9afc0200000003fb000000100044006900730070006c006100790073010000003e000002e3000000ca00fffffffb0000000a00560069006500770073010000032700000260000000a600fffffffb0000002a0055004d00520052002d0039003600200043006f006e00660069006700750072006100740069006f006e010000058d0000074b000001fe00ffffff000015c200000c9a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000001c200000c9afc0200000004fb000000100044006900730070006c006100790073010000003e000002aa000000ca00fffffffb0000000a0056006900650077007301000002ee00000231000000a600fffffffb0000002a0055004d00520052002d0039003600200043006f006e00660069006700750072006100740069006f006e0100000525000006bb0000034200fffffffb0000001e00520061006400610072002000660061006e00200069006d0061006700650100000be6000000f20000001600ffffff000015c200000c9a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Radar fan image:
+    collapsed: false
   UMRR-96 Configuration:
     collapsed: false
   Views:
