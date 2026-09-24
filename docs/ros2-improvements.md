@@ -69,6 +69,13 @@ hardware configuration as part of this batch.
    audited F32 conversion repair. CMake checks it, and ASan/UBSan tests exercise
    float bit patterns and unchanged integer conversions. No shared SDK binaries
    or physical sensor settings were changed.
+9. **Cloud dependency simplification — completed:** two explicit builders replace
+   the external wrapper and its submodule, retaining 72-byte target and 48-byte
+   object strides. All 66 target/object callbacks reserve their list size and
+   borrow the SDK list without copying it. Layout/byte tests cover every field,
+   empty clouds, NaNs, integer limits and zero padding. See the
+   [wrapper audit](point-cloud-wrapper-audit.md). This is
+   principally a maintenance improvement, not a measured receive-path bottleneck.
 
 ## Validation record
 
@@ -89,7 +96,7 @@ CMAKE_BUILD_PARALLEL_LEVEL=6 colcon build \
   --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 colcon test --base-paths src/smartmicro_ros2_radars \
   --packages-select umrr_ros2_driver smart_rviz_plugin \
-  --ctest-args -R 'test_runtime|test_sdk_float|test_sdk_patch|test_driver_runtime|test_readback|test_umrr96_views|panel_loading_smoke|umrr96_panel_smoke' \
+  --ctest-args -R 'test_runtime|test_point_cloud_builder|test_sdk_float|test_sdk_patch|test_driver_runtime|test_readback|test_umrr96_views|panel_loading_smoke|umrr96_panel_smoke' \
   --output-on-failure
 ```
 
@@ -98,13 +105,17 @@ configure time with `SMARTMICRO_TEST_DOMAIN_ID`. They require the SDK but no
 physical radar or Docker. Legacy network tests require
 `-DSMARTMICRO_NETWORK_TESTS=ON` explicitly.
 
-Result after the SDK fixes on this Lyrical host: **28 focused tests passed** (26 driver/processing
+Result after wrapper removal on this Lyrical host: **34 focused tests passed** (32 driver/processing
 tests and two RViz tests), with zero errors, failures or skips.
 
 - C++ tests check independent temporary configuration, exception cleanup, stream
   silence/recovery and repeated/backward/zero device counters. New checks cover
   callback draining/late entries/exceptions and sanitized F32 bit conversions.
 - Extraction-repair tests verify idempotence and rejection of unfamiliar code.
+- Six cloud-builder tests pin both published schemas and serialized bytes,
+  including integer signedness, NaN payloads, empty clouds and padding. A clean
+  build succeeds without the wrapper package. Recorded old/new ROS replay
+  produces identical data in all 18 target fields across 953 detections.
 - SDK replay tests run two namespaced data processes on separate sockets, verify
   independent configuration, unchanged installed templates, clean shutdown and
   cleanup, read-only parameters, and advancing ROS stamps despite a repeated
@@ -135,8 +146,10 @@ owner state, but SDK singletons and shared-library unloading remain unresolved.
 Control diagnostics may be delayed
 by the configured synchronous request timeout. Abrupt termination may leave a
 private temporary directory. The vendor float conversion warnings are resolved;
-deprecated calls in unrelated RViz panels remain. Live driver and RViz are left
-stopped after this offline implementation; a physical-sensor recheck is pending.
+deprecated calls in unrelated RViz panels remain. After restarting the SDK fixes,
+a live check verified the new quality fields across 1,458 detections. During the
+subsequent wrapper removal, the live driver and RViz remain on that existing
+build; the validated replacement is in `.colcon/umrr96-no-wrapper/install`.
 
 ## References
 

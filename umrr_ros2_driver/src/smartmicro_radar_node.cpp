@@ -18,7 +18,7 @@
 #include <signal.h>
 
 #include <nlohmann/json.hpp>
-#include <point_cloud_msg_wrapper/point_cloud_msg_wrapper.hpp>
+#include <umrr_ros2_driver/point_cloud_builder.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 #include <umrr11_t132_automotive_v1_1_2/comtargetlist/PortHeader.h>
 #include <umrr11_t132_automotive_v1_1_2/comtargetlist/Target.h>
@@ -113,7 +113,6 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <tuple>
 #include <vector>
 
 #include "umrr_ros2_driver/config_path.hpp"
@@ -128,7 +127,6 @@ using com::master::InstructionServiceIface;
 using com::master::Response;
 using com::master::ResponseBatch;
 using com::master::SetParamRequest;
-using point_cloud_msg_wrapper::PointCloud2Modifier;
 using std::literals::string_view_literals::operator""sv;
 
 namespace
@@ -185,123 +183,12 @@ constexpr auto kUIMajorVTag = "user_interface_major_v";
 constexpr auto kUIMinorVTag = "user_interface_minor_v";
 constexpr auto kUIPatchVTag = "user_interface_patch_v";
 
-constexpr bool float_eq(const float a, const float b) noexcept
-{
-  const auto maximum = std::max(std::fabs(a), std::fabs(b));
-  return std::fabs(a - b) <= maximum * std::numeric_limits<float>::epsilon();
-}
-struct RadarPoint
-{
-  float x{};
-  float y{};
-  float z{};
-  float radial_speed{};
-  float power{};
-  float rcs{};
-  float noise{};
-  float snr{};
-  float azimuth_angle{};
-  float elevation_angle{};
-  float range{};
-  float variance_range{};
-  float variance_speed{};
-  float variance_azimuth_angle{};
-  float variance_elevation_angle{};
-  float false_alarm_probability{};
-  uint32_t flags{};
-  uint16_t peak_idx{};
-  constexpr friend bool operator==(const RadarPoint & p1, const RadarPoint & p2) noexcept
-  {
-    return float_eq(p1.x, p2.x) && float_eq(p1.y, p2.y) && float_eq(p1.z, p2.z) &&
-           float_eq(p1.radial_speed, p2.radial_speed) && float_eq(p1.power, p2.power) &&
-           float_eq(p1.rcs, p2.rcs) && float_eq(p1.noise, p2.noise) && float_eq(p1.snr, p2.snr) &&
-           float_eq(p1.azimuth_angle, p2.azimuth_angle) &&
-           float_eq(p1.elevation_angle, p2.elevation_angle) && float_eq(p1.range, p2.range) &&
-           float_eq(p1.variance_range, p2.variance_range) &&
-           float_eq(p1.variance_speed, p2.variance_speed) &&
-           float_eq(p1.variance_azimuth_angle, p2.variance_azimuth_angle) &&
-           float_eq(p1.variance_elevation_angle, p2.variance_elevation_angle) &&
-           float_eq(p1.false_alarm_probability, p2.false_alarm_probability) &&
-           p1.flags == p2.flags && p1.peak_idx == p2.peak_idx;
-  }
-};
-
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(radial_speed);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(power);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(rcs);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(noise);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(snr);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(azimuth_angle);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(elevation_angle);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(range);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(variance_range);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(variance_speed);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(variance_azimuth_angle);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(variance_elevation_angle);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(false_alarm_probability);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(flags);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(peak_idx);
-using Generators = std::tuple<
-  point_cloud_msg_wrapper::field_x_generator, point_cloud_msg_wrapper::field_y_generator,
-  point_cloud_msg_wrapper::field_z_generator, field_radial_speed_generator, field_power_generator,
-  field_rcs_generator, field_noise_generator, field_snr_generator, field_azimuth_angle_generator,
-  field_elevation_angle_generator, field_range_generator, field_variance_range_generator,
-  field_variance_speed_generator, field_variance_azimuth_angle_generator,
-  field_variance_elevation_angle_generator, field_false_alarm_probability_generator,
-  field_flags_generator, field_peak_idx_generator>;
-using RadarCloudModifier = PointCloud2Modifier<RadarPoint, Generators>;
-
 constexpr float kRadarFloatSentinel = std::numeric_limits<float>::quiet_NaN();
 constexpr uint32_t kRadarFlagsSentinel = std::numeric_limits<uint32_t>::max();
 constexpr uint16_t kRadarPeakIdxSentinel = std::numeric_limits<uint16_t>::max();
 constexpr uint16_t kRadarU16Sentinel = std::numeric_limits<uint16_t>::max();
 constexpr uint8_t kRadarU8Sentinel = std::numeric_limits<uint8_t>::max();
 
-struct ObjectPoint
-{
-  float x{};
-  float y{};
-  float z{};
-  float speed_absolute{};
-  float heading{};
-  float length{};
-  float mileage{};
-  float quality{};
-  float acceleration{};
-  int16_t object_id{};
-  uint16_t idle_cycles{};
-  uint16_t spline_idx{};
-  uint8_t object_class{};
-  uint16_t status{};
-
-  constexpr friend bool operator==(const ObjectPoint & p1, const ObjectPoint & p2) noexcept
-  {
-    return float_eq(p1.x, p2.x) && float_eq(p1.y, p2.y) && float_eq(p1.z, p2.z) &&
-           float_eq(p1.speed_absolute, p2.speed_absolute) && float_eq(p1.heading, p2.heading) &&
-           float_eq(p1.length, p2.length) && float_eq(p1.mileage, p2.mileage) &&
-           float_eq(p1.quality, p2.quality) && float_eq(p1.acceleration, p2.acceleration);
-  }
-};
-
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(speed_absolute);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(heading);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(length);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(mileage);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(quality);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(acceleration);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(object_id);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(idle_cycles);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(spline_idx);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(object_class);
-LIDAR_UTILS__DEFINE_FIELD_GENERATOR_FOR_MEMBER(status);
-using GeneratorsObjectPoint = std::tuple<
-  point_cloud_msg_wrapper::field_x_generator, point_cloud_msg_wrapper::field_y_generator,
-  point_cloud_msg_wrapper::field_z_generator, field_speed_absolute_generator,
-  field_heading_generator, field_length_generator, field_mileage_generator, field_quality_generator,
-  field_acceleration_generator, field_object_id_generator, field_idle_cycles_generator,
-  field_spline_idx_generator, field_object_class_generator, field_status_generator>;
-
-using ObjectPointCloudModifier = PointCloud2Modifier<ObjectPoint, GeneratorsObjectPoint>;
 }  // namespace
 
 namespace smartmicro
@@ -2174,7 +2061,7 @@ void SmartmicroRadarNode::objectlist_callback_umrra4_mse_v3_0_0(
     object_header = objectlist_port_umrra4_mse_v3_0_0->GetObjectListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2194,7 +2081,9 @@ void SmartmicroRadarNode::objectlist_callback_umrra4_mse_v3_0_0(
     header.cycle_time = object_header->GetCycleTime();
     header.number_of_objects = object_header->GetNumberOfObjects();
     header.ts_measurement = object_header->GetTimestampOfMeasurement();
-    for (const auto & object : objectlist_port_umrra4_mse_v3_0_0->GetObjectList()) {
+    const auto & objects = objectlist_port_umrra4_mse_v3_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetPosX();
       const auto y_pos = object->GetPosY();
       const auto z_pos = object->GetPosZ();
@@ -2234,7 +2123,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v3_0_0(
     target_header = targetlist_port_umrra4_mse_v3_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2259,7 +2148,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v3_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra4_mse_v3_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra4_mse_v3_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -2356,7 +2247,7 @@ void SmartmicroRadarNode::objectlist_callback_umrra4_mse_v2_1_0(
     object_header = objectlist_port_umrra4_mse_v2_1_0->GetObjectListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2376,7 +2267,9 @@ void SmartmicroRadarNode::objectlist_callback_umrra4_mse_v2_1_0(
     header.cycle_time = object_header->GetCycleTime();
     header.number_of_objects = object_header->GetNumberOfObjects();
     header.ts_measurement = object_header->GetTimestampOfMeasurement();
-    for (const auto & object : objectlist_port_umrra4_mse_v2_1_0->GetObjectList()) {
+    const auto & objects = objectlist_port_umrra4_mse_v2_1_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetPosX();
       const auto y_pos = object->GetPosY();
       const auto z_pos = object->GetPosZ();
@@ -2416,7 +2309,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v2_1_0(
     target_header = targetlist_port_umrra4_mse_v2_1_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2441,7 +2334,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v2_1_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra4_mse_v2_1_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra4_mse_v2_1_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -2475,7 +2370,7 @@ void SmartmicroRadarNode::objectlist_callback_umrra4_mse_v1_0_0(
     object_header = objectlist_port_umrra4_mse_v1_0_0->GetObjectListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2495,7 +2390,9 @@ void SmartmicroRadarNode::objectlist_callback_umrra4_mse_v1_0_0(
     header.cycle_time = object_header->GetCycleTime();
     header.number_of_objects = object_header->GetNumberOfObjects();
     header.ts_measurement = object_header->GetTimestampOfMeasurement();
-    for (const auto & object : objectlist_port_umrra4_mse_v1_0_0->GetObjectList()) {
+    const auto & objects = objectlist_port_umrra4_mse_v1_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetPosX();
       const auto y_pos = object->GetPosY();
       const auto z_pos = object->GetPosZ();
@@ -2535,7 +2432,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v1_0_0(
     target_header = targetlist_port_umrra4_mse_v1_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2560,7 +2457,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v1_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra4_mse_v1_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra4_mse_v1_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -2595,7 +2494,7 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v2_0_0(
     object_header = objectlist_port_umrr9f_mse_v2_0_0->GetObjectListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2615,7 +2514,9 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v2_0_0(
     header.cycle_time = object_header->GetCycleTime();
     header.number_of_objects = object_header->GetNumberOfObjects();
     header.ts_measurement = object_header->GetTimestampOfMeasurement();
-    for (const auto & object : objectlist_port_umrr9f_mse_v2_0_0->GetObjectList()) {
+    const auto & objects = objectlist_port_umrr9f_mse_v2_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetPosX();
       const auto y_pos = object->GetPosY();
       const auto z_pos = object->GetPosZ();
@@ -2656,7 +2557,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v2_0_0(
     target_header = targetlist_port_umrr9f_mse_v2_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2681,7 +2582,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v2_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_mse_v2_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_mse_v2_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -2779,7 +2682,7 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_3_0(
     object_header = objectlist_port_umrr9f_mse_v1_3_0->GetObjectListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2799,7 +2702,9 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_3_0(
     header.cycle_time = object_header->GetCycleTime();
     header.number_of_objects = object_header->GetNumberOfObjects();
     header.ts_measurement = object_header->GetTimestampOfMeasurement();
-    for (const auto & object : objectlist_port_umrr9f_mse_v1_3_0->GetObjectList()) {
+    const auto & objects = objectlist_port_umrr9f_mse_v1_3_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetPosX();
       const auto y_pos = object->GetPosY();
       const auto z_pos = object->GetPosZ();
@@ -2840,7 +2745,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_3_0(
     target_header = targetlist_port_umrr9f_mse_v1_3_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2865,7 +2770,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_3_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_mse_v1_3_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_mse_v1_3_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -2900,7 +2807,7 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_1_0(
     object_header = objectlist_port_umrr9f_mse_v1_1_0->GetObjectListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2920,7 +2827,9 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_1_0(
     header.cycle_time = object_header->GetCycleTime();
     header.number_of_objects = object_header->GetNumberOfObjects();
     header.ts_measurement = object_header->GetTimestampOfMeasurement();
-    for (const auto & object : objectlist_port_umrr9f_mse_v1_1_0->GetObjectList()) {
+    const auto & objects = objectlist_port_umrr9f_mse_v1_1_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetPosX();
       const auto y_pos = object->GetPosY();
       const auto z_pos = object->GetPosZ();
@@ -2961,7 +2870,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_1_0(
     target_header = targetlist_port_umrr9f_mse_v1_1_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -2986,7 +2895,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_1_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_mse_v1_1_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_mse_v1_1_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3021,7 +2932,7 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_0_0(
     object_header = objectlist_port_umrr9f_mse_v1_0_0->GetObjectListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3041,7 +2952,9 @@ void SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_0_0(
     header.cycle_time = object_header->GetCycleTime();
     header.number_of_objects = object_header->GetNumberOfObjects();
     header.ts_measurement = object_header->GetTimestampOfMeasurement();
-    for (const auto & object : objectlist_port_umrr9f_mse_v1_0_0->GetObjectList()) {
+    const auto & objects = objectlist_port_umrr9f_mse_v1_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetPosX();
       const auto y_pos = object->GetPosY();
       const auto z_pos = object->GetPosZ();
@@ -3082,7 +2995,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_0_0(
     target_header = targetlist_port_umrr9f_mse_v1_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3107,7 +3020,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_mse_v1_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_mse_v1_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3142,7 +3057,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
     target_header = targetlist_port_umrr96->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3163,7 +3078,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.acquisition_setup_valid = true;
-    const auto targets = targetlist_port_umrr96->GetTargetList();
+    const auto & targets = targetlist_port_umrr96->GetTargetList();
     modifier.reserve(targets.size());
     for (const auto & target : targets) {
       const auto range = target->GetRange();
@@ -3201,7 +3116,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr11(
     target_header = targetlist_port_umrr11->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3221,7 +3136,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr11(
 
     header.cycle_time = target_header->GetCycleTime();
     header.number_of_targets = target_header->GetNumberOfTargets();
-    for (const auto & target : targetlist_port_umrr11->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr11->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3259,7 +3176,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v1_1_1(
     target_header = targetlist_port_umrr9f_v1_1_1->GetStaticPortHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3279,7 +3196,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v1_1_1(
 
     header.cycle_time = target_header->GetCycleTime();
     header.number_of_targets = target_header->GetNumberOfTargets();
-    for (const auto & target : targetlist_port_umrr9f_v1_1_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_v1_1_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3317,7 +3236,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_0_0(
     target_header = targetlist_port_umrr9f_v2_0_0->GetStaticPortHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3341,7 +3260,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_0_0(
     header.acquisition_sweep_idx = target_header->GetAcquisitionSweep();
     header.acquisition_cf_idx = target_header->GetAcquisitionTx();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_v2_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_v2_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3377,7 +3298,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_1_1(
     target_header = targetlist_port_umrr9f_v2_1_1->GetTargetListHeader();
     umrr_ros2_msgs::msg::PortTargetHeader header;
     sensor_msgs::msg::PointCloud2 msg;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3401,7 +3322,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_1_1(
     header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
     header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_v2_1_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_v2_1_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3437,7 +3360,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_2_1(
     target_header = targetlist_port_umrr9f_v2_2_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3463,7 +3386,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_2_1(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_v2_2_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_v2_2_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3499,7 +3424,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_4_1(
     target_header = targetlist_port_umrr9f_v2_4_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3525,7 +3450,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_4_1(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_v2_4_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_v2_4_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3561,7 +3488,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_0_0(
     target_header = targetlist_port_umrr9f_v3_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3587,7 +3514,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9f_v3_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_v3_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3623,7 +3552,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_2_0(
     target_header = targetlist_port_umrr9f_v3_2_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3651,7 +3580,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_2_0(
     header.acquisition_start = target_header->GetAcquisitionStart();
     header.acquisition_time_stamp_base = target_header->GetAcquisitionTimestampBase();
 
-    for (const auto & target : targetlist_port_umrr9f_v3_2_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9f_v3_2_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3750,7 +3681,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_0_3(
     target_header = targetlist_port_umrr9d_v1_0_3->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3774,7 +3705,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_0_3(
     header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
     header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9d_v1_0_3->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9d_v1_0_3->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3810,7 +3743,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_2_2(
     target_header = targetlist_port_umrr9d_v1_2_2->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3836,7 +3769,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_2_2(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9d_v1_2_2->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9d_v1_2_2->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3872,7 +3807,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_4_1(
     target_header = targetlist_port_umrr9d_v1_4_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3898,7 +3833,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_4_1(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9d_v1_4_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9d_v1_4_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3934,7 +3871,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_5_0(
     target_header = targetlist_port_umrr9d_v1_5_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -3960,7 +3897,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_5_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrr9d_v1_5_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9d_v1_5_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3995,7 +3934,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_7_0(
     target_header = targetlist_port_umrr9d_v1_7_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4024,7 +3963,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_7_0(
 
     header.acquisition_time_stamp_base = target_header->GetAcquisitionTimestampBase();
 
-    for (const auto & target : targetlist_port_umrr9d_v1_7_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrr9d_v1_7_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4126,7 +4067,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_0_1(
     target_header = targetlist_port_umrra4_v1_0_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4152,7 +4093,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_0_1(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra4_v1_0_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra4_v1_0_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4187,7 +4130,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_2_1(
     target_header = targetlist_port_umrra4_v1_2_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4213,7 +4156,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_2_1(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra4_v1_2_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra4_v1_2_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4248,7 +4193,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_4_0(
     target_header = targetlist_port_umrra4_v1_4_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4274,7 +4219,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_4_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra4_v1_4_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra4_v1_4_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4310,7 +4257,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_6_0(
     target_header = targetlist_port_umrra4_v1_6_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4338,7 +4285,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_6_0(
     header.acquisition_start = target_header->GetAcquisitionStart();
     header.acquisition_time_stamp_base = target_header->GetAcquisitionTimestampBase();
 
-    for (const auto & target : targetlist_port_umrra4_v1_6_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra4_v1_6_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4437,7 +4386,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v1_0_0(
     target_header = targetlist_port_umrra1_v1_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4463,7 +4412,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v1_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra1_v1_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra1_v1_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4500,7 +4451,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_0(
     target_header = targetlist_port_umrra1_v2_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4526,7 +4477,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra1_v2_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra1_v2_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4563,7 +4516,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_1(
     target_header = targetlist_port_umrra1_v2_0_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4589,7 +4542,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_1(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra1_v2_0_1->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra1_v2_0_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4626,7 +4581,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v3_0_0(
     target_header = targetlist_port_umrra1_v3_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::PortTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4652,7 +4607,9 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v3_0_0(
     header.prf = target_header->GetPrf();
     header.umambiguous_speed = target_header->GetUmambiguousSpeed();
     header.acquisition_start = target_header->GetAcquisitionStart();
-    for (const auto & target : targetlist_port_umrra1_v3_0_0->GetTargetList()) {
+    const auto & targets = targetlist_port_umrra1_v3_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4687,7 +4644,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v2_1_0(
     object_header = objectlist_can_umrra4_mse_v2_1_0->GetComObjectBaseListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4704,7 +4661,9 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v2_1_0(
     header.ego_yaw_rate = object_header->GetYawRate();
     header.ego_yaw_rate_quality = object_header->GetYawRateQuality();
     header.dyn_source = object_header->GetDynamicSource();
-    for (const auto & object : objectlist_can_umrra4_mse_v2_1_0->GetObjectList()) {
+    const auto & objects = objectlist_can_umrra4_mse_v2_1_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetXPoint1();
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
@@ -4740,7 +4699,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v2_1_0(
     target_header = targetlist_can_umrra4_mse_v2_1_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4755,7 +4714,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v2_1_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrra4_mse_v2_1_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrra4_mse_v2_1_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4790,7 +4751,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v1_0_0(
     object_header = objectlist_can_umrra4_mse_v1_0_0->GetComObjectBaseListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4807,7 +4768,9 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v1_0_0(
     header.ego_yaw_rate = object_header->GetYawRate();
     header.ego_yaw_rate_quality = object_header->GetYawRateQuality();
     header.dyn_source = object_header->GetDynamicSource();
-    for (const auto & object : objectlist_can_umrra4_mse_v1_0_0->GetObjectList()) {
+    const auto & objects = objectlist_can_umrra4_mse_v1_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetXPoint1();
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
@@ -4843,7 +4806,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v1_0_0(
     target_header = targetlist_can_umrra4_mse_v1_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4858,7 +4821,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v1_0_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrra4_mse_v1_0_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrra4_mse_v1_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4893,7 +4858,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_0_0(
     object_header = objectlist_can_umrr9f_mse_v1_0_0->GetComObjectBaseListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4910,7 +4875,9 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_0_0(
     header.ego_yaw_rate = object_header->GetYawRate();
     header.ego_yaw_rate_quality = object_header->GetYawRateQuality();
     header.dyn_source = object_header->GetDynamicSource();
-    for (const auto & object : objectlist_can_umrr9f_mse_v1_0_0->GetObjectList()) {
+    const auto & objects = objectlist_can_umrr9f_mse_v1_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetXPoint1();
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
@@ -4946,7 +4913,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_0_0(
     target_header = targetlist_can_umrr9f_mse_v1_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -4961,7 +4928,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_0_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrr9f_mse_v1_0_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_mse_v1_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -4996,7 +4965,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_1_0(
     object_header = objectlist_can_umrr9f_mse_v1_1_0->GetComObjectBaseListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
 
     fill_ros_header_stamp(
@@ -5014,7 +4983,9 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_1_0(
     header.ego_yaw_rate = object_header->GetYawRate();
     header.ego_yaw_rate_quality = object_header->GetYawRateQuality();
     header.dyn_source = object_header->GetDynamicSource();
-    for (const auto & object : objectlist_can_umrr9f_mse_v1_1_0->GetObjectList()) {
+    const auto & objects = objectlist_can_umrr9f_mse_v1_1_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetXPoint1();
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
@@ -5050,7 +5021,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_1_0(
     target_header = targetlist_can_umrr9f_mse_v1_1_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5065,7 +5036,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_1_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrr9f_mse_v1_1_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_mse_v1_1_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5100,7 +5073,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_3_0(
     object_header = objectlist_can_umrr9f_mse_v1_3_0->GetComObjectBaseListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5117,7 +5090,9 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_3_0(
     header.ego_yaw_rate = object_header->GetYawRate();
     header.ego_yaw_rate_quality = object_header->GetYawRateQuality();
     header.dyn_source = object_header->GetDynamicSource();
-    for (const auto & object : objectlist_can_umrr9f_mse_v1_3_0->GetObjectList()) {
+    const auto & objects = objectlist_can_umrr9f_mse_v1_3_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetXPoint1();
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
@@ -5153,7 +5128,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_3_0(
     target_header = targetlist_can_umrr9f_mse_v1_3_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5168,7 +5143,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_3_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrr9f_mse_v1_3_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_mse_v1_3_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5205,7 +5182,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr96(
     target_header = targetlist_can_umrr96->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5220,7 +5197,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr96(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr96->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr96->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5257,7 +5236,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr11(
     target_header = targetlist_can_umrr11->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5272,7 +5251,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr11(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr11->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr11->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5309,7 +5290,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_0_3(
     target_header = targetlist_can_umrr9d_v1_0_3->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5324,7 +5305,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_0_3(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9d_v1_0_3->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9d_v1_0_3->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5361,7 +5344,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_2_2(
     target_header = targetlist_can_umrr9d_v1_2_2->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5376,7 +5359,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_2_2(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9d_v1_2_2->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9d_v1_2_2->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5413,7 +5398,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_4_1(
     target_header = targetlist_can_umrr9d_v1_4_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5428,7 +5413,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_4_1(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9d_v1_4_1->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9d_v1_4_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5465,7 +5452,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_5_0(
     target_header = targetlist_can_umrr9d_v1_5_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5479,7 +5466,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_5_0(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9d_v1_5_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9d_v1_5_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5516,7 +5505,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_1_1(
     target_header = targetlist_can_umrr9f_v2_1_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5529,7 +5518,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_1_1(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9f_v2_1_1->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_v2_1_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5566,7 +5557,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_2_1(
     target_header = targetlist_can_umrr9f_v2_2_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5579,7 +5570,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_2_1(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9f_v2_2_1->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_v2_2_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5616,7 +5609,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_4_1(
     target_header = targetlist_can_umrr9f_v2_4_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5629,7 +5622,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_4_1(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9f_v2_4_1->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_v2_4_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5666,7 +5661,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_0_0(
     target_header = targetlist_can_umrr9f_v3_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5679,7 +5674,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_0_0(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9f_v3_0_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_v3_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5716,7 +5713,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_0_1(
     target_header = targetlist_can_umrra4_v1_0_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5729,7 +5726,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_0_1(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrra4_v1_0_1->GetTargetList()) {
+    const auto & targets = targetlist_can_umrra4_v1_0_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5766,7 +5765,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_2_1(
     target_header = targetlist_can_umrra4_v1_2_1->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5779,7 +5778,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_2_1(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrra4_v1_2_1->GetTargetList()) {
+    const auto & targets = targetlist_can_umrra4_v1_2_1->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5816,7 +5817,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_4_0(
     target_header = targetlist_can_umrra4_v1_4_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(
       msg,
@@ -5829,7 +5830,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_4_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrra4_v1_4_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrra4_v1_4_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5866,7 +5869,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_2_0(
     target_header = targetlist_can_umrr9f_v3_2_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(msg, header, port_header->GetTimestamp(), sensor_idx);
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
@@ -5875,7 +5878,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_2_0(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9f_v3_2_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_v3_2_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5911,7 +5916,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_7_0(
     target_header = targetlist_can_umrr9d_v1_7_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(msg, header, port_header->GetTimestamp(), sensor_idx);
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
@@ -5920,7 +5925,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_7_0(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrr9d_v1_7_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9d_v1_7_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5956,7 +5963,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_6_0(
     target_header = targetlist_can_umrra4_v1_6_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(msg, header, port_header->GetTimestamp(), sensor_idx);
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
@@ -5965,7 +5972,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_6_0(
     header.number_of_targets = target_header->GetNumberOfTargets();
     header.acquisition_setup = target_header->GetAcquisitionSetup();
     header.cycle_count = target_header->GetCycleCount();
-    for (const auto & target : targetlist_can_umrra4_v1_6_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrra4_v1_6_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -5999,7 +6008,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v3_0_0(
     object_header = objectlist_can_umrra4_mse_v3_0_0->GetComObjectBaseListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(msg, header, port_header->GetTimestamp(), sensor_idx);
 
@@ -6011,7 +6020,9 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v3_0_0(
     header.ego_yaw_rate = object_header->GetYawRate();
     header.ego_yaw_rate_quality = object_header->GetYawRateQuality();
     header.dyn_source = object_header->GetDynamicSource();
-    for (const auto & object : objectlist_can_umrra4_mse_v3_0_0->GetObjectList()) {
+    const auto & objects = objectlist_can_umrra4_mse_v3_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetXPoint1();
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
@@ -6047,7 +6058,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v3_0_0(
     target_header = targetlist_can_umrra4_mse_v3_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(msg, header, port_header->GetTimestamp(), sensor_idx);
 
@@ -6057,7 +6068,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v3_0_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrra4_mse_v3_0_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrra4_mse_v3_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -6091,7 +6104,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v2_0_0(
     object_header = objectlist_can_umrr9f_mse_v2_0_0->GetComObjectBaseListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanObjectHeader header;
-    ObjectPointCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(msg, header, port_header->GetTimestamp(), sensor_idx);
 
@@ -6103,7 +6116,9 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v2_0_0(
     header.ego_yaw_rate = object_header->GetYawRate();
     header.ego_yaw_rate_quality = object_header->GetYawRateQuality();
     header.dyn_source = object_header->GetDynamicSource();
-    for (const auto & object : objectlist_can_umrr9f_mse_v2_0_0->GetObjectList()) {
+    const auto & objects = objectlist_can_umrr9f_mse_v2_0_0->GetObjectList();
+    modifier.reserve(objects.size());
+    for (const auto & object : objects) {
       const auto x_pos = object->GetXPoint1();
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
@@ -6139,7 +6154,7 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v2_0_0(
     target_header = targetlist_can_umrr9f_mse_v2_0_0->GetTargetListHeader();
     sensor_msgs::msg::PointCloud2 msg;
     umrr_ros2_msgs::msg::CanTargetHeader header;
-    RadarCloudModifier modifier{msg, m_sensors[sensor_idx].frame_id};
+    RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
 
     fill_ros_header_stamp(msg, header, port_header->GetTimestamp(), sensor_idx);
 
@@ -6149,7 +6164,9 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v2_0_0(
     header.cycle_count = target_header->GetCycleCount();
     header.time_stamp = target_header->GetTimeStamp();
     header.acq_ts_fraction = target_header->GetAcqTimeStampFraction();
-    for (const auto & target : targetlist_can_umrr9f_mse_v2_0_0->GetTargetList()) {
+    const auto & targets = targetlist_can_umrr9f_mse_v2_0_0->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);

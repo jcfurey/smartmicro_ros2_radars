@@ -16,7 +16,6 @@
   <depend>rclpy</depend>
   <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
-  <depend>point_cloud_msg_wrapper</depend>
   <depend>visualization_msgs</depend>
   <depend>umrr_ros2_msgs</depend>
   <build_depend>nlohmann-json-dev</build_depend>

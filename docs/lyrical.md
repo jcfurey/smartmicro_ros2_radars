@@ -1,6 +1,6 @@
 # Building on ROS 2 Lyrical
 
-The driver, messages, point-cloud wrapper and all six RViz panels build on the
+The driver, messages and all six RViz panels build on the
 tested host: Ubuntu 26.04.1 x86_64, ROS 2 Lyrical, GCC 15.2, CMake 4.2.3 and
 Qt 6.10.2. Smart Access Automotive 3.13.0 uses its supplied
 `lib-linux-x86_64-gcc_9` libraries; the directory can be overridden with
@@ -9,12 +9,11 @@ Qt 6.10.2. Smart Access Automotive 3.13.0 uses its supplied
 ## Setup and build
 
 Run from the ROS workspace root. The SDK setup only needs to run once; it is
-already installed on this host. The point-cloud wrapper is a pinned upstream
-submodule because it was absent from this host's Lyrical package index.
+already installed on this host. Point clouds use standard `sensor_msgs` APIs;
+the external point-cloud wrapper and its submodule have been removed.
 
 ```bash
 source /opt/ros/lyrical/setup.bash
-git -C src/smartmicro_ros2_radars submodule update --init --recursive
 cd src/smartmicro_ros2_radars
 ./smart_extract.sh
 cd ../..
@@ -23,7 +22,7 @@ CMAKE_BUILD_PARALLEL_LEVEL=6 colcon build \
   --base-paths src/smartmicro_ros2_radars \
   --packages-up-to umrr_ros2_driver smart_rviz_plugin \
   --symlink-install \
-  --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+  --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 source install/local_setup.bash
 ros2 pkg executables umrr_ros2_driver
 ```
@@ -89,9 +88,7 @@ the driver's config files were restored afterward. This validates local SDK
 loading and the Ethernet target-output path; it is not a physical sensor test.
 
 The existing driver launch test expects the multi-sensor Docker network from
-`docker-compose.yml`. It was not run as part of this host build. The upstream
-wrapper's legacy test CMake also predates Lyrical, so the initial dependency
-build above disables its tests. Firmware download and hardware parameter writes
+`docker-compose.yml`. It was not run as part of this host build. Firmware download and hardware parameter writes
 were not exercised in the initial build checks. Later UMRR-96 hardware tuning
 and panel work is recorded in the [bringup notes](umrr96-bringup.md).
 The SDK's out-of-bounds float-to-integer read is now repaired, with ASan/UBSan

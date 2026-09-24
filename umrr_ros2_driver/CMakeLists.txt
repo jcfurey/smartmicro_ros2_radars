@@ -32,7 +32,6 @@ find_package(ament_cmake_auto REQUIRED)
 find_package(Threads REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(nlohmann_json 3.11 REQUIRED)
-find_package(point_cloud_msg_wrapper REQUIRED)
 
 ament_auto_find_build_dependencies()
 
@@ -200,6 +199,15 @@ if(BUILD_TESTING)
     ament_add_gtest(test_runtime test/test_runtime.cpp)
     target_include_directories(test_runtime PRIVATE include)
     target_link_libraries(test_runtime nlohmann_json::nlohmann_json Threads::Threads)
+
+    ament_add_gtest(test_point_cloud_builder test/test_point_cloud_builder.cpp)
+    target_include_directories(test_point_cloud_builder PRIVATE include)
+    target_link_libraries(test_point_cloud_builder ${sensor_msgs_TARGETS})
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(test_point_cloud_builder PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        set_property(TARGET test_point_cloud_builder APPEND_STRING PROPERTY LINK_FLAGS " -fsanitize=address,undefined")
+        set_tests_properties(test_point_cloud_builder PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    endif()
 
     ament_add_gtest(test_sdk_float test/test_sdk_float.cpp)
     target_include_directories(test_sdk_float PRIVATE smartmicro/include)

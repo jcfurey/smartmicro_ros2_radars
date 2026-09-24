@@ -87,13 +87,12 @@ For each sensor user interface there is a corressponding sensor firmware. The fo
 | UMRRA1 Type 166 AUTOMOTIVE v2.0.1                | UMRRA1 Type 166: V2.0.1             |
 | UMRRA1 Type 166 AUTOMOTIVE v3.0.0                | UMRRA1 Type 166: V3.0.0             |
 
-### Point cloud message wrapper library
-To add targets to the point cloud in a safe and quick fashion a
-[`point_cloud_msg_wrapper`](https://gitlab.com/ApexAI/point_cloud_msg_wrapper) library is used within
-this project's node. This project can be installed either through `rosdep` or manually by executing:
-```
-sudo apt install ros-foxy-point-cloud-msg-wrapper
-```
+### Point cloud construction
+The driver builds standard `sensor_msgs/PointCloud2` messages directly. Its two
+explicit builders preserve the 72-byte target and 48-byte object layouts,
+including all custom radar fields. No external point-cloud wrapper package or
+submodule is required. See the [layout audit](docs/point-cloud-wrapper-audit.md)
+and [Lyrical build instructions](docs/lyrical.md).
 
 To use the GUI provided, it is required to install the following package:
 ```
