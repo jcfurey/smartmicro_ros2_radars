@@ -18,7 +18,6 @@
 cmake_minimum_required(VERSION 3.11)
 
 project(umrr_ros2_driver)
-include(FetchContent)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
@@ -32,23 +31,16 @@ endif()
 find_package(ament_cmake_auto REQUIRED)
 find_package(Threads REQUIRED)
 find_package(visualization_msgs REQUIRED)
-
-fetchcontent_declare(json
-    URL https://github.com/nlohmann/json/releases/download/v3.12.0/include.zip
-    URL_HASH SHA256=b8cb0ef2dd7f57f18933997c9934bb1fa962594f701cd5a8d3c2c80541559372
-)
-
-fetchcontent_getproperties(json)
-if(NOT json_POPULATED)
-    fetchcontent_populate(json)
-    add_library(nlohmann_json INTERFACE)
-    target_include_directories(nlohmann_json INTERFACE ${json_SOURCE_DIR}/include)
-    add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
-endif()
+find_package(nlohmann_json 3.11 REQUIRED)
+find_package(point_cloud_msg_wrapper REQUIRED)
 
 ament_auto_find_build_dependencies()
 
-set(SMARTMICRO_LIB_DIR "lib-linux-x86_64-gcc_9")
+set(SMARTMICRO_LIB_DIR "lib-linux-x86_64-gcc_9" CACHE STRING
+    "Smart Access library directory relative to smartmicro/")
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/smartmicro/${SMARTMICRO_LIB_DIR}/libsmart_access.so")
+    message(FATAL_ERROR "Smart Access SDK is missing. Run ./smart_extract.sh in the repository root.")
+endif()
 
 # specify the path to search for the libraries
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/smartmicro/${SMARTMICRO_LIB_DIR})

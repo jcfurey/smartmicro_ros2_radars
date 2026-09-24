@@ -1,7 +1,11 @@
 #ifndef SMART_RVIZ_PLUGIN__SMART_RECORDER_HPP_
 #define SMART_RVIZ_PLUGIN__SMART_RECORDER_HPP_
 
+#if __has_include(<cv_bridge/cv_bridge.hpp>)
+#include <cv_bridge/cv_bridge.hpp>
+#else
 #include <cv_bridge/cv_bridge.h>
+#endif
 
 #include <QComboBox>
 #include <QDebug>

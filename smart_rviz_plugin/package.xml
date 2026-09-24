@@ -7,9 +7,10 @@
   <maintainer email="shahrukh.raja@smartmicro.de">shahrukh</maintainer>
   <license>Apache 2.0 License</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_auto</buildtool_depend>
   
-  <build_depend>qtbase5-dev</build_depend>
+  <build_depend condition="$ROS_DISTRO == 'foxy' or $ROS_DISTRO == 'humble' or $ROS_DISTRO == 'iron' or $ROS_DISTRO == 'jazzy' or $ROS_DISTRO == 'kilted'">qtbase5-dev</build_depend>
+  <build_depend condition="$ROS_DISTRO == 'lyrical' or $ROS_DISTRO == 'rolling'">qt6-base-dev</build_depend>
 
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
@@ -21,16 +22,15 @@
   <depend>rviz_rendering</depend>
   <depend>std_msgs</depend>
   <depend>visualization_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>libopencv-dev</depend>
   
-  <exec_depend>libqt5-core</exec_depend>
-  <exec_depend>libqt5-gui</exec_depend>
   <exec_depend>xacro</exec_depend>
-  <exec_depend>rviz</exec_depend>
-  <exec_depend>libqt5-opengl</exec_depend>
-  <exec_depend>libqt5-widgets</exec_depend>
+  <exec_depend>rviz2</exec_depend>
   
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_test</test_depend>
   
   <export>
     <build_type>ament_cmake</build_type>

@@ -1,6 +1,9 @@
 #ifndef SMART_RVIZ_PLUGIN__SMART_DOWNLOAD_HPP_
 #define SMART_RVIZ_PLUGIN__SMART_DOWNLOAD_HPP_
 
+#include <atomic>
+#include <thread>
+
 #include <QDebug>
 #include <QFileDialog>
 #include <QLabel>
@@ -75,6 +78,7 @@ private:
   rclcpp::Node::SharedPtr download_node_;
   rclcpp::Client<umrr_ros2_msgs::srv::FirmwareDownload>::SharedPtr download_client_;
   std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> executor_;
+  std::atomic<bool> stop_requested_{false};
   std::thread ros_thread_;
 
   QLineEdit * file_path_input_;

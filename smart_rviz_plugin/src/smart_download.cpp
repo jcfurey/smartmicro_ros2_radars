@@ -1,4 +1,7 @@
 #include "smart_rviz_plugin/smart_download.hpp"
+
+#include <chrono>
+#include <utility>
 #include <pluginlib/class_list_macros.hpp>
 
 namespace smart_rviz_plugin
@@ -13,6 +16,7 @@ SmartDownloadService::SmartDownloadService(QWidget * parent)
 
 SmartDownloadService::~SmartDownloadService()
 {
+  stop_requested_.store(true);
   if (executor_) {
     executor_->cancel();
   }
@@ -34,7 +38,13 @@ void SmartDownloadService::initialize_ros()
   executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   executor_->add_node(download_node_);
 
-  ros_thread_ = std::thread([this]() { executor_->spin(); });
+  ros_thread_ = std::thread([this]() {
+    // cancel() can run before the worker starts spinning. A stop flag and a
+    // bounded wait also let that ordering exit, instead of hanging in join().
+    while (rclcpp::ok() && !stop_requested_.load()) {
+      executor_->spin_once(std::chrono::milliseconds(100));
+    }
+  });
 
   RCLCPP_INFO(download_node_->get_logger(), "SmartDownloadService node initialized.");
 }
@@ -106,7 +116,7 @@ void SmartDownloadService::download_firmware()
   auto future = download_client_->async_send_request(request);
 
   // Async callback, do non block rviz
-  std::thread([this, future]() mutable {
+  std::thread([this, future = std::move(future)]() mutable {
     try {
       auto result = future.get();
       QString response_msg = QString::fromStdString(result->res);

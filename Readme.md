@@ -35,12 +35,13 @@ python custom_can_sender.py
 ## Prerequisites
 
 ### Supported ROS distributions:
+- ROS2 lyrical *(driver + Qt 6 RViz panels; see [native build and verification](docs/lyrical.md))*
 - ROS2 foxy *(recommended — full stack: driver + RViz plugins)*
 - ROS2 humble *(driver node only)*
 - ROS2 jazzy *(driver node only)*
 
-> **Note:** The RViz plugins (`smart_rviz_plugin`) are currently only available for **ROS2 foxy**.
-> On humble and jazzy the radar driver node is fully functional but the plugins are not supported.
+> The RViz plugins (`smart_rviz_plugin`) are verified here on **ROS2 Lyrical**.
+> The upstream support statement covers Foxy; Humble and Jazzy remain driver-only.
 
 ### UMRR radars and Smart Access API version
 A [smartmicro](https://www.smartmicro.com/automotive-radar) UMRR96, UMRR11, DRVEGRD 171, DRVEGRD 152, DRVEGRD 169, DRVEGRD 169 MSE or DRVEGRD 171 MSE radar is 

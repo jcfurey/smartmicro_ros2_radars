@@ -20,7 +20,13 @@ find_package(umrr_ros2_msgs REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_rendering REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Widgets Test)
+# Match the Qt major version exported by RViz; mixing Qt 5 and 6 is unsupported.
+if(TARGET Qt6::Widgets)
+  set(SMART_RVIZ_QT Qt6)
+else()
+  find_package(Qt5 REQUIRED COMPONENTS Widgets)
+  set(SMART_RVIZ_QT Qt5)
+endif()
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(OpenCV REQUIRED)
@@ -49,34 +55,22 @@ add_library(smart_rviz_plugin SHARED
   ${smart_rviz_plugin_HDRS}
 )
 
-set(dependencies
-  umrr_ros2_msgs
-  pluginlib
-  Qt5
-  rclcpp
-  rviz_common
-  rviz_default_plugins
-  rviz_ogre_vendor
-  rviz_rendering
-  std_msgs
-  OpenCV
-  cv_bridge
-)
-
-ament_target_dependencies(smart_rviz_plugin
-  ${dependencies}
-)
-
 target_include_directories(smart_rviz_plugin PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/smart_rviz_plugin>
-  ${Qt5Widgets_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
 )
 
 
 target_link_libraries(smart_rviz_plugin
+  ${umrr_ros2_msgs_TARGETS}
+  pluginlib::pluginlib
+  rclcpp::rclcpp
   rviz_common::rviz_common
+  rviz_rendering::rviz_rendering
+  cv_bridge::cv_bridge
+  ${OpenCV_LIBS}
+  ${SMART_RVIZ_QT}::Widgets
 )
 
 
@@ -99,11 +93,32 @@ install(
 
 ament_export_targets(smart_rviz_plugin HAS_LIBRARY_TARGET)
 ament_export_dependencies(
+  pluginlib
+  cv_bridge
+  OpenCV
+  ${SMART_RVIZ_QT}
   rclcpp
   rviz_common
   rviz_ogre_vendor
   sensor_msgs
   umrr_ros2_msgs
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_test REQUIRED)
+  add_executable(panel_loading_smoke test/panel_loading_smoke.cpp)
+  target_link_libraries(panel_loading_smoke
+    pluginlib::pluginlib
+    rclcpp::rclcpp
+    rviz_common::rviz_common
+    ${SMART_RVIZ_QT}::Widgets
+  )
+  ament_add_test(panel_loading_smoke
+    COMMAND $<TARGET_FILE:panel_loading_smoke>
+    TIMEOUT 20
+    ENV QT_QPA_PLATFORM=offscreen
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+  )
+endif()
 
 ament_package()
