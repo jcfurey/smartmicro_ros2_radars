@@ -118,6 +118,18 @@ def main():
                       'values': ['2', '3'], 'value_types': [3, 3]}, 'Invalid tuning value'),
                 ):
                     call(setter, SetMode.Request(**dict(tuning, **changes)), error)
+                velocity = dict(sensor_id=230739, section_name='auto_interface_0dim',
+                                params=['tv_min_speed_sweep_idx_2', 'tv_max_speed_sweep_idx_2'],
+                                values=['-12.5', '25.25'], value_types=[0, 0])
+                for changes, error in (
+                    ({'values': ['nan', '20']}, 'Invalid tuning value'),
+                    ({'values': ['-151', '20']}, 'Invalid tuning value'),
+                    ({'values': ['21', '20']}, 'Minimum velocity'),
+                    ({'params': ['tv_min_speed_sweep_idx_2'], 'values': ['-20'],
+                      'value_types': [0]}, 'both velocity bounds'),
+                    ({'value_types': [3, 3]}, 'Unsupported'),
+                ):
+                    call(setter, SetMode.Request(**dict(velocity, **changes)), error)
                 peer.settimeout(.1)
                 try:
                     peer.recvfrom(65535)
@@ -132,6 +144,8 @@ def main():
                         sensor_id=230739, section_name='auto_interface',
                         statuses=['sw_version_major'], status_types=[1])),
                     (setter, SetMode.Request(**tuning)),
+                    (setter, SetMode.Request(**velocity)),
+                    (setter, SetMode.Request(**dict(tuning, params=['prf_manual_value_idx']))),
                 ):
                     started = time.monotonic()
                     call(client, request, 'Timed out')
@@ -143,13 +157,13 @@ def main():
                 while time.monotonic() < deadline:
                     rclpy.spin_once(node, timeout_sec=.1)
                     matched = [s for s in diagnostics if s.name.endswith('Control requests') and
-                               dict((v.key, v.value) for v in s.values).get('timeouts') == '3']
+                               dict((v.key, v.value) for v in s.values).get('timeouts') == '5']
                     if matched:
                         break
                 assert matched and matched[-1].level == DiagnosticStatus.WARN, diagnostics
                 values = {v.key: v.value for v in matched[-1].values}
-                assert int(values['invalid_requests']) == 20, values
-                assert int(values['failed_requests']) == 3, values
+                assert int(values['invalid_requests']) == 25, values
+                assert int(values['failed_requests']) == 5, values
             finally:
                 node.destroy_node()
                 rclpy.shutdown()

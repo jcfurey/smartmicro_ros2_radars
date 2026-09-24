@@ -52,6 +52,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <umrr_ros2_msgs/msg/radar_timing.hpp>
+#include <umrr_ros2_msgs/msg/umrr96_raw_quality.hpp>
 #include <umrr_ros2_driver/runtime_config.hpp>
 #include <umrr_ros2_driver/startup_parameter.hpp>
 #include <umrr_ros2_driver/stream_health.hpp>
@@ -1405,6 +1406,8 @@ private:
   std::array<StreamHealth, detail::kMaxSensorCount> target_health_;
   std::array<rclcpp::Publisher<umrr_ros2_msgs::msg::RadarTiming>::SharedPtr,
     detail::kMaxSensorCount> timing_publishers_;
+  std::array<rclcpp::Publisher<umrr_ros2_msgs::msg::Umrr96RawQuality>::SharedPtr,
+    detail::kMaxSensorCount> raw_quality_publishers_;
   std::unique_ptr<diagnostic_updater::Updater> diagnostics_;
   double stale_timeout_seconds_{2.0};
 

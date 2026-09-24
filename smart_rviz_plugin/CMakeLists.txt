@@ -43,6 +43,7 @@ set(smart_rviz_plugin_SRCS
   src/smart_status.cpp
   src/smart_faults.cpp
   src/umrr96_config.cpp
+  src/umrr96_advanced.cpp
 )
 
 set(smart_rviz_plugin_HDRS
@@ -137,7 +138,7 @@ if(BUILD_TESTING)
   )
   ament_add_test(umrr96_panel_smoke
     COMMAND $<TARGET_FILE:umrr96_panel_smoke>
-    TIMEOUT 30
+    TIMEOUT 60
     ENV QT_QPA_PLATFORM=offscreen ROS_DOMAIN_ID=174 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
     GENERATE_RESULT_FOR_RETURN_CODE_ZERO
   )

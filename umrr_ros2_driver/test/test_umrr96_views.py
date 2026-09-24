@@ -12,6 +12,7 @@ import unittest
 
 import numpy as np
 import rclpy
+from geometry_msgs.msg import TransformStamped
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
@@ -49,6 +50,21 @@ class DensityTests(unittest.TestCase):
         grid.add([(1, 0)], 0)
         grid.add([(1, 0)], 2)
         self.assertAlmostEqual(grid.samples()[0][3], 1 + math.exp(-1))
+
+    def test_decay_change_preserves_hits_and_elapsed_old_rate(self):
+        grid = views.DensityGrid(.25, 2)
+        grid.add([(1, 0)], 0)
+        grid.set_decay(.5, 1)
+        self.assertAlmostEqual(grid.samples()[0][3], math.exp(-.5))
+        grid.decay(1.25)
+        self.assertAlmostEqual(grid.samples()[0][3], math.exp(-1))
+        for invalid in (0, -1, float('nan'), float('inf')):
+            with self.assertRaises(ValueError):
+                grid.set_decay(invalid, 2)
+            self.assertEqual(grid.decay_seconds, .5)
+            self.assertAlmostEqual(grid.samples()[0][3], math.exp(-1))
+        grid.decay(1.5)
+        self.assertEqual(grid.samples(), [])
 
     def test_clock_reversal_clears_old_frame(self):
         grid = views.DensityGrid()
@@ -112,6 +128,15 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(selected, [0, 1])
         self.assertEqual(stats['accepted'], 2)
 
+    def test_quality_mode_has_no_stationary_radar_or_speed_assumption(self):
+        filtering = views.DetectionFilter('quality', 6, .25)
+        selected, stats = filtering.select([
+            self.point(speed=0), self.point(radius=9, speed=-5), self.point(snr=5)], 1)
+        self.assertEqual(selected, [0, 1])
+        self.assertEqual(stats['rejected_quality'], 1)
+        self.assertEqual(stats['rejected_temporal'], 0)
+        self.assertEqual(stats['rejected_motion'], 0)
+
     def test_mapping_requires_distinct_scans_and_preserves_stationary_returns(self):
         filtering = views.DetectionFilter('mapping')
         points = [self.point(), self.point(radius=3.2)]
@@ -144,6 +169,106 @@ class FilterTests(unittest.TestCase):
 
 
 class RosViewTests(unittest.TestCase):
+    def test_decay_change_preserves_pending_transform_hit_age(self):
+        rclpy.init(args=['--ros-args', '-p', 'grid_frame_id:=odom', '-p', 'tf_wait_seconds:=2.0'])
+        radar_views = views.RadarViews()
+        now = 10.0
+        radar_views.now_seconds = lambda: now
+        header = Header(frame_id='umrr96')
+        header.stamp.sec = 10
+        layout = [PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32, count=1)
+                  for i, name in enumerate(('x', 'y', 'z', 'range', 'azimuth_angle', 'snr'))]
+        try:
+            radar_views.receive(point_cloud2.create_cloud(header, layout, [(1, 0, 0, 1, 0, 20)]))
+            self.assertEqual(len(radar_views.pending_grid), 1)
+            now = 11.0
+            changed = radar_views.set_parameters_atomically([Parameter('decay_seconds', value=.5)])
+            self.assertTrue(changed.successful)
+            self.assertEqual(len(radar_views.pending_grid), 1)
+            self.assertEqual(radar_views.grid.samples(), [])
+            tf = TransformStamped(header=Header(frame_id='odom'), child_frame_id='umrr96')
+            tf.header.stamp = header.stamp
+            tf.transform.rotation.w = 1.0
+            radar_views.tf_buffer.set_transform(tf, 'fixture')
+            now = 11.25
+            radar_views.publish()
+            self.assertEqual(len(radar_views.pending_grid), 0)
+            self.assertAlmostEqual(radar_views.grid.samples()[0][3], math.exp(-1))
+            now = 11.5
+            radar_views.publish()
+            self.assertEqual(radar_views.grid.samples(), [])
+        finally:
+            radar_views.destroy_node()
+            rclpy.shutdown()
+
+    def test_world_grid_uses_each_scan_transform_without_changing_sensor_fan(self):
+        rclpy.init(args=['--ros-args', '-p', 'grid_frame_id:=odom', '-p', 'tf_wait_seconds:=0.0'])
+        radar_views = views.RadarViews()
+        peer = rclpy.create_node('umrr96_tf_fixture')
+        executor = SingleThreadedExecutor()
+        executor.add_node(radar_views)
+        executor.add_node(peer)
+        cells, fan = [], []
+        peer.create_subscription(PointCloud2, '/smart_radar/density_cells', cells.append, 1)
+        peer.create_subscription(PointCloud2, '/smart_radar/fan_targets', fan.append, 1)
+        layout = [PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32, count=1)
+                  for i, name in enumerate(('x', 'y', 'z', 'range', 'azimuth_angle', 'snr'))]
+
+        def cloud(stamp, x, z=0):
+            header = Header(frame_id='umrr96')
+            header.stamp.sec = stamp
+            return point_cloud2.create_cloud(header, layout, [(x, 0, z, math.hypot(x, z), 0, 20)])
+
+        def transform(stamp, x, y=0, yaw=0, pitch=0):
+            tf = TransformStamped(header=Header(frame_id='odom'), child_frame_id='umrr96')
+            tf.header.stamp.sec = stamp
+            tf.transform.translation.x = float(x)
+            tf.transform.translation.y = float(y)
+            tf.transform.rotation.w = math.cos(yaw / 2) * math.cos(pitch / 2)
+            tf.transform.rotation.x = -math.sin(yaw / 2) * math.sin(pitch / 2)
+            tf.transform.rotation.y = math.cos(yaw / 2) * math.sin(pitch / 2)
+            tf.transform.rotation.z = math.sin(yaw / 2) * math.cos(pitch / 2)
+            radar_views.tf_buffer.set_transform(tf, 'fixture')
+
+        try:
+            deadline = time.monotonic() + 3
+            while radar_views.fan_pub.get_subscription_count() == 0 and time.monotonic() < deadline:
+                executor.spin_once(timeout_sec=.05)
+            # The same world target as the sensor translates, yaws, and pitches.
+            transform(10, 0)
+            radar_views.receive(cloud(10, 5.125))
+            transform(11, 1)
+            radar_views.receive(cloud(11, 4.125))
+            transform(12, 5.125, -4, yaw=math.pi / 2)
+            radar_views.receive(cloud(12, 4))
+            transform(13, 3.125, pitch=math.pi / 2)
+            radar_views.receive(cloud(13, 1, z=2))
+            self.assertEqual(len(radar_views.grid.samples()), 1)
+            self.assertGreater(radar_views.grid.samples()[0][3], 3.5)
+            self.assertEqual(radar_views.grid.samples()[0][0], 5.125)
+            radar_views.publish()
+            deadline = time.monotonic() + 3
+            while (not cells or not fan) and time.monotonic() < deadline:
+                executor.spin_once(timeout_sec=.05)
+            self.assertEqual(cells[-1].header.frame_id, 'odom')
+            self.assertEqual(fan[-1].header.frame_id, 'umrr96')
+            # Neither latest TF nor identity TF is a fallback for missing timestamps.
+            radar_views.receive(cloud(20, 2))
+            radar_views.receive(cloud(0, 2))
+            self.assertEqual(radar_views.tf_dropped, 2)
+            self.assertEqual(len(radar_views.grid.samples()), 1)
+            self.assertEqual(len(radar_views.image_targets), 1)  # Fan still usable without TF.
+            radar_views.grid.clear()
+            radar_views.receive(cloud(12, 4))  # Still uses t=12, not the latest (t=13).
+            self.assertEqual(radar_views.grid.samples()[0][0], 5.125)
+        finally:
+            executor.remove_node(peer)
+            executor.remove_node(radar_views)
+            peer.destroy_node()
+            radar_views.destroy_node()
+            executor.shutdown()
+            rclpy.shutdown()
+
     def test_filter_selection_atomic_parameters_and_original_point_bytes(self):
         rclpy.init()
         radar_views = views.RadarViews()
@@ -203,7 +328,27 @@ class RosViewTests(unittest.TestCase):
             self.assertEqual(filtered[-1].width, 2)
             self.assertEqual(filtered[-1].fields, cloud.fields)
             self.assertEqual(filtered[-1].data, cloud.data[:64])
+            wait(lambda: statuses[-1]['accepted'] == 2)
             self.assertEqual(statuses[-1]['rejected_quality'], 2)
+            # RViz resends unchanged filters with decay. Keep both density and
+            # persistence history, and publish the new value even without scans.
+            history = list(radar_views.filter.history)
+            cells_before = dict(radar_views.grid.cells)
+            accepted_before = statuses[-1]['accepted']
+            self.assertTrue(parameters(filter_mode='mapping', filter_min_snr_db=6.0,
+                                       filter_min_abs_speed=.25, decay_seconds=1.0).successful)
+            self.assertEqual(list(radar_views.filter.history), history)
+            self.assertEqual(radar_views.grid.cells.keys(), cells_before.keys())
+            self.assertTrue(all(0 < value <= cells_before[key]
+                                for key, value in radar_views.grid.cells.items()))
+            wait(lambda: statuses[-1]['density_decay_seconds'] == 1.0)
+            self.assertEqual(statuses[-1]['accepted'], accepted_before)
+            for invalid in (.09, 30.1, -1.0, float('nan'), float('inf')):
+                rejected = parameters(filter_mode='off', decay_seconds=invalid)
+                self.assertFalse(rejected.successful)
+                self.assertEqual(radar_views.get_parameter('decay_seconds').value, 1.0)
+                self.assertEqual(radar_views.get_parameter('filter_mode').value, 'mapping')
+                self.assertEqual(list(radar_views.filter.history), history)
             rejected = parameters(filter_mode='invalid', filter_min_snr_db=50.0)
             self.assertFalse(rejected.successful)
             self.assertEqual(radar_views.get_parameter('filter_mode').value, 'mapping')

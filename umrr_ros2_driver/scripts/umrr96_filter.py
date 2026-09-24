@@ -6,11 +6,11 @@ import math
 
 
 class DetectionFilter:
-    MODES = ('off', 'mapping', 'moving')
+    MODES = ('off', 'quality', 'mapping', 'moving')
 
     def __init__(self, mode='off', min_snr_db=6.0, min_abs_speed=.25):
         if mode not in self.MODES:
-            raise ValueError('filter_mode must be off, mapping, or moving')
+            raise ValueError('filter_mode must be off, quality, mapping, or moving')
         if not math.isfinite(min_snr_db) or not -20 <= min_snr_db <= 80:
             raise ValueError('filter_min_snr_db must be within -20..80 dB')
         if not math.isfinite(min_abs_speed) or not 0 <= min_abs_speed <= 30:

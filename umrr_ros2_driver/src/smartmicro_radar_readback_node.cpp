@@ -6,6 +6,7 @@
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <umrr_ros2_driver/runtime_config.hpp>
 #include <umrr_ros2_driver/startup_parameter.hpp>
+#include <umrr_ros2_driver/umrr96_tuning.hpp>
 #include <umrr_ros2_msgs/srv/get_mode.hpp>
 #include <umrr_ros2_msgs/srv/get_status.hpp>
 #include <umrr_ros2_msgs/srv/set_mode.hpp>
@@ -193,53 +194,31 @@ public:
 private:
   Json write(const SetMode::Request & request)
   {
-    // Bench tuning controls only. Network, persistence, and reset commands are
-    // deliberately outside this service's scope. Bounds follow the UMRR-96 UIF.
-    static const std::map<std::string, unsigned> limits = {
-      {"tx_antenna_idx", 2}, {"frequency_sweep_idx", 2}, {"range_toggle_mode", 3},
-      {"output_control_target_list_can", 1}};
     try {
       if (request.sensor_id != sensor_id_ || request.section_name != "auto_interface_0dim") {
         throw std::invalid_argument("Invalid tuning sensor ID or section");
       }
-      if (request.params.empty() || request.params.size() > 10 ||
-        request.params.size() != request.values.size() ||
-        request.params.size() != request.value_types.size())
-      {
-        throw std::invalid_argument("Supply 1–10 names, values and types with equal lengths");
-      }
-      if (std::set<std::string>(request.params.begin(), request.params.end()).size() !=
-        request.params.size())
-      {
-        throw std::invalid_argument("Tuning names must be unique");
-      }
+      const auto values = smartmicro::drivers::radar::validate_umrr96_tuning(
+        request.params, request.values, request.value_types);
       auto instructions = services_->GetInstructionService();
       std::shared_ptr<InstructionBatch> batch;
       if (!instructions || !instructions->AllocateInstructionBatch(sensor_id_, batch)) {
         throw std::runtime_error("Could not allocate SDK tuning request");
       }
       const BatchLease lease{instructions, batch};
+      std::vector<ValueType> types;
       for (size_t i = 0; i < request.params.size(); ++i) {
-        const auto bound = limits.find(request.params[i]);
-        if (bound == limits.end() || request.value_types[i] != 3) {
-          throw std::invalid_argument("Unsupported tuning parameter or type: " + request.params[i]);
-        }
-        unsigned value{};
-        const auto & string = request.values[i];
-        const auto parsed = std::from_chars(string.data(), string.data() + string.size(), value);
-        if (parsed.ec != std::errc{} || parsed.ptr != string.data() + string.size() ||
-          value > bound->second)
-        {
-          throw std::invalid_argument("Invalid tuning value for " + request.params[i]);
-        }
-        if (!batch->AddRequest(std::make_shared<com::master::SetParamRequest<uint8_t>>(
-            request.section_name, request.params[i], static_cast<uint8_t>(value))))
-        {
+        const bool floating = std::holds_alternative<float>(values[i]);
+        types.push_back(floating ? ValueType::F32 : ValueType::U8);
+        const bool added = std::visit([&](auto value) {
+            return batch->AddRequest(std::make_shared<com::master::SetParamRequest<decltype(value)>>(
+              request.section_name, request.params[i], value));
+          }, values[i]);
+        if (!added) {
           throw std::invalid_argument("SDK rejected tuning parameter: " + request.params[i]);
         }
       }
-      return exchange(batch, request.params,
-        std::vector<ValueType>(request.params.size(), ValueType::U8), request.section_name);
+      return exchange(batch, request.params, types, request.section_name);
     } catch (const std::invalid_argument & error) {
       ++invalid_requests_;
       return {{"sensor_id", request.sensor_id}, {"section", request.section_name},

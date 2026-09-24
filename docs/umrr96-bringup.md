@@ -147,6 +147,20 @@ have fewer recent hits; cyan and yellow indicate more, with the color scale
 saturating at 20 weighted hits. These are hit counts, so increasing the sensor's
 frame rate also increases the displayed density.
 
+**Density decay** in the RViz panel adjusts this time constant from 0.1 to 30 s
+using **Apply view settings**. Changes preserve existing hits and filter
+confirmation history; the new rate applies from the change onward. The default
+remains 2 s. A single isolated hit disappears after about 1.39 times the selected
+time constant; cells with repeated hits last longer. This control affects the
+density grid, not the instantaneous fan/image or RViz's separate point-cloud
+**Decay Time** property.
+
+It can also be adjusted while the views node runs:
+
+```bash
+ros2 param set /umrr96_views decay_seconds 0.5
+```
+
 This is a detection-history view, not an occupancy or free-space map. Empty
 cells are unknown; the view does not clear along radar rays, interpolate missing
 returns, or improve the sensor's physical resolution. History is accumulated in
@@ -206,9 +220,14 @@ The `/umrr96_views` section in
 sets `cell_size`, `decay_seconds`, `density_full_scale`, `max_range`,
 `half_angle_degrees`, `publish_hz`, `image_width`, `image_height`, and
 `image_angle_bin_degrees`. The image uses `cell_size` for its radial bin size.
-These are startup parameters; restart the
-views node after editing them. The node only subscribes to detections and never
+`decay_seconds` can change at runtime; the other display dimensions are startup
+parameters and require restarting the views node. The node only subscribes to detections and never
 sends sensor commands. Its outputs use standard ROS messages:
+
+`grid_frame_id` optionally selects a fixed TF frame for density accumulation;
+the fan and image remain sensor-local. See [moving-radar behavior and timing
+limits](umrr96-output-priorities.md#4-a-grid-that-can-follow-a-moving-radar)
+before enabling it.
 
 | Topic | Message | Contents |
 | --- | --- | --- |
@@ -246,9 +265,11 @@ subscriptions were confirmed. Sensor settings were unchanged by these checks.
 
 ### Selectable host filtering
 
-The **Host detection filtering** section of the UMRR-96 panel stages a mode,
-minimum SNR, and minimum radial speed. **Apply filter** changes them together,
-clears the grid/fan history, and begins accumulating the newly selected returns.
+The **Filtering and density history** section of the UMRR-96 panel stages a mode,
+minimum SNR, minimum radial speed, and density decay time. **Apply view settings**
+changes them atomically. Changing filter settings clears the grid/fan history
+and begins accumulating the newly selected returns. Changing only decay keeps
+the accumulated hits and filter confirmation history.
 It makes no sensor writes. Opening the panel only reads the current host filter.
 The current mode, accepted/input counts, and rejection counts are displayed
 separately from the staged values; the image also labels its active filter mode.
@@ -256,6 +277,7 @@ separately from the staged values; the image also labels its active filter mode.
 | Mode | Behavior |
 | --- | --- |
 | **Off** (default) | Pass through all source detections; normal view bounds still apply. |
+| **Quality only** | Reject invalid/low-SNR returns without scan persistence or speed gating; usable while the radar moves. |
 | **Stable mapping** | Reject invalid/low-SNR returns, then require a nearby candidate in at least one of the previous two scans. Stationary returns are retained. |
 | **Moving returns** | Reject invalid/low-SNR returns and those below the minimum absolute radial speed. Both velocity signs are retained. |
 
@@ -286,6 +308,9 @@ the SDK's four reported variances and peak index in the existing cloud fields.
 Variance units/calibration have not been fully established, so the host filters
 do not yet use them as covariance weights. False-alarm probability and flags
 remain unavailable sentinels because their validity/semantics are unverified.
+Their original SDK values are now separately available on
+`/smart_radar/umrr96_raw_quality_0`, explicitly marked as uninterpreted. See
+[raw quality semantics](umrr96-output-priorities.md#3-raw-quality-without-invented-confidence).
 
 `PortTargetHeader` now includes `acquisition_setup` and `acquisition_setup_valid`.
 The UMRR-96 Ethernet callback supplies the raw 16-bit setup word with validity
@@ -297,7 +322,7 @@ reported values for retained detections.
 The three host filter parameters can also be changed at runtime:
 
 ```bash
-ros2 param set /umrr96_views filter_mode mapping  # off, mapping, moving
+ros2 param set /umrr96_views filter_mode mapping  # off, quality, mapping, moving
 ros2 param set /umrr96_views filter_min_snr_db 8.0
 ros2 param set /umrr96_views filter_min_abs_speed 0.5
 ```
@@ -328,6 +353,12 @@ closing the panel does not write sensor settings, and no EEPROM save is offered.
 The live metrics correspond to sensor topic index 0.
 
 The panel's live readback and firmware display were verified on this sensor.
+The later **Advanced sensor controls…** dialog adds PRF and velocity bounds,
+with simulated-response validation documented in
+[output priorities](umrr96-output-priorities.md#1-controls-and-repeatable-measurements).
+Its live write verification is still pending. After reconnection, the original
+control process read all settings successfully, but parameter snapshots on a
+temporary extra control socket timed out; the trial stopped before any writes.
 Before shutdown, the last verified panel settings were sweep 2, range switching
 off, antenna 0, and CAN target output off. Both radar processes and RViz exited
 cleanly. After the subsequent power cycle, readback showed the same settings
@@ -405,8 +436,10 @@ ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode \
   '{sensor_id: 230739, section_name: auto_interface_0dim, params: [output_control_target_list_can], param_types: [3]}'
 ```
 
-Use value `"1"` to restore CAN target output. Other parameter writes and save/reset
-commands are outside the new control service's scope.
+Use value `"1"` to restore CAN target output. The service also supports PRF
+selection and paired per-sweep velocity bounds; see [advanced controls and the
+measurement tool](umrr96-output-priorities.md#1-controls-and-repeatable-measurements).
+Save/reset and network commands remain outside this service's scope.
 
 The hardware comparison script records the current settings, tests CAN target
 output off, antenna indices 1 and 2, and sweep index 1, with a return to baseline

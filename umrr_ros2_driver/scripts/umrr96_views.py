@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Sensor-local detection density and polar fan displays for UMRR-96 targets."""
+"""Detection density in a selected TF frame and sensor-local polar fan displays."""
 
 import copy
+from collections import deque
 import json
 import math
+import time
 
+import numpy as np
 import rclpy
 from geometry_msgs.msg import Point
-from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
+from rcl_interfaces.msg import FloatingPointRange, ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from rclpy.time import Time
 from sensor_msgs.msg import Image, PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import ColorRGBA, Header, String
 from std_srvs.srv import Empty
 from visualization_msgs.msg import Marker, MarkerArray
+from tf2_ros import Buffer, TransformException, TransformListener
+from tf2_sensor_msgs.tf2_sensor_msgs import transform_points
 
 from umrr96_fan_image import FanImage
 from umrr96_filter import DetectionFilter
@@ -48,12 +54,18 @@ class DensityGrid:
                               if weight * factor >= .25}
         self.time = now
 
-    def add(self, points, now):
+    def add(self, points, now, weight=1.0):
         self.decay(now)
         for x, y in points:
             if math.isfinite(x) and math.isfinite(y):
                 cell = (math.floor(x / self.resolution), math.floor(y / self.resolution))
-                self.cells[cell] = self.cells.get(cell, 0.0) + 1.0
+                self.cells[cell] = self.cells.get(cell, 0.0) + weight
+
+    def set_decay(self, seconds, now):
+        if not math.isfinite(seconds) or seconds <= 0:
+            raise ValueError('Decay time must be finite and positive')
+        self.decay(now)  # Apply the old rate up to the change, without clearing hits.
+        self.decay_seconds = seconds
 
     def samples(self):
         return [((i + .5) * self.resolution, (j + .5) * self.resolution, 0.0, hits)
@@ -87,10 +99,21 @@ class RadarViews(Node):
                 name, default, ParameterDescriptor(read_only=True)).value
 
         self.frame = param('frame_id', 'umrr96')
+        self.grid_frame = param('grid_frame_id', '') or self.frame
+        self.tf_wait = param('tf_wait_seconds', .25)
+        if not math.isfinite(self.tf_wait) or not 0 <= self.tf_wait <= 2:
+            raise ValueError('tf_wait_seconds must be within 0..2 seconds')
+        self.tf_buffer = Buffer(node=self) if self.grid_frame != self.frame else None
+        self.tf_listener = TransformListener(self.tf_buffer, self) if self.tf_buffer else None
+        self.pending_grid = deque()
+        self.tf_dropped = 0
+        self.grid_clock = None
         self.range = param('max_range', 20.0)
         angle = param('half_angle_degrees', 90.0)
         resolution = param('cell_size', .25)
-        decay = param('decay_seconds', 2.0)
+        decay = self.declare_parameter('decay_seconds', 2.0, ParameterDescriptor(
+            description='Density exponential decay time in seconds; adjustable at runtime.',
+            floating_point_range=[FloatingPointRange(from_value=.1, to_value=30.0)])).value
         self.full_scale = param('density_full_scale', 20.0)
         rate = param('publish_hz', 10.0)
         topic = param('input_topic', '/smart_radar/port_targets_0')
@@ -141,8 +164,8 @@ class RadarViews(Node):
     def now_seconds(self):
         return self.get_clock().now().nanoseconds * 1e-9
 
-    def header(self):
-        return Header(stamp=self.get_clock().now().to_msg(), frame_id=self.frame)
+    def header(self, frame=None):
+        return Header(stamp=self.get_clock().now().to_msg(), frame_id=frame or self.frame)
 
     def filter_options(self, parameters):
         options = {name: self.get_parameter(name).value for name in (
@@ -152,6 +175,10 @@ class RadarViews(Node):
 
     def validate_filter(self, parameters):
         try:
+            decay = next((p.value for p in parameters if p.name == 'decay_seconds'),
+                         self.get_parameter('decay_seconds').value)
+            if not math.isfinite(decay) or not .1 <= decay <= 30:
+                raise ValueError('decay_seconds must be finite and within 0.1..30 seconds')
             options = self.filter_options(parameters)
             DetectionFilter(options['filter_mode'], options['filter_min_snr_db'],
                             options['filter_min_abs_speed'])
@@ -160,12 +187,28 @@ class RadarViews(Node):
             return SetParametersResult(successful=False, reason=str(error))
 
     def update_filter(self, parameters):
-        if not any(p.name.startswith('filter_') for p in parameters):
-            return
+        decay = self.get_parameter('decay_seconds').value
+        decay_changed = decay != self.grid.decay_seconds
+        if decay_changed:
+            now = self.now_seconds()
+            self.transform_grid(now)
+            old_decay = self.grid.decay_seconds
+            self.grid.set_decay(decay, now)
+            # Pending TF scans also retain decay accrued before the rate change.
+            self.pending_grid = deque((header, points, queued, now,
+                weight * math.exp(-max(0, now - received) / old_decay))
+                for header, points, queued, received, weight in self.pending_grid)
         options = self.filter_options(parameters)
+        if (options['filter_mode'], options['filter_min_snr_db'], options['filter_min_abs_speed']) == (
+                self.filter.mode, self.filter.min_snr_db, self.filter.min_abs_speed):
+            if decay_changed:
+                self.publish_view_status()
+                self.publish()
+            return
         self.filter = DetectionFilter(options['filter_mode'], options['filter_min_snr_db'],
                                       options['filter_min_abs_speed'])
         self.grid.clear()
+        self.pending_grid.clear()
         self.last_input, self.input_header = None, None
         self.image_targets = []
         self.fan_pub.publish(point_cloud2.create_cloud(self.header(), fields('snr'), []))
@@ -178,9 +221,17 @@ class RadarViews(Node):
         self.publish()
 
     def publish_filter_status(self, points, stamp=0.0):
-        selected, stats = self.filter.select(points, stamp)
-        self.filter_status_pub.publish(String(data=json.dumps(stats)))
+        selected, self.filter_stats = self.filter.select(points, stamp)
+        self.publish_view_status()
         return selected
+
+    def publish_view_status(self):
+        stats = dict(self.filter_stats)
+        stats.update(grid_frame_id=self.grid_frame, grid_tf_dropped=self.tf_dropped,
+                     grid_tf_pending=len(self.pending_grid),
+                     grid_timestamp_source='ros_receive_time', ego_motion_compensated=False,
+                     density_decay_seconds=self.grid.decay_seconds)
+        self.filter_status_pub.publish(String(data=json.dumps(stats)))
 
     def receive(self, cloud):
         if cloud.header.frame_id != self.frame:
@@ -213,7 +264,11 @@ class RadarViews(Node):
                     continue
                 if math.hypot(x, y) > self.range:
                     continue
-                cartesian.append((x, y))
+                # The grid uses XYZ before projection: pitch/roll matter in a
+                # world frame. Legacy planar inputs still work in sensor-local mode.
+                z = float(p['z']) if 'z' in points.dtype.names else 0.0
+                if math.isfinite(z):
+                    cartesian.append((x, y, z))
                 snr = snr if math.isfinite(snr) else 0.0
                 fan.append((radius * math.cos(azimuth), radius * math.sin(azimuth),
                             0.0, snr))
@@ -222,19 +277,57 @@ class RadarViews(Node):
             self.get_logger().warning(f'Ignoring malformed target cloud: {error}', throttle_duration_sec=5)
             return
         now = self.now_seconds()
-        self.grid.add(cartesian, now)
+        if self.tf_buffer is None:
+            self.grid.add(((x, y) for x, y, _ in cartesian), now)
+        elif not (cloud.header.stamp.sec or cloud.header.stamp.nanosec):
+            # Time(0) means latest TF; never use that silently for accumulation.
+            self.tf_dropped += 1
+            self.get_logger().warning('Skipping density input with zero timestamp', throttle_duration_sec=5)
+        else:
+            if len(self.pending_grid) >= 40:
+                self.pending_grid.popleft()
+                self.tf_dropped += 1
+            self.pending_grid.append((cloud.header, cartesian, time.monotonic(), now, 1.0))
+            self.transform_grid(now)
         self.last_input = now
         self.input_header = cloud.header
         self.image_targets = image_targets
         self.fan_stale = False
         self.fan_pub.publish(point_cloud2.create_cloud(cloud.header, fields('snr'), fan))
 
+    def transform_grid(self, now):
+        if self.grid_clock is not None and now < self.grid_clock:
+            self.pending_grid.clear()
+            self.grid.clear()
+        self.grid_clock = now
+        while self.pending_grid:
+            header, points, queued, received, weight = self.pending_grid[0]
+            try:
+                transform = self.tf_buffer.lookup_transform(
+                    self.grid_frame, header.frame_id, Time.from_msg(header.stamp))
+            except TransformException as error:
+                if time.monotonic() - queued < self.tf_wait:
+                    break
+                self.pending_grid.popleft()
+                self.tf_dropped += 1
+                self.get_logger().warning(
+                    f'Skipping density input without timestamped TF: {error}', throttle_duration_sec=5)
+                continue
+            self.pending_grid.popleft()
+            if points:
+                transformed = transform_points(np.asarray(points), transform.transform)
+                # Account for TF waiting when decaying the original hit weight.
+                weight *= math.exp(-max(0, now - received) / self.grid.decay_seconds)
+                self.grid.add(((x, y) for x, y, _ in transformed), now, weight)
+
     def publish(self):
         now = self.now_seconds()
+        self.transform_grid(now)
         self.grid.decay(now)
         samples = self.grid.samples()
         header = self.header()
-        marker = Marker(header=header, ns='detection_density', id=0, type=Marker.CUBE_LIST)
+        grid_header = self.header(self.grid_frame)
+        marker = Marker(header=grid_header, ns='detection_density', id=0, type=Marker.CUBE_LIST)
         marker.action = Marker.ADD if samples else Marker.DELETE
         marker.pose.orientation.w = 1.0
         marker.scale.x = marker.scale.y = self.grid.resolution
@@ -246,7 +339,7 @@ class RadarViews(Node):
             marker.points.append(Point(x=x, y=y, z=-.05))
             marker.colors.append(density_color(hits, self.full_scale))
         self.grid_pub.publish(marker)
-        self.cells_pub.publish(point_cloud2.create_cloud(header, fields('density'), samples))
+        self.cells_pub.publish(point_cloud2.create_cloud(grid_header, fields('density'), samples))
         # Instantaneous fan targets disappear after one second without input.
         if self.last_input is not None and (now < self.last_input or now - self.last_input > 1):
             if not self.fan_stale:
@@ -264,6 +357,7 @@ class RadarViews(Node):
 
     def reset(self, request, response):
         self.grid.clear()
+        self.pending_grid.clear()
         self.publish()
         return response
 

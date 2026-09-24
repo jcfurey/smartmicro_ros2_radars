@@ -64,6 +64,25 @@ TEST(StreamHealth, SilenceRecoveryAndCounterReset)
   EXPECT_EQ(recovered.device_timestamp_us, 100000U);
 }
 
+TEST(StreamHealth, DelayVariationDoesNotPretendToMeasureAbsoluteLatency)
+{
+  StreamHealth health;
+  const auto start = StreamHealth::Clock::now();
+  health.receive(1000000, start);
+  health.receive(1100000, start + std::chrono::milliseconds(140));
+  const auto delayed = health.snapshot(start + std::chrono::milliseconds(150));
+  EXPECT_NEAR(delayed.receive_interval_seconds, .14, 1e-9);
+  EXPECT_NEAR(delayed.device_interval_seconds, .1, 1e-9);
+  EXPECT_NEAR(delayed.relative_delay_change_seconds, .04, 1e-9);
+  EXPECT_NEAR(delayed.max_positive_delay_change_seconds, .04, 1e-9);
+  health.receive(1200000, start + std::chrono::milliseconds(200));
+  const auto caught_up = health.snapshot(start + std::chrono::milliseconds(210));
+  EXPECT_NEAR(caught_up.relative_delay_change_seconds, -.04, 1e-9);
+  EXPECT_DOUBLE_EQ(caught_up.max_positive_delay_change_seconds, 0);
+  health.receive(0, start + std::chrono::milliseconds(300));
+  EXPECT_LT(health.snapshot().device_interval_seconds, 0);
+}
+
 TEST(SdkCallbackGate, DrainsAnActiveCallAndDropsLateCalls)
 {
   SdkCallbackGate gate;

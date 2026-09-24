@@ -200,6 +200,11 @@ if(BUILD_TESTING)
     target_include_directories(test_runtime PRIVATE include)
     target_link_libraries(test_runtime nlohmann_json::nlohmann_json Threads::Threads)
 
+    ament_add_gtest(test_umrr96_tuning test/test_umrr96_tuning.cpp)
+    target_include_directories(test_umrr96_tuning PRIVATE include)
+    ament_add_gtest(test_udp_socket_health test/test_udp_socket_health.cpp)
+    target_include_directories(test_udp_socket_health PRIVATE include)
+
     ament_add_gtest(test_point_cloud_builder test/test_point_cloud_builder.cpp)
     target_include_directories(test_point_cloud_builder PRIVATE include)
     target_link_libraries(test_point_cloud_builder ${sensor_msgs_TARGETS})
@@ -231,12 +236,14 @@ if(BUILD_TESTING)
         "CYCLONEDDS_URI=<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"lo\" multicast=\"false\"/></Interfaces><AllowMulticast>false</AllowMulticast></General></Domain></CycloneDDS>")
     ament_add_pytest_test(test_umrr96_views test/test_umrr96_views.py
         TIMEOUT 60 ENV ${offline_environment})
+    ament_add_pytest_test(test_umrr96_measure test/test_umrr96_measure.py
+        TIMEOUT 30 ENV ${offline_environment})
     ament_add_pytest_test(test_readback test/readback_smoke.py
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py
         TIMEOUT 90 ENV ${offline_environment}
         "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>")
-    set_tests_properties(test_umrr96_views test_readback test_driver_runtime PROPERTIES RUN_SERIAL TRUE)
+    set_tests_properties(test_umrr96_views test_umrr96_measure test_readback test_driver_runtime PROPERTIES RUN_SERIAL TRUE)
        
     # Not applying ros2 linters on external sources
     list(APPEND AMENT_LINT_AUTO_EXCLUDE
@@ -281,6 +288,8 @@ endif()
 
 install(PROGRAMS scripts/umrr96_views.py DESTINATION lib/${PROJECT_NAME}
     RENAME umrr96_views)
+install(PROGRAMS scripts/umrr96_measure.py DESTINATION lib/${PROJECT_NAME}
+    RENAME umrr96_measure)
 install(FILES scripts/umrr96_fan_image.py scripts/umrr96_filter.py
     DESTINATION lib/${PROJECT_NAME})
 

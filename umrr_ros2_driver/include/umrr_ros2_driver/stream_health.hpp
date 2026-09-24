@@ -2,6 +2,7 @@
 #ifndef UMRR_ROS2_DRIVER__STREAM_HEALTH_HPP_
 #define UMRR_ROS2_DRIVER__STREAM_HEALTH_HPP_
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <mutex>
@@ -17,6 +18,8 @@ public:
   {
     uint64_t frames{}, device_timestamp_us{}, repeated{}, backwards{}, zero{};
     double age_seconds{-1.0}, frequency_hz{};
+    double receive_interval_seconds{-1.0}, device_interval_seconds{-1.0};
+    double relative_delay_change_seconds{}, max_positive_delay_change_seconds{};
     bool timestamp_warning{false};
   };
 
@@ -26,6 +29,19 @@ public:
     if (state_.frames) {
       state_.repeated += timestamp == state_.device_timestamp_us;
       state_.backwards += timestamp < state_.device_timestamp_us;
+      state_.receive_interval_seconds = std::chrono::duration<double>(receipt - last_receipt_).count();
+      if (timestamp > state_.device_timestamp_us && state_.device_timestamp_us) {
+        state_.device_interval_seconds = (timestamp - state_.device_timestamp_us) * 1e-6;
+        // Clock offsets cancel. This measures changing delay, not absolute
+        // sensor latency, synchronized acquisition time or a packet loss count.
+        state_.relative_delay_change_seconds = state_.receive_interval_seconds -
+          state_.device_interval_seconds;
+        state_.max_positive_delay_change_seconds = std::max(
+          state_.max_positive_delay_change_seconds, state_.relative_delay_change_seconds);
+      } else {
+        state_.device_interval_seconds = -1;
+        state_.relative_delay_change_seconds = 0;
+      }
     }
     state_.zero += timestamp == 0;
     state_.device_timestamp_us = timestamp;
@@ -46,6 +62,7 @@ public:
     result.timestamp_warning = anomalies != checked_anomalies_;
     checked_anomalies_ = anomalies;
     checked_frames_ = state_.frames;
+    state_.max_positive_delay_change_seconds = 0;
     last_check_ = now;
     return result;
   }

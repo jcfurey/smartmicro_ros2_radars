@@ -6,6 +6,10 @@
 There is a need for a node that will interface with a smartmicro radar driver and publish the data
 acquired by the sensor through the ROS2 pipeline. This package implements such a node.
 
+For the UMRR-96 Type 153 work, see [output priorities and current capabilities](docs/umrr96-output-priorities.md),
+including advanced tuning, repeatable measurements, raw quality metadata,
+TF-aware density grids and UDP loss diagnostics.
+
 ## Get the Smart Access release
 ```bash
 ./smart_extract.sh
@@ -117,6 +121,7 @@ The driver publishes the following topics per sensor, where `<N>` is the sensor 
 | :---------------------------------- | :----------------------------------- | :------------------------------------------ |
 | `smart_radar/port_targets_<N>`      | `sensor_msgs/PointCloud2`            | Port-based radar target point cloud         |
 | `smart_radar/port_targetheader_<N>` | `umrr_ros2_msgs/PortTargetHeader`    | Port-based target list header               |
+| `smart_radar/umrr96_raw_quality_<N>` | `umrr_ros2_msgs/Umrr96RawQuality` | Uninterpreted Pfa/flags; UMRR-96 Ethernet, published when subscribed |
 | `smart_radar/can_targets_<N>`       | `sensor_msgs/PointCloud2`            | CAN-based radar target point cloud          |
 | `smart_radar/can_targetheader_<N>`  | `umrr_ros2_msgs/CanTargetHeader`     | CAN-based target list header                |
 | `smart_radar/port_objects_<N>`      | `sensor_msgs/PointCloud2`            | Port-based object point cloud (MSE models)  |

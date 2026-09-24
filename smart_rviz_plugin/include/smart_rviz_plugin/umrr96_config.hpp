@@ -4,6 +4,7 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -38,7 +39,9 @@ private:
   using SetMode = umrr_ros2_msgs::srv::SetMode;
   using Clock = std::chrono::steady_clock;
   using Values = std::array<int, 4>;
-  enum class Operation { None, Read, Write, Identity };
+  using AdvancedValues = std::array<double, 9>;
+  enum class Operation { None, Read, Write, Identity, AdvancedRead, AdvancedWrite };
+  enum class AdvancedRead { Refresh, BeforeWrite, Verify, Recover };
 
   void tick();
   void read_settings(bool verify = false);
@@ -53,6 +56,13 @@ private:
   void filter_status(const std::string & text);
   uint32_t sensor_id() const;
   Values selected() const;
+  void create_advanced_dialog();
+  void stage_advanced(const AdvancedValues & values);
+  void read_advanced(AdvancedRead purpose = AdvancedRead::Refresh);
+  void apply_advanced();
+  void write_advanced_next();
+  void recover_advanced(const QString & reason);
+  void fail_advanced(const QString & reason);
 
   QLineEdit * sensor_{};
   QLabel * identity_{};
@@ -65,9 +75,26 @@ private:
   QPushButton * preset_{};
   QPushButton * starting_{};
   QTimer * timer_{};
+  QPushButton * advanced_open_{};
+  QDialog * advanced_dialog_{};
+  QComboBox * prf_mode_{};
+  QComboBox * prf_index_{};
+  std::array<QDoubleSpinBox *, 6> velocity_{};
+  std::array<QLabel *, 9> advanced_actual_labels_{};
+  QPushButton * advanced_refresh_{};
+  QPushButton * advanced_apply_{};
+  QPushButton * advanced_starting_{};
+  QLabel * advanced_feedback_{};
+  AdvancedValues advanced_actual_{}, advanced_initial_{}, advanced_staged_{}, advanced_expected_{};
+  bool have_advanced_{false}, have_advanced_initial_{false};
+  std::deque<SetMode::Request::SharedPtr> advanced_writes_;
+  QString advanced_error_;
   QComboBox * filter_mode_{};
   QDoubleSpinBox * filter_snr_{};
   QDoubleSpinBox * filter_speed_{};
+  QDoubleSpinBox * decay_{};
+  bool decay_ready_{false};
+  double staged_decay_{2.0};
   QPushButton * filter_apply_{};
   QLabel * filter_actual_{};
   QLabel * filter_feedback_{};

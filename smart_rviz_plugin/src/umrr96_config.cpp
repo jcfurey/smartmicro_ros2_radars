@@ -131,14 +131,27 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   feedback_->setWordWrap(true);
   feedback_->setTextFormat(Qt::PlainText);
   layout->addWidget(feedback_);
+  advanced_open_ = new QPushButton("Advanced sensor controls…", this);
+  advanced_open_->setObjectName("advanced");
+  layout->addWidget(advanced_open_);
+  create_advanced_dialog();
+  connect(advanced_open_, &QPushButton::clicked, this, [this] {
+      advanced_dialog_->show();
+      advanced_dialog_->raise();
+      if (!have_advanced_) {read_advanced();}
+    });
 
-  auto filtering = new QGroupBox("Host detection filtering", this);
+  auto filtering = new QGroupBox("Filtering and density history", this);
   auto filter_layout = new QGridLayout(filtering);
   filter_mode_ = new QComboBox(filtering);
   filter_mode_->setObjectName("filter_mode");
   filter_mode_->addItem("Off (raw detections)", "off");
+  filter_mode_->addItem("Quality only", "quality");
   filter_mode_->addItem("Stable mapping", "mapping");
   filter_mode_->addItem("Moving returns", "moving");
+  filter_mode_->setToolTip("Quality only applies the SNR gate without scan persistence. "
+    "Stable mapping assumes a stationary radar. Moving returns uses sensor-relative radial speed; "
+    "it does not identify moving objects when the radar moves.");
   filter_snr_ = new QDoubleSpinBox(filtering);
   filter_snr_->setObjectName("filter_snr");
   filter_snr_->setRange(-20, 80);
@@ -156,19 +169,30 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   filter_layout->addWidget(filter_snr_, 1, 1);
   filter_layout->addWidget(new QLabel("Minimum radial speed", filtering), 2, 0);
   filter_layout->addWidget(filter_speed_, 2, 1);
-  filter_apply_ = new QPushButton("Apply filter", filtering);
+  decay_ = new QDoubleSpinBox(filtering);
+  decay_->setObjectName("density_decay");
+  decay_->setRange(.1, 30);
+  decay_->setDecimals(2);
+  decay_->setSingleStep(.1);
+  decay_->setSuffix(" s");
+  decay_->setValue(2.0);
+  decay_->setToolTip("Time for a cell's stored hit weight to fall to 37%. "
+    "Shorter values fade trails faster. Changing decay preserves existing hits.");
+  filter_layout->addWidget(new QLabel("Density decay", filtering), 3, 0);
+  filter_layout->addWidget(decay_, 3, 1);
+  filter_apply_ = new QPushButton("Apply view settings", filtering);
   filter_apply_->setObjectName("filter_apply");
-  filter_layout->addWidget(filter_apply_, 3, 0, 1, 2);
+  filter_layout->addWidget(filter_apply_, 4, 0, 1, 2);
   filter_actual_ = new QLabel("Waiting for view node…", filtering);
   filter_actual_->setObjectName("filter_actual");
   filter_actual_->setWordWrap(true);
   filter_actual_->setTextFormat(Qt::PlainText);
-  filter_layout->addWidget(filter_actual_, 4, 0, 1, 2);
-  filter_feedback_ = new QLabel("Applies to grid, fan, and image. Changing filters clears history.", filtering);
+  filter_layout->addWidget(filter_actual_, 5, 0, 1, 2);
+  filter_feedback_ = new QLabel("Filter changes clear history. Decay changes preserve existing hits.", filtering);
   filter_feedback_->setObjectName("filter_feedback");
   filter_feedback_->setWordWrap(true);
   filter_feedback_->setTextFormat(Qt::PlainText);
-  filter_layout->addWidget(filter_feedback_, 5, 0, 1, 2);
+  filter_layout->addWidget(filter_feedback_, 6, 0, 1, 2);
   layout->addWidget(filtering);
   connect(filter_mode_, QOverload<int>::of(&QComboBox::currentIndexChanged),
     this, [this] {filter_dirty_ = true;});
@@ -176,6 +200,8 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
     this, [this] {filter_dirty_ = true;});
   connect(filter_speed_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
     this, [this] {filter_dirty_ = true;});
+  connect(decay_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+    this, [this](double value) {staged_decay_ = value; filter_dirty_ = true;});
   connect(filter_apply_, &QPushButton::clicked, this, &Umrr96Config::apply_filter);
   filter_apply_->setEnabled(false);
   layout->addStretch();
@@ -226,8 +252,12 @@ Umrr96Config::~Umrr96Config()
 
 void Umrr96Config::cancel_pending()
 {
-  if (operation_ == Operation::Read) {getter_->remove_pending_request(pending_id_);}
-  if (operation_ == Operation::Write) {setter_->remove_pending_request(pending_id_);}
+  if (operation_ == Operation::Read || operation_ == Operation::AdvancedRead) {
+    getter_->remove_pending_request(pending_id_);
+  }
+  if (operation_ == Operation::Write || operation_ == Operation::AdvancedWrite) {
+    setter_->remove_pending_request(pending_id_);
+  }
   if (operation_ == Operation::Identity) {status_->remove_pending_request(pending_id_);}
   operation_ = Operation::None;
 }
@@ -240,7 +270,7 @@ void Umrr96Config::tick()
   if (filter_pending_ && now > filter_deadline_) {
     filter_setter_->remove_pending_request(filter_pending_id_);
     filter_pending_ = false;
-    filter_feedback_->setText("Filter request timed out. Check the current mode before retrying.");
+    filter_feedback_->setText("View settings request timed out. Check current values before retrying.");
   }
   const bool filter_available = filter_ready_ && !filter_pending_ &&
     filter_setter_->service_is_ready();
@@ -248,6 +278,7 @@ void Umrr96Config::tick()
   filter_mode_->setEnabled(filter_available);
   filter_snr_->setEnabled(filter_available);
   filter_speed_->setEnabled(filter_available);
+  decay_->setEnabled(filter_available && decay_ready_);
   while (!arrivals_.empty() && now - arrivals_.front() > std::chrono::seconds(2)) {
     arrivals_.pop_front();
   }
@@ -259,8 +290,16 @@ void Umrr96Config::tick()
     metrics_->setText("Waiting for live targets…");
   }
   if (operation_ != Operation::None && now > deadline_) {
+    const auto expired = operation_;
     cancel_pending();
-    fail("Request timed out. Read settings before retrying a change.");
+    if (expired == Operation::AdvancedWrite) {
+      recover_advanced("Write timed out; some changes may have reached the sensor.");
+    } else if (expired == Operation::AdvancedRead) {
+      fail_advanced((advanced_error_.isEmpty() ? QString{} : advanced_error_ + " ") +
+        "Advanced read timed out. Actual state is unknown; read settings before retrying.");
+    } else {
+      fail("Request timed out. Read settings before retrying a change.");
+    }
   }
   if (!have_actual_ && operation_ == Operation::None && now >= next_read_) {
     next_read_ = now + std::chrono::seconds(3);
@@ -277,15 +316,26 @@ void Umrr96Config::filter_status(const std::string & text)
   const int index = filter_mode_->findData(mode);
   if (index < 0 || !data.value("min_snr_db").isDouble() ||
     !data.value("min_abs_speed").isDouble()) {return;}
+  const auto decay = data.value("density_decay_seconds");
+  decay_ready_ = decay.isDouble() && std::isfinite(decay.toDouble()) &&
+    decay.toDouble() >= .1 && decay.toDouble() <= 30;
   filter_actual_->setText(QString("Current: %1 · kept %2 / %3\nRejected: quality %4 · motion %5 · persistence %6")
     .arg(filter_mode_->itemText(index)).arg(data.value("accepted").toInt())
     .arg(data.value("input").toInt()).arg(data.value("rejected_quality").toInt())
     .arg(data.value("rejected_motion").toInt()).arg(data.value("rejected_temporal").toInt()));
+  filter_actual_->setText(filter_actual_->text() + (decay_ready_ ?
+    QString("\nDensity decay: %1 s").arg(decay.toDouble(), 0, 'f', 2) :
+    "\nLive decay control needs the updated view node."));
   if (!filter_ready_ || (!filter_dirty_ && !filter_pending_)) {
-    const QSignalBlocker mode_block(filter_mode_), snr_block(filter_snr_), speed_block(filter_speed_);
+    const QSignalBlocker mode_block(filter_mode_), snr_block(filter_snr_), speed_block(filter_speed_),
+      decay_block(decay_);
     filter_mode_->setCurrentIndex(index);
     filter_snr_->setValue(data.value("min_snr_db").toDouble());
     filter_speed_->setValue(data.value("min_abs_speed").toDouble());
+    if (decay_ready_) {
+      staged_decay_ = decay.toDouble();
+      decay_->setValue(staged_decay_);
+    }
   }
   filter_ready_ = true;
 }
@@ -299,9 +349,12 @@ void Umrr96Config::apply_filter()
     rclcpp::Parameter("filter_mode", filter_mode_->currentData().toString().toStdString()).to_parameter_msg(),
     rclcpp::Parameter("filter_min_snr_db", filter_snr_->value()).to_parameter_msg(),
     rclcpp::Parameter("filter_min_abs_speed", filter_speed_->value()).to_parameter_msg()};
+  if (decay_ready_) {
+    request->parameters.push_back(rclcpp::Parameter("decay_seconds", staged_decay_).to_parameter_msg());
+  }
   filter_pending_ = true;
   filter_deadline_ = Clock::now() + std::chrono::seconds(3);
-  filter_feedback_->setText("Applying host filter…");
+  filter_feedback_->setText("Applying view settings…");
   filter_pending_id_ = filter_setter_->async_send_request(request,
     [this](rclcpp::Client<Service>::SharedFuture future) {
       filter_pending_ = false;
@@ -309,9 +362,9 @@ void Umrr96Config::apply_filter()
         const auto result = future.get()->result;
         if (result.successful) {
           filter_dirty_ = false;
-          filter_feedback_->setText("Filter applied; view history cleared. Raw topic remains available.");
+          filter_feedback_->setText("View settings applied. Decay-only edits preserve history.");
         } else {
-          filter_feedback_->setText("Filter rejected: " + QString::fromStdString(result.reason));
+          filter_feedback_->setText("View settings rejected: " + QString::fromStdString(result.reason));
         }
       } catch (const std::exception & error) {
         filter_feedback_->setText(QString::fromUtf8(error.what()));
@@ -348,6 +401,20 @@ void Umrr96Config::controls()
   preset_->setEnabled(idle && have_actual_);
   starting_->setEnabled(idle && have_actual_ && have_initial_);
   apply_->setEnabled(idle && have_actual_ && selected() != actual_);
+  if (advanced_apply_) {
+    advanced_open_->setEnabled(idle);
+    advanced_refresh_->setEnabled(idle);
+    advanced_starting_->setEnabled(idle && have_advanced_ && have_advanced_initial_);
+    prf_mode_->setEnabled(idle && have_advanced_);
+    prf_index_->setEnabled(idle && have_advanced_);
+    bool valid = true;
+    for (size_t i = 0; i < velocity_.size(); ++i) {
+      velocity_[i]->setEnabled(idle && have_advanced_);
+      if (i % 2 == 0) {valid &= advanced_staged_[i + 3] <= advanced_staged_[i + 4];}
+    }
+    advanced_apply_->setEnabled(idle && have_advanced_ && valid &&
+      advanced_staged_ != advanced_actual_);
+  }
 }
 
 Umrr96Config::Values Umrr96Config::selected() const
@@ -483,6 +550,10 @@ void Umrr96Config::apply()
 void Umrr96Config::changed_sensor()
 {
   have_actual_ = have_initial_ = false;
+  have_advanced_ = have_advanced_initial_ = false;
+  advanced_writes_.clear();
+  for (auto label : advanced_actual_labels_) {label->setText("—");}
+  advanced_feedback_->setText("Read advanced settings for the selected sensor.");
   identity_->setText("Firmware: waiting for sensor");
   for (auto label : actual_labels_) {label->setText("—");}
   next_read_ = Clock::now() + std::chrono::seconds(1);

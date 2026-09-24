@@ -19,6 +19,7 @@
 
 #include <nlohmann/json.hpp>
 #include <umrr_ros2_driver/point_cloud_builder.hpp>
+#include <umrr_ros2_driver/udp_socket_health.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 #include <umrr11_t132_automotive_v1_1_2/comtargetlist/PortHeader.h>
 #include <umrr11_t132_automotive_v1_1_2/comtargetlist/Target.h>
@@ -257,6 +258,10 @@ void SmartmicroRadarNode::setup_diagnostics()
   for (size_t i = 0; i < m_number_of_sensors; ++i) {
     timing_publishers_[i] = create_publisher<umrr_ros2_msgs::msg::RadarTiming>(
       "smart_radar/timing_" + std::to_string(i), m_sensors[i].history_size);
+    if (m_sensors[i].model == "umrr96_v1_2_2" && m_sensors[i].data_type == "port_based") {
+      raw_quality_publishers_[i] = create_publisher<umrr_ros2_msgs::msg::Umrr96RawQuality>(
+        "smart_radar/umrr96_raw_quality_" + std::to_string(i), m_sensors[i].history_size);
+    }
     diagnostics_->add("Target stream " + std::to_string(i),
       [this, i](diagnostic_updater::DiagnosticStatusWrapper & status) {
         using Status = diagnostic_msgs::msg::DiagnosticStatus;
@@ -276,8 +281,38 @@ void SmartmicroRadarNode::setup_diagnostics()
         status.add("timestamp_repeats", health.repeated);
         status.add("timestamp_backwards", health.backwards);
         status.add("timestamp_zero", health.zero);
+        status.add("receive_interval_seconds", health.receive_interval_seconds);
+        status.add("device_interval_seconds", health.device_interval_seconds);
+        status.add("relative_delay_change_seconds", health.relative_delay_change_seconds);
+        status.add("max_positive_delay_change_seconds", health.max_positive_delay_change_seconds);
         status.add("timestamp_source", "ros_receive_time");
         status.add("sensor_clock_synchronized", false);
+      });
+  }
+  for (size_t i = 0; i < m_number_of_adapters; ++i) {
+    if (m_adapters[i].hw_type != "eth") {continue;}
+    diagnostics_->add("UDP adapter " + std::to_string(i),
+      [this, i, previous_inode = std::string{}, previous_drops = uint64_t{}]
+      (diagnostic_updater::DiagnosticStatusWrapper & status) mutable {
+        using Status = diagnostic_msgs::msg::DiagnosticStatus;
+        const auto socket = udp_socket_health(static_cast<uint16_t>(m_adapters[i].port));
+        status.add("local_port", m_adapters[i].port);
+        status.add("kernel_counters_available", socket.available);
+        status.add("sdk_queue_depth_available", false);
+        if (!socket.available) {
+          status.summary(Status::WARN, "IPv4 UDP socket counters unavailable or ambiguous");
+          return;
+        }
+        const auto delta = socket.inode == previous_inode && socket.drops >= previous_drops ?
+          socket.drops - previous_drops : socket.drops;
+        previous_inode = socket.inode;
+        previous_drops = socket.drops;
+        status.summary(delta ? Status::WARN : Status::OK,
+          delta ? "Kernel dropped UDP datagrams" : "No new kernel UDP drops; not a liveness check");
+        status.add("kernel_drops_total", socket.drops);
+        status.add("kernel_drops_since_last_check", delta);
+        status.add("kernel_receive_memory_bytes", socket.receive_memory_bytes);
+        status.add("socket_inode", socket.inode);
       });
   }
 }
@@ -3080,6 +3115,16 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
     header.acquisition_setup_valid = true;
     const auto & targets = targetlist_port_umrr96->GetTargetList();
     modifier.reserve(targets.size());
+    umrr_ros2_msgs::msg::Umrr96RawQuality raw_quality;
+    const bool publish_raw = raw_quality_publishers_[sensor_idx] &&
+      raw_quality_publishers_[sensor_idx]->get_subscription_count() > 0;
+    if (publish_raw) {
+      raw_quality.header = msg.header;
+      raw_quality.sensor_id = client_id;
+      raw_quality.semantics = umrr_ros2_msgs::msg::Umrr96RawQuality::SEMANTICS_UNVERIFIED;
+      raw_quality.false_alarm_probability_raw.reserve(targets.size());
+      raw_quality.flags_raw.reserve(targets.size());
+    }
     for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
@@ -3093,8 +3138,13 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
           target->GetVarianceRange(), target->GetVarianceSpeed(),
           target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
           kRadarFloatSentinel, kRadarFlagsSentinel, target->GetPeakIdx()});
+      if (publish_raw) {
+        raw_quality.false_alarm_probability_raw.push_back(target->GetFalseAlarmProbability());
+        raw_quality.flags_raw.push_back(target->GetFlags());
+      }
     }
 
+    if (publish_raw) {raw_quality_publishers_[sensor_idx]->publish(raw_quality);}
     m_publishers[sensor_idx]->publish(msg);
     m_publishers_port_target_header[sensor_idx]->publish(header);
   }

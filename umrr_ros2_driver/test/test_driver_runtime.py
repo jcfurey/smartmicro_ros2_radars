@@ -19,7 +19,7 @@ from rclpy.parameter import Parameter
 from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
-from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming
+from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming, Umrr96RawQuality
 import yaml
 
 
@@ -39,10 +39,12 @@ def test_driver_runtime():
     rclpy.init()
     node = rclpy.create_node('driver_runtime_test')
     clouds, headers, timing, statuses = [], [], [], []
+    quality = []
     topic = '/driver_runtime/a/smart_radar/'
     node.create_subscription(PointCloud2, topic + 'port_targets_0', clouds.append, 10)
     node.create_subscription(PortTargetHeader, topic + 'port_targetheader_0', headers.append, 10)
     node.create_subscription(RadarTiming, topic + 'timing_0', timing.append, 10)
+    node.create_subscription(Umrr96RawQuality, topic + 'umrr96_raw_quality_0', quality.append, 10)
     node.create_subscription(DiagnosticArray, '/diagnostics',
                              lambda msg: statuses.extend(msg.status), 10)
 
@@ -150,14 +152,15 @@ def test_driver_runtime():
             for index in range(17):
                 struct.pack_into('<10fIffH', fixture, 32 + index * 56,
                     1.0 + index, .5, .1, .2, .01 + index, .02 + index,
-                    .03 + index, .04 + index, 2.0, 0.0, 0, 40.0, 10.0, index + 100)
+                    .03 + index, .04 + index, 2.0, .25, 0x123400 + index, 40.0, 10.0, index + 100)
             fixture_path = run / 'known_quality_port.bin'
             fixture_path.write_bytes(fixture)
             started_ns = node.get_clock().now().nanoseconds
             sender = launch([os.environ['SMARTMICRO_TEST_SENDER'],
                              str(fixture_path)],
                             SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
-            wait(lambda: len(clouds) >= 5 and len(timing) >= 5 and len(headers) >= 5)
+            wait(lambda: len(clouds) >= 5 and len(timing) >= 5 and len(headers) >= 5
+                 and len(quality) >= 5)
             matched = 0
             for cloud in clouds:
                 stamp = cloud.header.stamp
@@ -175,6 +178,13 @@ def test_driver_runtime():
                 assert cloud.point_step == 72 and cloud.width == 17
                 metadata = next(h for h in headers if h.header == cloud.header)
                 assert metadata.acquisition_setup_valid and metadata.acquisition_setup == 0x1234
+                raw_values = next((q for q in quality if q.header == cloud.header), None)
+                if raw_values is None:
+                    continue
+                assert raw_values.sensor_id == 200
+                assert raw_values.semantics == Umrr96RawQuality.SEMANTICS_UNVERIFIED
+                assert list(raw_values.false_alarm_probability_raw) == [.25] * 17
+                assert list(raw_values.flags_raw) == list(range(0x123400, 0x123400 + 17))
                 records = point_cloud2.read_points(cloud)
                 for index, record in enumerate(records):
                     for field, base in (('variance_range', .01), ('variance_speed', .02),
@@ -183,6 +193,9 @@ def test_driver_runtime():
                         expected = struct.unpack('<f', struct.pack('<f', base + index))[0]
                         assert float(record[field]) == expected, (field, index, record[field])
                     assert int(record['peak_idx']) == index + 100
+            wait(lambda: any(s.name == 'runtime_a: UDP adapter 0' and
+                             {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
+                             for s in statuses))
             assert matched >= 3
             # The fixture deliberately repeats its original counter. ROS stamps still advance.
             assert len({t.device_timestamp_us for t in timing}) == 1

@@ -34,7 +34,7 @@ source install/setup.bash
 Included in `ros2 launch umrr_ros2_driver umrr96_live.launch.py`, or add
 `smart_rviz_plugin/UMRR-96 Configuration` from RViz's Panels menu.
 
-- Reads the four supported tuning settings and firmware version from the radar.
+- Reads the four basic tuning settings and firmware version from the radar.
 - Shows target count, received update rate, and sensor cycle time from
   `/smart_radar/port_targetheader_0`.
 - Stages range, range switching, antenna index, and CAN target-output changes.
@@ -43,11 +43,29 @@ Included in `ros2 launch umrr_ros2_driver umrr96_live.launch.py`, or add
   and CAN target output off. Click Apply to send the preset.
 - **Starting values** stages the first settings read during this panel session.
   Click Apply to restore them. Closing the panel does not restore settings.
-- **Host detection filtering** selects Off, Stable mapping, or Moving returns,
-  with adjustable minimum SNR and radial speed. **Apply filter** changes the host
-  view parameters atomically and clears accumulated history. It sends no sensor
+- **Advanced sensor controls…** opens PRF selection/index and the minimum/maximum
+  velocity gates for long, medium and short sweeps. It reads before writing to
+  detect concurrent changes, orders PRF switching, sends velocity bounds as
+  float pairs and verifies the result. Rejected/timed-out sequences stop and
+  show fresh readback, including partial changes. Its own **Starting values**
+  button stages restoration of the first advanced profile read for that sensor.
+- **Filtering and density history** selects Off, Quality only, Stable mapping, or Moving returns,
+  with adjustable minimum SNR, radial speed, and density decay (0.1–30 s).
+  **Apply view settings** changes the host view parameters atomically. Filter
+  changes clear accumulated history; decay-only edits preserve existing hits
+  and apply the new decay rate from that moment onward. It sends no sensor
   commands. Current mode and accepted/rejected counts are displayed separately
   from the staged values. The raw target topic stays available for comparison.
+
+Density decay defaults to 2 s: each cell's hit weight falls to about 37% over
+that period without new hits. It affects the accumulated density grid; the
+fan image remains the latest scan. Older view nodes leave this control disabled
+until updated, while filtering remains available.
+
+Quality only applies SNR/validity gates without stationary-radar assumptions.
+Stable mapping requires a stationary radar; Moving returns uses sensor-relative
+radial speed. The [measurement CLI](../docs/umrr96-output-priorities.md) provides
+repeatable PRF comparisons with interleaved baselines and automatic restoration.
 
 Opening the panel or loading an RViz configuration never writes sensor settings.
 Only the sensor ID is saved in the RViz file; parameter values are read afresh.

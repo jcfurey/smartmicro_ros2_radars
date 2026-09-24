@@ -44,11 +44,15 @@
 /umrr96_views:
   ros__parameters:
     frame_id: umrr96
+    # Set to odom only when timestamped odom -> umrr96 TF is available.
+    # Fan/image and raw/filtered target clouds remain in the sensor frame.
+    grid_frame_id: ''
+    tf_wait_seconds: 0.25
     input_topic: /smart_radar/port_targets_0
     max_range: 20.0
     half_angle_degrees: 90.0
     cell_size: 0.25
-    decay_seconds: 2.0
+    decay_seconds: 2.0  # Runtime adjustable exponential time constant, 0.1..30 s.
     density_full_scale: 20.0
     publish_hz: 10.0
     image_width: 960

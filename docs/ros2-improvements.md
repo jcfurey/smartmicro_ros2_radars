@@ -40,6 +40,10 @@ hardware configuration as part of this batch.
 
 ## Follow-up work
 
+The sensor-output priorities are tracked separately in
+[UMRR-96 output improvements](umrr96-output-priorities.md), with implementation,
+validation results and remaining hardware/vendor dependencies.
+
 1. **Namespaces and deployment:** replace absolute view/panel topic and service
    names with relative names or configurable endpoints; make RViz optional;
    test two radars and headless launch.
