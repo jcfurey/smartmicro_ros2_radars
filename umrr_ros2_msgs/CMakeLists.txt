@@ -25,6 +25,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
     "srv/FirmwareDownload.srv"
     "srv/GetStatus.srv"
     "srv/GetMode.srv"
+    "msg/RadarTiming.msg"
     "msg/CanTargetHeader.msg"
     "msg/PortTargetHeader.msg"
     "msg/PortObjectHeader.msg"

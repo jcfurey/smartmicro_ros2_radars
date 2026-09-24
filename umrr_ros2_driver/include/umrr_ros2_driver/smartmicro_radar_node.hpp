@@ -50,6 +50,11 @@
 #include <umrra1_t166_b_automotive_v3_0_0/DataStreamServiceIface.h>
 
 #include <rclcpp/rclcpp.hpp>
+#include <diagnostic_updater/diagnostic_updater.hpp>
+#include <umrr_ros2_msgs/msg/radar_timing.hpp>
+#include <umrr_ros2_driver/runtime_config.hpp>
+#include <umrr_ros2_driver/startup_parameter.hpp>
+#include <umrr_ros2_driver/stream_health.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <umrr_ros2_msgs/msg/can_object_header.hpp>
@@ -1284,20 +1289,9 @@ private:
     const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request,
     std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Response> result);
 
-  ///
-  /// @brief Converts a timestamp from microseconds to seconds and nanoseconds.
-  ///
-  /// @param timestamp The input timestamp in microseconds as a `std::chrono::microseconds`.
-  /// @return A `std::pair` where:
-  ///         - `first` is the number of seconds (`int32_t`).
-  ///         - `second` is the number of nanoseconds (`uint32_t`).
-  ///
-  inline std::pair<int32_t, uint32_t> convert_timestamp(std::chrono::microseconds timestamp)
-  {
-    const auto sec = std::chrono::duration_cast<std::chrono::seconds>(timestamp);
-    const auto nanosec = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp - sec);
-    return {sec.count(), nanosec.count()};
-  }
+  builtin_interfaces::msg::Time receive_stamp(
+    uint64_t timestamp_us, uint32_t sensor_idx, uint8_t stream);
+  void setup_diagnostics();
 
   ///
   /// @brief Fills the ROS timestamp for the PointCloud2 message and the custom header message.
@@ -1317,12 +1311,12 @@ private:
     const std::uint64_t timestamp_us,
     const std::uint32_t sensor_idx)
   {
-    const auto [sec, nanosec] =
-      convert_timestamp(std::chrono::microseconds{timestamp_us});
-
-    builtin_interfaces::msg::Time stamp;
-    stamp.sec = sec;
-    stamp.nanosec = nanosec;
+    constexpr bool objects =
+      std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::PortObjectHeader> ||
+      std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::CanObjectHeader>;
+    using Timing = umrr_ros2_msgs::msg::RadarTiming;
+    const auto stamp = receive_stamp(
+      timestamp_us, sensor_idx, objects ? Timing::OBJECTS : Timing::TARGETS);
 
     msg.header.stamp = stamp;
     header.header.stamp = stamp;
@@ -1343,12 +1337,8 @@ private:
     const std::uint64_t timestamp_us,
     const std::uint32_t sensor_idx)
   {
-    const auto [sec, nanosec] =
-      convert_timestamp(std::chrono::microseconds{timestamp_us});
-
-    builtin_interfaces::msg::Time stamp;
-    stamp.sec = sec;
-    stamp.nanosec = nanosec;
+    const auto stamp = receive_stamp(
+      timestamp_us, sensor_idx, umrr_ros2_msgs::msg::RadarTiming::FAULTS);
 
     msg.header.stamp = stamp;
     msg.header.frame_id = m_sensors[sensor_idx].frame_id;
@@ -1411,6 +1401,14 @@ private:
     const std::shared_ptr<com::master::ResponseBatch> & response,
     const std::vector<std::string> & params,
     const std::string & section_name);
+
+  // Declared first so its directory outlives the node's publishers/services.
+  RuntimeConfig runtime_config_{"smartmicro-data"};
+  std::array<StreamHealth, detail::kMaxSensorCount> target_health_;
+  std::array<rclcpp::Publisher<umrr_ros2_msgs::msg::RadarTiming>::SharedPtr,
+    detail::kMaxSensorCount> timing_publishers_;
+  std::unique_ptr<diagnostic_updater::Updater> diagnostics_;
+  double stale_timeout_seconds_{2.0};
 
   rclcpp::Service<umrr_ros2_msgs::srv::SetMode>::SharedPtr mode_srv_;
   rclcpp::Service<umrr_ros2_msgs::srv::SetIp>::SharedPtr ip_addr_srv_;

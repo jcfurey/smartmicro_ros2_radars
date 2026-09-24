@@ -316,13 +316,72 @@ SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_option
   update_config_files_from_params();
   update_service = std::make_shared<UpdateService>();
 
-  const auto override = false;
-  setenv("SMART_ACCESS_CFG_FILE_PATH", kConfigFilePath, override);
+  runtime_config_.activate();
+  setup_diagnostics();
 
   initialize_services();
   setup_publishers();
 
   rclcpp::on_shutdown(std::bind(&SmartmicroRadarNode::on_shutdown_callback, this));
+}
+
+builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
+  uint64_t timestamp_us, uint32_t sensor_idx, uint8_t stream)
+{
+  umrr_ros2_msgs::msg::RadarTiming timing;
+  timing.header.stamp = now();
+  timing.header.frame_id = m_sensors[sensor_idx].frame_id;
+  timing.sensor_id = m_sensors[sensor_idx].id;
+  timing.device_timestamp_us = timestamp_us;
+  timing.stream = stream;
+  timing.timestamp_source = umrr_ros2_msgs::msg::RadarTiming::ROS_RECEIVE_TIME;
+  if (stream == umrr_ros2_msgs::msg::RadarTiming::TARGETS) {
+    target_health_[sensor_idx].receive(timestamp_us);
+  }
+  timing_publishers_[sensor_idx]->publish(timing);
+  return timing.header.stamp;
+}
+
+void SmartmicroRadarNode::setup_diagnostics()
+{
+  auto descriptor = startup_descriptor();
+  descriptor.description = "Target stream silence threshold in seconds; restart to change.";
+  rcl_interfaces::msg::FloatingPointRange range;
+  range.from_value = 0.1;
+  range.to_value = 3600.0;
+  descriptor.floating_point_range.push_back(range);
+  stale_timeout_seconds_ = declare_parameter("diagnostics.stale_timeout", 2.0, descriptor);
+  if (!std::isfinite(stale_timeout_seconds_)) {
+    throw std::invalid_argument("diagnostics.stale_timeout must be finite");
+  }
+  diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
+  diagnostics_->setHardwareID("smartmicro");
+  for (size_t i = 0; i < m_number_of_sensors; ++i) {
+    timing_publishers_[i] = create_publisher<umrr_ros2_msgs::msg::RadarTiming>(
+      "smart_radar/timing_" + std::to_string(i), m_sensors[i].history_size);
+    diagnostics_->add("Target stream " + std::to_string(i),
+      [this, i](diagnostic_updater::DiagnosticStatusWrapper & status) {
+        using Status = diagnostic_msgs::msg::DiagnosticStatus;
+        const auto health = target_health_[i].snapshot();
+        status.hardware_id = std::to_string(m_sensors[i].id);
+        if (!health.frames || health.age_seconds > stale_timeout_seconds_) {
+          status.summary(Status::STALE, health.frames ? "No recent targets" : "Waiting for targets");
+        } else if (health.timestamp_warning) {
+          status.summary(Status::WARN, "Device timestamp anomaly; headers use ROS receive time");
+        } else {
+          status.summary(Status::OK, "Receiving targets");
+        }
+        status.add("frames_received", health.frames);
+        status.add("last_receive_age_seconds", health.age_seconds);
+        status.add("frequency_hz", health.frequency_hz);
+        status.add("device_timestamp_us", health.device_timestamp_us);
+        status.add("timestamp_repeats", health.repeated);
+        status.add("timestamp_backwards", health.backwards);
+        status.add("timestamp_zero", health.zero);
+        status.add("timestamp_source", "ros_receive_time");
+        status.add("sensor_clock_synchronized", false);
+      });
+  }
 }
 
 void SmartmicroRadarNode::initialize_services()
@@ -6108,61 +6167,78 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v2_0_0(
 
 void SmartmicroRadarNode::update_config_files_from_params()
 {
-  const auto master_inst_serial_type = declare_parameter(kInstSerialTypeTag, std::string{});
-  const auto master_data_serial_type = declare_parameter(kDataSerialTypeTag, std::string{});
+  const auto master_inst_serial_type = startup_parameter(*this, kInstSerialTypeTag, std::string{});
+  const auto master_data_serial_type = startup_parameter(*this, kDataSerialTypeTag, std::string{});
 
   auto read_adapter_params_if_possible = [&](const std::uint32_t index) {
       auto & current_adapter = m_adapters[index];
       const auto prefix_2 = "adapters.adapter_" + std::to_string(index);
-      current_adapter.hw_dev_id = this->declare_parameter(prefix_2 + ".hw_dev_id", kDefaultHwDevId);
+      current_adapter.hw_dev_id = startup_parameter(*this, prefix_2 + ".hw_dev_id", kDefaultHwDevId);
       if (current_adapter.hw_dev_id == kDefaultHwDevId) {
         // The id was not set, so the adapter with this index was not defined.
         // Stop here.
         return false;
       }
       current_adapter.hw_iface_name =
-        this->declare_parameter(prefix_2 + ".hw_iface_name", kDefaultHwDevIface);
+        startup_parameter(*this, prefix_2 + ".hw_iface_name", kDefaultHwDevIface);
       current_adapter.hw_ip_address =
-        this->declare_parameter(prefix_2 + ".hw_ip_address", std::string{});
-      current_adapter.hw_type = this->declare_parameter(prefix_2 + ".hw_type", kDefaultHwLinkType);
-      current_adapter.baudrate = this->declare_parameter(prefix_2 + ".baudrate", 500000);
-      current_adapter.port = this->declare_parameter(prefix_2 + ".port", kDefaultPort);
+        startup_parameter(*this, prefix_2 + ".hw_ip_address", std::string{});
+      current_adapter.hw_type = startup_parameter(*this, prefix_2 + ".hw_type", kDefaultHwLinkType);
+      current_adapter.baudrate = startup_parameter(*this, prefix_2 + ".baudrate", 500000);
+      current_adapter.port = startup_parameter(*this, prefix_2 + ".port", kDefaultPort, 0, 65535);
 
+      if (current_adapter.port > 65535 ||
+        (current_adapter.hw_type == "eth" && current_adapter.port == 0))
+      {
+        throw std::invalid_argument(prefix_2 + ".port must be a valid UDP port for Ethernet");
+      }
       return true;
     };
 
   auto read_sensor_params_if_possible = [&](const std::uint32_t index) {
       auto & sensor = m_sensors[index];
       const auto prefix_3 = "sensors.sensor_" + std::to_string(index);
-      sensor.dev_id = this->declare_parameter(prefix_3 + ".dev_id", kDefaultHwDevId);
-      sensor.uifname = this->declare_parameter(prefix_3 + ".uifname", "");
-      sensor.uifmajorv = this->declare_parameter(prefix_3 + ".uifmajorv", 0);
-      sensor.uifminorv = this->declare_parameter(prefix_3 + ".uifminorv", 0);
-      sensor.uifpatchv = this->declare_parameter(prefix_3 + ".uifpatchv", 0);
-      sensor.model = this->declare_parameter(prefix_3 + ".model", kDefaultSensorType);
-      sensor.id = this->declare_parameter(prefix_3 + ".id", kDefaultClientId);
+      sensor.dev_id = startup_parameter(*this, prefix_3 + ".dev_id", kDefaultHwDevId);
+      sensor.uifname = startup_parameter(*this, prefix_3 + ".uifname", "");
+      sensor.uifmajorv = startup_parameter(*this, prefix_3 + ".uifmajorv", 0);
+      sensor.uifminorv = startup_parameter(*this, prefix_3 + ".uifminorv", 0);
+      sensor.uifpatchv = startup_parameter(*this, prefix_3 + ".uifpatchv", 0);
+      sensor.model = startup_parameter(*this, prefix_3 + ".model", kDefaultSensorType);
+      sensor.id = startup_parameter(*this, prefix_3 + ".id", kDefaultClientId);
       if (sensor.id == kDefaultClientId) {
         // The id was not set, so the sensor with this index was not defined. Stop
         // here.
         return false;
       }
-      sensor.ip = this->declare_parameter(prefix_3 + ".ip", "");
-      sensor.port = this->declare_parameter(prefix_3 + ".port", 0);
-      sensor.frame_id = this->declare_parameter(prefix_3 + ".frame_id", kDefaultFrameId);
+      sensor.ip = startup_parameter(*this, prefix_3 + ".ip", "");
+      sensor.port = startup_parameter(*this, prefix_3 + ".port", 0, 0, 65535);
+      sensor.frame_id = startup_parameter(*this, prefix_3 + ".frame_id", kDefaultFrameId);
       sensor.history_size =
-        this->declare_parameter(prefix_3 + ".history_size", kDefaultHistorySize);
-      sensor.inst_type = this->declare_parameter(prefix_3 + ".inst_type", "");
-      sensor.data_type = this->declare_parameter(prefix_3 + ".data_type", "");
-      sensor.link_type = this->declare_parameter(prefix_3 + ".link_type", kDefaultHwLinkType);
-      sensor.pub_type = this->declare_parameter(prefix_3 + ".pub_type", "");
+        startup_parameter(*this, prefix_3 + ".history_size", kDefaultHistorySize, 1, UINT32_MAX);
+      sensor.inst_type = startup_parameter(*this, prefix_3 + ".inst_type", "");
+      sensor.data_type = startup_parameter(*this, prefix_3 + ".data_type", "");
+      sensor.link_type = startup_parameter(*this, prefix_3 + ".link_type", kDefaultHwLinkType);
+      sensor.pub_type = startup_parameter(*this, prefix_3 + ".pub_type", "");
+      if (sensor.port > 65535 || (sensor.link_type == "eth" && sensor.port == 0) ||
+        sensor.history_size == 0 || sensor.frame_id.empty())
+      {
+        throw std::invalid_argument(prefix_3 + ": invalid port, empty frame_id or zero history_size");
+      }
+      bool adapter_found = false;
+      for (size_t i = 0; i < m_number_of_adapters; ++i) {
+        adapter_found |= m_adapters[i].hw_dev_id == sensor.dev_id;
+      }
+      if (!adapter_found) {
+        throw std::invalid_argument(prefix_3 + ".dev_id does not identify a configured adapter");
+      }
       return true;
     };
 
   for (auto j = 0UL; j < m_adapters.size(); ++j) {
     if (!read_adapter_params_if_possible(j)) {
-      m_number_of_adapters = j;
       break;
     }
+    ++m_number_of_adapters;
   }
 
   if (!m_number_of_adapters) {
@@ -6171,9 +6247,9 @@ void SmartmicroRadarNode::update_config_files_from_params()
 
   for (auto i = 0UL; i < m_sensors.size(); ++i) {
     if (!read_sensor_params_if_possible(i)) {
-      m_number_of_sensors = i;
       break;
     }
+    ++m_number_of_sensors;
   }
   if (!m_number_of_sensors) {
     throw std::runtime_error("At least one sensor must be configured.");
@@ -6182,7 +6258,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
   auto config = nlohmann::json::parse(std::ifstream{kConfigFilePath});
   config[kDataSerialTypeJsonTag] = master_data_serial_type;
   config[kInstSerialTypeJsonTag] = master_inst_serial_type;
-  std::ofstream{kConfigFilePath, std::ios::trunc} << config;
+  config["config_path"] = runtime_config_.path.string();
+  runtime_config_.write("smart_access_config.json", config);
 
   auto hw_inventory = nlohmann::json::parse(std::ifstream{kHwInventoryFilePath});
   auto & hw_items = hw_inventory[kHwItemsJsonTag];
@@ -6205,7 +6282,7 @@ void SmartmicroRadarNode::update_config_files_from_params()
     hw_item[kBaudRateTag] = adapter.baudrate;
     hw_items.push_back(hw_item);
   }
-  std::ofstream{kHwInventoryFilePath, std::ios::trunc} << hw_inventory;
+  runtime_config_.write("hw_inventory.json", hw_inventory);
 
   auto routing_table = nlohmann::json::parse(std::ifstream{kRoutingTableFilePath});
   auto & clients = routing_table[kClientsJsonTag];
@@ -6230,7 +6307,7 @@ void SmartmicroRadarNode::update_config_files_from_params()
     clients.push_back(client);
   }
 
-  std::ofstream{kRoutingTableFilePath, std::ios::trunc} << std::setw(4) << routing_table;
+  runtime_config_.write("routing_table.json", routing_table);
 }
 
 }  // namespace radar

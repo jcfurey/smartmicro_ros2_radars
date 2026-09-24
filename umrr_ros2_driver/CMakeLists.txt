@@ -179,8 +179,37 @@ target_link_libraries(smartmicro_radar_readback_node
     smart_access com_lib osal nlohmann_json::nlohmann_json)
 
 if(BUILD_TESTING)
-    find_package(launch_testing_ament_cmake)
-    add_launch_test(test/radar_node_test.launch.py TIMEOUT "100")
+    option(SMARTMICRO_NETWORK_TESTS "Enable legacy Docker/network integration tests" OFF)
+    if(SMARTMICRO_NETWORK_TESTS)
+        find_package(launch_testing_ament_cmake REQUIRED)
+        add_launch_test(test/radar_node_test.launch.py TIMEOUT "100")
+    endif()
+
+    find_package(ament_cmake_gtest REQUIRED)
+    find_package(ament_cmake_pytest REQUIRED)
+    ament_add_gtest(test_runtime test/test_runtime.cpp)
+    target_include_directories(test_runtime PRIVATE include)
+    target_link_libraries(test_runtime nlohmann_json::nlohmann_json)
+
+    add_executable(radar_test_sender test/radar_test_sender.cpp)
+    target_include_directories(radar_test_sender PRIVATE smartmicro/include)
+    target_link_libraries(radar_test_sender smart_access com_lib osal)
+
+    set(SMARTMICRO_TEST_DOMAIN_ID 178 CACHE STRING "Isolated ROS domain for offline tests")
+    set(offline_environment
+        "ROS_DOMAIN_ID=${SMARTMICRO_TEST_DOMAIN_ID}"
+        "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST"
+        "ROS_LOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/test_ros_logs"
+        "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
+        "CYCLONEDDS_URI=<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"lo\" multicast=\"false\"/></Interfaces><AllowMulticast>false</AllowMulticast></General></Domain></CycloneDDS>")
+    ament_add_pytest_test(test_umrr96_views test/test_umrr96_views.py
+        TIMEOUT 60 ENV ${offline_environment})
+    ament_add_pytest_test(test_readback test/readback_smoke.py
+        TIMEOUT 60 ENV ${offline_environment})
+    ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py
+        TIMEOUT 90 ENV ${offline_environment}
+        "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>")
+    set_tests_properties(test_umrr96_views test_readback test_driver_runtime PROPERTIES RUN_SERIAL TRUE)
        
     # Not applying ros2 linters on external sources
     list(APPEND AMENT_LINT_AUTO_EXCLUDE

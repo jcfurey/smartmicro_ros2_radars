@@ -10,6 +10,9 @@
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
   <depend>rclcpp</depend>
+  <depend>diagnostic_updater</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>rcl_interfaces</depend>
   <depend>rclpy</depend>
   <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
@@ -17,6 +20,7 @@
   <depend>visualization_msgs</depend>
   <depend>umrr_ros2_msgs</depend>
   <build_depend>nlohmann-json-dev</build_depend>
+  <build_export_depend>nlohmann-json-dev</build_export_depend>
 
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
@@ -27,7 +31,6 @@
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
 
@@ -35,6 +38,9 @@
   <test_depend>launch_testing_ament_cmake</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>rmw_cyclonedds_cpp</test_depend>
+  <test_depend>python3-yaml</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

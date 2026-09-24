@@ -3,6 +3,9 @@
 #include <CommunicationServicesIface.h>
 #include <nlohmann/json.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <diagnostic_updater/diagnostic_updater.hpp>
+#include <umrr_ros2_driver/runtime_config.hpp>
+#include <umrr_ros2_driver/startup_parameter.hpp>
 #include <umrr_ros2_msgs/srv/get_mode.hpp>
 #include <umrr_ros2_msgs/srv/get_status.hpp>
 #include <umrr_ros2_msgs/srv/set_mode.hpp>
@@ -33,37 +36,8 @@ using SetMode = umrr_ros2_msgs::srv::SetMode;
 using com::master::InstructionBatch;
 using com::master::ResponseBatch;
 
-// The SDK is a process-wide singleton. Keep legacy CAN-format instruction
-// handling in its own process so the data node can decode Ethernet target ports.
-struct RuntimeConfig
-{
-  RuntimeConfig()
-  {
-    std::string pattern = "/tmp/smartmicro-readback-XXXXXX";
-    const auto directory = mkdtemp(pattern.data());
-    if (!directory) {
-      throw std::runtime_error("Could not create readback SDK configuration directory");
-    }
-    path = directory;
-  }
-
-  ~RuntimeConfig()
-  {
-    std::error_code error;
-    std::filesystem::remove_all(path, error);
-  }
-
-  void write(const std::string & filename, const Json & value) const
-  {
-    std::ofstream stream;
-    stream.exceptions(std::ios::failbit | std::ios::badbit);
-    stream.open(path / filename);
-    stream << value.dump(2) << '\n';
-    stream.flush();
-  }
-
-  std::filesystem::path path;
-};
+using smartmicro::drivers::radar::RuntimeConfig;
+using smartmicro::drivers::radar::startup_parameter;
 
 enum class ValueType { F32, U32, U16, U8, I32 };
 
@@ -127,13 +101,13 @@ public:
   ReadbackNode()
   : Node("smart_radar_readback")
   {
-    const auto sensor_id = declare_parameter<int64_t>("sensor_id", 0);
-    const auto host_port = declare_parameter<int64_t>("host_port", 55556);
-    const auto sensor_port = declare_parameter<int64_t>("sensor_port", 55555);
-    const auto timeout_ms = declare_parameter<int64_t>("timeout_ms", 2000);
-    const auto interface = declare_parameter<std::string>("interface_name", "enp68s0f0");
-    const auto host_ip = declare_parameter<std::string>("host_ip", "192.168.11.17");
-    const auto sensor_ip = declare_parameter<std::string>("sensor_ip", "192.168.11.11");
+    const auto sensor_id = startup_parameter(*this, "sensor_id", 0, 1, UINT32_MAX);
+    const auto host_port = startup_parameter(*this, "host_port", 55556, 1, 65535);
+    const auto sensor_port = startup_parameter(*this, "sensor_port", 55555, 1, 65535);
+    const auto timeout_ms = startup_parameter(*this, "timeout_ms", 2000, 1, 30000);
+    const auto interface = startup_parameter(*this, "interface_name", "enp68s0f0");
+    const auto host_ip = startup_parameter(*this, "host_ip", "192.168.11.17");
+    const auto sensor_ip = startup_parameter(*this, "sensor_ip", "192.168.11.11");
     if (sensor_id <= 0 || sensor_id > UINT32_MAX || host_port <= 0 || host_port > 65535 ||
       sensor_port <= 0 || sensor_port > 65535 || timeout_ms <= 0 || timeout_ms > 30000)
     {
@@ -166,10 +140,7 @@ public:
         {"user_interface_name", "umrr96_t153_automotive"},
         {"user_interface_major_v", 1}, {"user_interface_minor_v", 2},
         {"user_interface_patch_v", 2}}})}});
-    const auto config_path = (config_.path / "smart_access_config.json").string();
-    if (setenv("SMART_ACCESS_CFG_FILE_PATH", config_path.c_str(), 1) != 0) {
-      throw std::runtime_error("Could not set SDK configuration path");
-    }
+    config_.activate();
     services_ = com::master::CommunicationServicesIface::Get();
     if (!services_->Init()) {
       throw std::runtime_error("Readback SDK initialization failed");
@@ -193,6 +164,27 @@ public:
       "smart_radar/set_radar_mode",
       [this](const SetMode::Request::SharedPtr request, SetMode::Response::SharedPtr response) {
         response->res = write(*request).dump(2);
+      });
+    diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
+    diagnostics_->setHardwareID(std::to_string(sensor_id_));
+    diagnostics_->add("Control requests", [this](diagnostic_updater::DiagnosticStatusWrapper & stat) {
+        using Status = diagnostic_msgs::msg::DiagnosticStatus;
+        if (!last_error_.empty()) {
+          stat.summary(Status::WARN, last_error_);
+        } else if (!exchanges_) {
+          stat.summary(Status::STALE, "Idle; sensor reachability has not been checked");
+        } else {
+          stat.summary(Status::OK, "Last request succeeded; no automatic polling");
+        }
+        stat.add("requests_sent_or_attempted", exchanges_);
+        stat.add("invalid_requests", invalid_requests_);
+        stat.add("failed_requests", failed_requests_);
+        stat.add("timeouts", timeouts_);
+        stat.add("sensor_rejected_batches", sensor_rejections_);
+        stat.add("responses_received", responses_);
+        stat.add("last_response_age_seconds", responses_ ?
+          std::chrono::duration<double>(std::chrono::steady_clock::now() - last_response_).count() :
+          -1.0);
       });
     RCLCPP_INFO(get_logger(), "Readback ready for sensor %u on %s:%ld", sensor_id_,
       host_ip.c_str(), static_cast<long>(host_port));
@@ -248,7 +240,13 @@ private:
       }
       return exchange(batch, request.params,
         std::vector<ValueType>(request.params.size(), ValueType::U8), request.section_name);
+    } catch (const std::invalid_argument & error) {
+      ++invalid_requests_;
+      return {{"sensor_id", request.sensor_id}, {"section", request.section_name},
+        {"success", false}, {"error", error.what()}};
     } catch (const std::exception & error) {
+      ++failed_requests_;
+      last_error_ = error.what();
       return {{"sensor_id", request.sensor_id}, {"section", request.section_name},
         {"success", false}, {"error", error.what()}};
     }
@@ -301,7 +299,13 @@ private:
         }
       }
       return exchange(batch, names, types, section);
+    } catch (const std::invalid_argument & error) {
+      ++invalid_requests_;
+      return {{"sensor_id", sensor_id}, {"section", section},
+        {"success", false}, {"error", error.what()}};
     } catch (const std::exception & error) {
+      ++failed_requests_;
+      last_error_ = error.what();
       return {{"sensor_id", sensor_id}, {"section", section},
         {"success", false}, {"error", error.what()}};
     }
@@ -311,6 +315,7 @@ private:
     const std::shared_ptr<InstructionBatch> & batch, const std::vector<std::string> & names,
     const std::vector<ValueType> & types, const std::string & section)
   {
+    ++exchanges_;
     const auto sensor_id = sensor_id_;
     auto instructions = services_->GetInstructionService();
     // Capture owned state only: a late reply must remain safe after a timeout.
@@ -346,12 +351,25 @@ private:
     }
     std::unique_lock<std::mutex> lock(pending->mutex);
     if (!pending->ready.wait_for(lock, timeout_, [&pending] {return pending->received;})) {
+      ++timeouts_;
       throw std::runtime_error("Timed out waiting for the sensor reply");
+    }
+    ++responses_;
+    last_response_ = std::chrono::steady_clock::now();
+    last_error_.clear();
+    if (!pending->result["success"].get<bool>()) {
+      ++sensor_rejections_;
+      last_error_ = "Sensor rejected one or more instructions";
     }
     return pending->result;
   }
 
-  RuntimeConfig config_;
+  RuntimeConfig config_{"smartmicro-readback"};
+  uint64_t exchanges_{}, invalid_requests_{}, failed_requests_{}, timeouts_{};
+  uint64_t responses_{}, sensor_rejections_{};
+  std::string last_error_;
+  std::chrono::steady_clock::time_point last_response_{};
+  std::unique_ptr<diagnostic_updater::Updater> diagnostics_;
   uint32_t sensor_id_{};
   std::chrono::milliseconds timeout_{};
   std::shared_ptr<com::master::CommunicationServicesIface> services_;

@@ -54,6 +54,60 @@ ros2 topic hz /smart_radar/port_targets_0
 ros2 topic echo /smart_radar/port_targetheader_0 --once
 ```
 
+### Timestamps, runtime configuration and diagnostics
+
+Clouds and their matching metadata now use the ROS clock when the SDK callback
+is handled. The radar's device microsecond counter is **not a ROS epoch**. This
+is receive-time stamping; transport/processing latency remains and no sensor
+clock synchronization is claimed. The common timestamp helpers apply this rule
+to CAN/Ethernet target, object and fault messages for all supported models; the
+UMRR-96 Ethernet path is the hardware-verified path.
+
+`/smart_radar/timing_0` (`umrr_ros2_msgs/msg/RadarTiming`) preserves the original
+`device_timestamp_us`, sensor ID, stream kind and timestamp source. Its header
+matches the associated cloud/header or fault report. Record this topic alongside
+the data when device timing is needed. Existing point fields and custom header
+message definitions are unchanged. Downstream consumers that previously treated
+the header as device time must switch to this timing topic. With `use_sim_time`,
+headers follow ROS `/clock`, including pauses and jumps.
+
+Both SDK processes build configuration in separate private temporary directories
+(`smartmicro-data-*` and `smartmicro-readback-*`, under `$TMPDIR` or `/tmp`).
+Installed JSON files are read-only templates. Normal shutdown removes these
+directories; forced process termination can leave one behind. No wrapper that
+restores the installed JSON is needed. ROS startup parameters select the runtime
+configuration; a preexisting `SMART_ACCESS_CFG_FILE_PATH` is replaced in each
+driver process. The SDK remains a singleton: data and control must run in
+separate processes, and safe component unloading is not yet established.
+
+Connection, sensor definition and queue parameters are marked read-only. Edit
+the YAML and restart the affected node. The host filtering parameters remain
+dynamic, and hardware settings still use the explicit read/tuning services.
+
+Both nodes publish standard `/diagnostics` via `diagnostic_updater`:
+
+- **Target stream N:** received frame count, interval frequency, steady-clock
+  age, raw device counter, and cumulative repeat/backward/zero counter counts.
+  No targets received, or silence longer than `diagnostics.stale_timeout`
+  (default 2 seconds), gives `STALE`. A timestamp anomaly in the last diagnostic
+  interval gives `WARN`; healthy reception returns to `OK`. Empty target lists
+  count as valid frames. Object/fault traffic does not mask target-stream silence.
+- **Control requests:** attempted exchanges, invalid requests, communication
+  failures, timeouts, rejected batches, replies and reply age. An unused channel
+  is `STALE` (reachability unknown); a failed exchange gives `WARN` until a
+  successful exchange. `OK` describes the last request, not continuous connection
+  monitoring. Diagnostics do not poll or write the radar. A synchronous control
+  request can delay that node's diagnostic update until it replies or times out.
+
+```bash
+ros2 topic echo /diagnostics
+ros2 topic echo /smart_radar/timing_0 --once
+ros2 param describe /smart_radar_readback host_port
+```
+
+The [ROS 2 improvement plan](ros2-improvements.md) tracks validation and remaining
+optimization, namespace, lifecycle and integration work.
+
 ## Live RViz view
 
 After adding the secondary host address and sourcing the workspace as above,
