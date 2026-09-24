@@ -40,3 +40,14 @@
     sensor_ip: 192.168.11.11
     sensor_port: 55555
     timeout_ms: 2000
+
+/umrr96_views:
+  ros__parameters:
+    frame_id: umrr96
+    input_topic: /smart_radar/port_targets_0
+    max_range: 20.0
+    half_angle_degrees: 90.0
+    cell_size: 0.25
+    decay_seconds: 2.0
+    density_full_scale: 20.0
+    publish_hz: 10.0

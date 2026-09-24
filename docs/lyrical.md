@@ -28,7 +28,9 @@ source install/local_setup.bash
 ros2 pkg executables umrr_ros2_driver
 ```
 
-The executable is `smartmicro_radar_node_exe`. The fork's former root
+The data executable is `smartmicro_radar_node_exe`. The UMRR-96 live launch also
+uses `smartmicro_radar_readback_node` for control and the Python `umrr96_views`
+node for detection density and the 2D fan. The fork's former root
 `COLCON_IGNORE` marker has been removed. The SDK and build products remain
 ignored by Git. Its upstream download script handles SDK installation; no SDK
 libraries are vendored into tracked source.

@@ -223,4 +223,7 @@ if(BUILD_TESTING)
 
 endif()
 
+install(PROGRAMS scripts/umrr96_views.py DESTINATION lib/${PROJECT_NAME}
+    RENAME umrr96_views)
+
 ament_auto_package(INSTALL_TO_SHARE config launch param)

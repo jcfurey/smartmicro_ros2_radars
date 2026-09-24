@@ -7,7 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
@@ -32,6 +32,13 @@ def generate_launch_description():
         parameters=[LaunchConfiguration('params_file')],
         output='log',
     )
+    views = Node(
+        package='umrr_ros2_driver',
+        executable='umrr96_views',
+        name='umrr96_views',
+        parameters=[LaunchConfiguration('params_file')],
+        output='log',
+    )
     rviz = Node(
         package='rviz2',
         executable='rviz2',
@@ -46,8 +53,15 @@ def generate_launch_description():
             description='Radar driver parameters',
         ),
         DeclareLaunchArgument(
+            'view',
+            default_value='grid',
+            choices=['grid', 'fan', 'live'],
+            description='Detection density grid, 2D fan, or original 3D point view',
+        ),
+        DeclareLaunchArgument(
             'rviz_config',
-            default_value=os.path.join(share, 'config', 'rviz', 'umrr96_live.rviz'),
+            default_value=PathJoinSubstitution([
+                share, 'config', 'rviz', ['umrr96_', LaunchConfiguration('view'), '.rviz']]),
             description='RViz display configuration',
         ),
         RegisterEventHandler(OnProcessExit(
@@ -56,5 +70,6 @@ def generate_launch_description():
         )),
         radar,
         readback,
+        views,
         rviz,
     ])

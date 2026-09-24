@@ -57,18 +57,97 @@ ros2 topic echo /smart_radar/port_targetheader_0 --once
 ## Live RViz view
 
 After adding the secondary host address and sourcing the workspace as above,
-start the data driver, parameter readback node, and RViz together:
+start the data driver, parameter readback node, derived views, and RViz together:
 
 ```bash
 ros2 launch umrr_ros2_driver umrr96_live.launch.py
 ```
 
-The saved view uses fixed frame `umrr96`, a one-meter grid, and bright live targets
-colored by return power. The dim gray layer, `Recent targets (2 seconds)`, retains
-two seconds of past detections for context; it is not additional instantaneous
-sensor resolution. Toggle that display off for a single-frame view. Closing RViz
-also stops both driver processes. Stop any separately running radar driver before
-using this launch file.
+The default is a top-down **detection-density grid**, with radar forward pointing
+up and positive azimuth to the left. Select the **2D range/azimuth fan** or the
+original 3D point view at startup:
+
+```bash
+ros2 launch umrr_ros2_driver umrr96_live.launch.py view:=fan
+ros2 launch umrr_ros2_driver umrr96_live.launch.py view:=live
+```
+
+Run one launch at a time. Closing RViz stops all three supporting nodes. Stop any
+separately running radar driver before using this launch file. The grid and fan
+configurations both include **Detection density** and **Fan targets** checkboxes;
+toggle these in Displays to switch or overlay the views without restarting.
+Scroll over the view to zoom, and use the middle mouse button to pan.
+
+The original `view:=live` configuration shows targets colored by return power,
+with a dim gray `Recent targets (2 seconds)` layer for historical context.
+All configurations use fixed frame `umrr96` and include the sensor control panel.
+
+### Density grid and fan
+
+Each detection adds one hit to its 0.25 m Cartesian XY cell. Counts decay
+exponentially with a two-second time constant: a hit retains about 37% of its
+weight after two seconds. Cells disappear below 0.25 weighted hits. Blue cells
+have fewer recent hits; cyan and yellow indicate more, with the color scale
+saturating at 20 weighted hits. These are hit counts, so increasing the sensor's
+frame rate also increases the displayed density.
+
+This is a detection-history view, not an occupancy or free-space map. Empty
+cells are unknown; the view does not clear along radar rays, interpolate missing
+returns, or improve the sensor's physical resolution. History is accumulated in
+the sensor frame without motion compensation. Moving the radar can smear the
+history; let it decay or clear it explicitly:
+
+```bash
+ros2 service call /smart_radar/reset_density std_srvs/srv/Empty '{}'
+```
+
+The fan displays only the latest scan, projected from measured slant range and
+azimuth onto a flat plane. It can therefore differ from the Cartesian grid for
+targets with elevation. Color represents SNR on a fixed 0–50 dB scale, and range
+arcs mark 5, 10, 15, and 20 m. The fan is cleared after one second without input.
+The default 20 m range and ±90° azimuth are display bounds, not a statement of
+the sensor's field of view. A wider sensor sweep does not automatically enlarge
+the display bounds.
+
+The `/umrr96_views` section in
+[`radar.params.umrr96_38553.yaml`](../umrr_ros2_driver/param/radar.params.umrr96_38553.yaml)
+sets `cell_size`, `decay_seconds`, `density_full_scale`, `max_range`,
+`half_angle_degrees`, and `publish_hz`. These are startup parameters; restart the
+views node after editing them. The node only subscribes to detections and never
+sends sensor commands. Its outputs use standard ROS messages:
+
+| Topic | Message | Contents |
+| --- | --- | --- |
+| `/smart_radar/density_grid` | `visualization_msgs/Marker` | Colored cell cubes for RViz |
+| `/smart_radar/density_cells` | `sensor_msgs/PointCloud2` | Observed cell centers and float `density` |
+| `/smart_radar/fan_targets` | `sensor_msgs/PointCloud2` | Flat range/azimuth points with `snr` |
+| `/smart_radar/fan_guides` | `visualization_msgs/MarkerArray` | Range and angle labels; available to late subscribers |
+
+For an existing driver or rosbag replay, run only the derived views:
+
+```bash
+ros2 run umrr_ros2_driver umrr96_views --ros-args \
+  --params-file src/smartmicro_ros2_radars/umrr_ros2_driver/param/radar.params.umrr96_38553.yaml
+# Add -p use_sim_time:=true when replaying with a ROS /clock publisher.
+rviz2 -d src/smartmicro_ros2_radars/umrr_ros2_driver/config/rviz/umrr96_grid.rviz
+```
+
+An offline test checks cell boundaries, hit counts, decay, clock reversal,
+projection, filtering, stale scans, reset, and late subscribers using synthetic
+ROS detections:
+
+```bash
+ROS_DOMAIN_ID=176 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST python3 \
+  src/smartmicro_ros2_radars/umrr_ros2_driver/test/test_umrr96_views.py -v
+```
+
+All six tests passed on 2026-09-24. A ten-second live check then received 84
+source scans, matched all 83 corresponding fan scans received by the checker,
+and observed 100 grid updates. The source had 17–36 targets per scan; the final
+grid contained 231 cells with decayed hit history. The RViz grid and guide
+subscriptions were confirmed. Sensor settings were unchanged by these checks.
+
+### Sensor control panel
 
 The **UMRR-96 Configuration** panel opens with the live view. It reads the current
 settings and firmware, displays target count/rate/cycle time, and lets you stage
@@ -80,10 +159,11 @@ closing the panel does not write sensor settings, and no EEPROM save is offered.
 The live metrics correspond to sensor topic index 0.
 
 The panel's live readback and firmware display were verified on this sensor.
-At the end of the session, the last verified panel settings were sweep 2,
-range switching off, antenna 0, and CAN target output off. Both radar processes
-and RViz exited cleanly on shutdown; shutting down the nodes does not reset the
-sensor's temporary settings.
+Before shutdown, the last verified panel settings were sweep 2, range switching
+off, antenna 0, and CAN target output off. Both radar processes and RViz exited
+cleanly. After the subsequent power cycle, readback showed the same settings
+except CAN target output was back on. Stopping ROS nodes does not reset temporary
+sensor settings, but power cycling can restore the sensor's saved settings.
 
 ## Read parameters and status
 
