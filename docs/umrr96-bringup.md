@@ -281,9 +281,18 @@ of each retained point. All grid, fan, and image outputs use the selected
 detections; the original 3D raw-cloud displays still show the source topic.
 `/smart_radar/filter_status` publishes a transient-local `std_msgs/String` JSON
 report with `mode`, `input`, `accepted`, `rejected_quality`, `rejected_motion`,
-`rejected_temporal`, and the thresholds. The generic uncertainty/false-alarm/flag
-fields are not used: this UMRR-96 callback currently fills them with unavailable
-sentinels, even though the SDK exposes corresponding accessors.
+`rejected_temporal`, and the thresholds. The UMRR-96 Ethernet callback now publishes
+the SDK's four reported variances and peak index in the existing cloud fields.
+Variance units/calibration have not been fully established, so the host filters
+do not yet use them as covariance weights. False-alarm probability and flags
+remain unavailable sentinels because their validity/semantics are unverified.
+
+`PortTargetHeader` now includes `acquisition_setup` and `acquisition_setup_valid`.
+The UMRR-96 Ethernet callback supplies the raw 16-bit setup word with validity
+true; other callbacks leave validity false. Its bit layout is not yet decoded.
+Rebuild consumers of this custom message after updating. The point cloud's 18
+fields and 72-byte point layout are unchanged, and filtering preserves the new
+reported values for retained detections.
 
 The three host filter parameters can also be changed at runtime:
 

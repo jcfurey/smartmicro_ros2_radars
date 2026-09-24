@@ -25,6 +25,7 @@
 #include <UpdateServiceIface.h>
 
 #include <rclcpp/rclcpp.hpp>
+#include <umrr_ros2_driver/sdk_callback_gate.hpp>
 
 #include <condition_variable>
 #include <mutex>
@@ -59,7 +60,7 @@ public:
   /// @brief  Constructs a firmware update service.
   ///
   UpdateService();
-  ~UpdateService() = default;
+  ~UpdateService() {callback_gate_.close();}
   ///
   /// @brief  Starts a firmware update and waits for its result.
   ///
@@ -84,6 +85,7 @@ private:
   /// @return  The corresponding firmware update result.
   ///
   UpdateResult HandleResult();
+  smartmicro::drivers::radar::SdkCallbackGate callback_gate_;
   com::types::SWUpdateInfo updateInfo_;
   std::mutex mutex_;
   std::condition_variable cv_;

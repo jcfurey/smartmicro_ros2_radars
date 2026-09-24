@@ -50,4 +50,5 @@ function cleanup {
 }
 
 getSmartaccessBinaries
+python3 tools/patch_smart_access.py umrr_ros2_driver/smartmicro
 cleanup

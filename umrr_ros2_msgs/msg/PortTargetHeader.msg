@@ -17,3 +17,7 @@ uint8 prf
 uint8 acquisition_time_stamp_base
 float32 umambiguous_speed
 uint64 acquisition_start
+# Opaque UMRR-96 acquisition setup word; bit meanings are not yet verified.
+# Other model callbacks leave valid=false instead of implying a measured zero.
+bool acquisition_setup_valid
+uint16 acquisition_setup

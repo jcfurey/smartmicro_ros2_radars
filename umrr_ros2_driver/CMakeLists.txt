@@ -42,6 +42,16 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/smartmicro/${SMARTMICRO_LIB_DIR}/libs
     message(FATAL_ERROR "Smart Access SDK is missing. Run ./smart_extract.sh in the repository root.")
 endif()
 
+# Check rather than silently modifying an existing vendor installation at build time.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/../tools/patch_smart_access.py"
+        --check "${PROJECT_SOURCE_DIR}/smartmicro"
+    RESULT_VARIABLE sdk_patch_result OUTPUT_QUIET ERROR_VARIABLE sdk_patch_error)
+if(NOT sdk_patch_result EQUAL 0)
+    message(FATAL_ERROR "${sdk_patch_error}\nFrom the repository root run: python3 tools/patch_smart_access.py umrr_ros2_driver/smartmicro")
+endif()
+
 # specify the path to search for the libraries
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/smartmicro/${SMARTMICRO_LIB_DIR})
 
@@ -189,7 +199,16 @@ if(BUILD_TESTING)
     find_package(ament_cmake_pytest REQUIRED)
     ament_add_gtest(test_runtime test/test_runtime.cpp)
     target_include_directories(test_runtime PRIVATE include)
-    target_link_libraries(test_runtime nlohmann_json::nlohmann_json)
+    target_link_libraries(test_runtime nlohmann_json::nlohmann_json Threads::Threads)
+
+    ament_add_gtest(test_sdk_float test/test_sdk_float.cpp)
+    target_include_directories(test_sdk_float PRIVATE smartmicro/include)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(test_sdk_float PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        set_property(TARGET test_sdk_float APPEND_STRING PROPERTY LINK_FLAGS " -fsanitize=address,undefined")
+        set_tests_properties(test_sdk_float PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    endif()
+    ament_add_pytest_test(test_sdk_patch test/test_sdk_patch.py TIMEOUT 20)
 
     add_executable(radar_test_sender test/radar_test_sender.cpp)
     target_include_directories(radar_test_sender PRIVATE smartmicro/include)

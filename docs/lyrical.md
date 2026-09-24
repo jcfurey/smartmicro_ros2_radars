@@ -35,6 +35,18 @@ node for detection density and the 2D fan. The fork's former root
 ignored by Git. Its upstream download script handles SDK installation; no SDK
 libraries are vendored into tracked source.
 
+Extraction applies the audited four-byte F32 conversion repair using
+`tools/patch_smart_access.py`. For an SDK extracted before this repair, run from
+the repository root before rebuilding:
+
+```bash
+python3 tools/patch_smart_access.py umrr_ros2_driver/smartmicro
+```
+
+CMake checks that the repair is present and reports an actionable error if it is
+missing. The script is idempotent and refuses unfamiliar conversion code; review
+it when upgrading the SDK. Vendor shared libraries are unchanged.
+
 CMake now uses the system `nlohmann-json3-dev` package (3.11 or newer), avoiding
 a network download during configuration. The RViz library selects the Qt major
 version exported by RViz, uses imported CMake targets supported by Lyrical,
@@ -82,8 +94,10 @@ wrapper's legacy test CMake also predates Lyrical, so the initial dependency
 build above disables its tests. Firmware download and hardware parameter writes
 were not exercised in the initial build checks. Later UMRR-96 hardware tuning
 and panel work is recorded in the [bringup notes](umrr96-bringup.md).
-GCC 15 warns about an out-of-bounds float-to-integer read
-in the supplied SDK `Instruction.h`; that vendor header has not been patched.
+The SDK's out-of-bounds float-to-integer read is now repaired, with ASan/UBSan
+bit-pattern tests. The [driver regression suite](ros2-improvements.md#validation-record)
+also checks callback draining, quality fields, isolated configuration and shutdown
+during UDP reception. Existing deprecation warnings in unrelated RViz panels remain.
 
 ## Sensor configuration
 

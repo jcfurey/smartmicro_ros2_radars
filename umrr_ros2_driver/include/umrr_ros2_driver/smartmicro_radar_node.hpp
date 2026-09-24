@@ -55,6 +55,7 @@
 #include <umrr_ros2_driver/runtime_config.hpp>
 #include <umrr_ros2_driver/startup_parameter.hpp>
 #include <umrr_ros2_driver/stream_health.hpp>
+#include <umrr_ros2_driver/sdk_callback_gate.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <umrr_ros2_msgs/msg/can_object_header.hpp>
@@ -135,11 +136,7 @@ public:
   ///
   explicit SmartmicroRadarNode(const rclcpp::NodeOptions & node_options);
 
-protected:
-  ///
-  /// @brief      Requests node shutdown.
-  ///
-  void on_shutdown_callback();
+  ~SmartmicroRadarNode() override;
 
 private:
   ///
@@ -1404,6 +1401,7 @@ private:
 
   // Declared first so its directory outlives the node's publishers/services.
   RuntimeConfig runtime_config_{"smartmicro-data"};
+  SdkCallbackGate callback_gate_;
   std::array<StreamHealth, detail::kMaxSensorCount> target_health_;
   std::array<rclcpp::Publisher<umrr_ros2_msgs::msg::RadarTiming>::SharedPtr,
     detail::kMaxSensorCount> timing_publishers_;

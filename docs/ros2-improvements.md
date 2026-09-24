@@ -51,22 +51,24 @@ hardware configuration as part of this batch.
 4. **QoS:** expose supported overrides and test raw/filtered topics with RViz and
    rosbag. Choose reliability/depth deliberately; best effort is not mandatory
    for every publisher.
-5. **Lifecycle and shutdown:** replace fixed startup sleeps with readiness checks;
-   audit SDK singleton ownership and callbacks capturing `this` before claiming
-   safe component unloading or adding lifecycle transitions.
+5. **Lifecycle and shutdown:** callback draining now replaces the shutdown delay,
+   and initialization uses the SDK's synchronous result without a fixed sleep.
+   SDK singleton ownership and retained callback code still prevent a claim of
+   safe component unloading/reloading or lifecycle support.
 6. **Regression automation:** extend the new colcon suite with disconnect/reconnect,
    complete launch/panel namespace coverage and a read-only installation fixture.
    Processing tests and concurrent data-process isolation are now covered; legacy
    Docker/network tests are opt-in separately.
 7. **Data quality:** the [SDK audit](sdk-audit.md) verified four nonzero variance
    fields, peak indices and acquisition setup in captured UMRR-96 packets.
-   Expose those with provenance; confirm variance units/calibration and the
+   Those are now published with provenance; confirm variance units/calibration and the
    meaning of zero flags/false-alarm probability before using them as confidence.
    For moving platforms, transform detections into a fixed frame before
    accumulating the density grid.
-8. **SDK instruction correctness:** the SDK audit reproduces an out-of-bounds
-   F32 conversion in the vendor header. Add a reproducible fix and bit-pattern
-   tests before extending float parameter controls. The live SDK was left intact.
+8. **SDK instruction correctness — completed:** extraction now applies the
+   audited F32 conversion repair. CMake checks it, and ASan/UBSan tests exercise
+   float bit patterns and unchanged integer conversions. No shared SDK binaries
+   or physical sensor settings were changed.
 
 ## Validation record
 
@@ -87,7 +89,7 @@ CMAKE_BUILD_PARALLEL_LEVEL=6 colcon build \
   --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 colcon test --base-paths src/smartmicro_ros2_radars \
   --packages-select umrr_ros2_driver smart_rviz_plugin \
-  --ctest-args -R 'test_runtime|test_driver_runtime|test_readback|test_umrr96_views|panel_loading_smoke|umrr96_panel_smoke' \
+  --ctest-args -R 'test_runtime|test_sdk_float|test_sdk_patch|test_driver_runtime|test_readback|test_umrr96_views|panel_loading_smoke|umrr96_panel_smoke' \
   --output-on-failure
 ```
 
@@ -96,20 +98,27 @@ configure time with `SMARTMICRO_TEST_DOMAIN_ID`. They require the SDK but no
 physical radar or Docker. Legacy network tests require
 `-DSMARTMICRO_NETWORK_TESTS=ON` explicitly.
 
-Result on this Lyrical host: **21 focused tests passed** (19 driver/processing
+Result after the SDK fixes on this Lyrical host: **28 focused tests passed** (26 driver/processing
 tests and two RViz tests), with zero errors, failures or skips.
 
 - C++ tests check independent temporary configuration, exception cleanup, stream
-  silence/recovery and repeated/backward/zero device counters.
+  silence/recovery and repeated/backward/zero device counters. New checks cover
+  callback draining/late entries/exceptions and sanitized F32 bit conversions.
+- Extraction-repair tests verify idempotence and rejection of unfamiliar code.
 - SDK replay tests run two namespaced data processes on separate sockets, verify
   independent configuration, unchanged installed templates, clean shutdown and
   cleanup, read-only parameters, and advancing ROS stamps despite a repeated
   fixture timestamp. Target diagnostics transition from waiting to timestamp
-  warning and then stale after replay stops.
+  warning and then stale after replay stops. The updated fixture verifies all four
+  reported variances, peak index and acquisition setup exactly, then shuts down
+  the driver while replay traffic is still arriving.
 - Readback tests check 20 malformed read/tuning requests, three timeouts,
   diagnostic counters, rejected parameter changes and invalid startup ranges.
 - The existing 14 processing/image/filter tests and two RViz panel tests pass.
-- A six-second physical-sensor sample matched all 50 clouds with their custom
+- A post-fix ROS replay of the earlier sensor capture preserved all four variance
+  fields and peak indices exactly across 30 frames and 953 detections, with
+  acquisition setup 49 throughout and normal shutdown/configuration cleanup.
+- Before the SDK fixes, a six-second physical-sensor sample matched all 50 clouds with their custom
   headers and timing messages, preserving all 18 point fields. Subscriber receipt
   was 0.27–0.78 ms after the ROS stamp (mean 0.52 ms). This measures local ROS
   delivery, **not sensor acquisition latency**. The raw counter was about
@@ -121,11 +130,13 @@ tests and two RViz tests), with zero errors, failures or skips.
 
 Known limits: only UMRR-96 Ethernet is verified on hardware; other model/CAN
 callbacks use the shared timestamp path but still need hardware validation.
-Receive time is not synchronized acquisition time. SDK callbacks/singletons and
-component unloading remain a separate audit. Control diagnostics may be delayed
+Receive time is not synchronized acquisition time. Callback gates now protect
+owner state, but SDK singletons and shared-library unloading remain unresolved.
+Control diagnostics may be delayed
 by the configured synchronous request timeout. Abrupt termination may leave a
-private temporary directory. The build retains existing vendor float conversion
-warnings and deprecated calls in unrelated RViz panels.
+private temporary directory. The vendor float conversion warnings are resolved;
+deprecated calls in unrelated RViz panels remain. Live driver and RViz are left
+stopped after this offline implementation; a physical-sensor recheck is pending.
 
 ## References
 

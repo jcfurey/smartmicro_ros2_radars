@@ -43,11 +43,13 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
 ASAN_OPTIONS=detect_leaks=0 "$smartmicro_audit_dir/float_probe"
 ```
 
-With the audited vendor header, this intentionally fails with an ASan stack buffer
-overread in `InstructionBase<float>::GetConvertValue`. Do not add it as an ordinary
-passing regression test. After a corrected four-byte conversion, it should print
-`1 3fc00000` without sanitizer errors. The actual conversion fix and broader
-bit-pattern regression coverage are future implementation work.
+With the original vendor header, this fails with an ASan stack buffer overread
+in `InstructionBase<float>::GetConvertValue`. With the extraction repair now
+applied by `tools/patch_smart_access.py`, it prints `1 3fc00000` without sanitizer
+errors. The ordinary `test_sdk_float` regression adds ASan/UBSan coverage for
+negative values, signed zero, subnormals, infinities, NaN payloads, read requests
+and unchanged integer conversions. `test_sdk_patch` checks repair idempotence
+and rejection of unfamiliar or duplicated original code.
 
 `results-2026-09-24.json` retains aggregate observations and the source capture hash;
 the full decoded target lists remain in the local output file.

@@ -2,10 +2,14 @@
 #include <gtest/gtest.h>
 #include <umrr_ros2_driver/runtime_config.hpp>
 #include <umrr_ros2_driver/stream_health.hpp>
+#include <umrr_ros2_driver/sdk_callback_gate.hpp>
 #include <fstream>
+#include <future>
+#include <thread>
 
 using smartmicro::drivers::radar::RuntimeConfig;
 using smartmicro::drivers::radar::StreamHealth;
+using smartmicro::drivers::radar::SdkCallbackGate;
 
 TEST(RuntimeConfig, IndependentDirectoriesAndExceptionCleanup)
 {
@@ -58,4 +62,51 @@ TEST(StreamHealth, SilenceRecoveryAndCounterReset)
   EXPECT_FALSE(recovered.timestamp_warning);
   EXPECT_EQ(recovered.backwards, 1U);  // Lifetime counter remains available.
   EXPECT_EQ(recovered.device_timestamp_us, 100000U);
+}
+
+TEST(SdkCallbackGate, DrainsAnActiveCallAndDropsLateCalls)
+{
+  SdkCallbackGate gate;
+  std::promise<void> entered, release;
+  auto release_future = release.get_future().share();
+  unsigned calls = 0;
+  auto callback = gate.wrap([&] {
+      ++calls;
+      entered.set_value();
+      release_future.wait();
+    });
+  std::thread worker(callback);
+  entered.get_future().wait();
+  auto closing = std::async(std::launch::async, [&] {gate.close();});
+  EXPECT_EQ(closing.wait_for(std::chrono::milliseconds(20)), std::future_status::timeout);
+  release.set_value();
+  worker.join();
+  closing.get();
+  callback();
+  EXPECT_EQ(calls, 1U);
+  gate.close();  // Shutdown and destructor may both close it.
+}
+
+TEST(SdkCallbackGate, RetainedCallbackAndShutdownHookOutliveOwner)
+{
+  unsigned calls = 0;
+  std::function<void()> callback, shutdown;
+  {
+    SdkCallbackGate gate;
+    callback = gate.wrap([&] {++calls;});
+    shutdown = gate.shutdown_callback();
+    callback();
+  }
+  callback();
+  shutdown();
+  EXPECT_EQ(calls, 1U);
+}
+
+TEST(SdkCallbackGate, ExceptionReleasesActiveLease)
+{
+  SdkCallbackGate gate;
+  auto callback = gate.wrap([] {throw std::runtime_error("SDK callback failure");});
+  EXPECT_THROW(callback(), std::runtime_error);
+  gate.close();
+  EXPECT_NO_THROW(callback());
 }

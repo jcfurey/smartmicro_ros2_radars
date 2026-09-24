@@ -2,10 +2,12 @@
 
 Investigated on 2026-09-24 with Smart Access Automotive **3.13.0**, UMRR-96
 Type 153 firmware **5.2.2**, and interface **1.2.2**. The live driver, control
-node, views and RViz stayed running throughout. No installed SDK files, running
-executables, sensor settings or network configuration were changed.
+node, views and RViz stayed running throughout the initial investigation. That
+investigation changed no installed SDK files, running executables, sensor
+settings or network configuration. The subsequent implementation below was
+built and tested after stopping the live launch at the user's request.
 
-## Findings that change our next steps
+## Findings at audit time
 
 | Finding | Evidence | Driver consequence |
 | --- | --- | --- |
@@ -33,8 +35,9 @@ The bundle lockfile distinguishes several version numbers:
 | OSAL Linux implementation | 1.7.0 |
 | UMRR-96 interface implementation package | 4.9.0; interface contract 1.2.2 |
 
-The inspected installed API headers match the downloaded reference copies byte
-for byte. This bundle supplies binary core libraries, public/generated headers,
+At audit time, the installed API headers matched the downloaded reference copies
+byte for byte. The subsequent F32 repair changes `Instruction.h` only. This bundle
+supplies binary core libraries, public/generated headers,
 interface definitions and OSAL example source; it does not supply the core
 communication/target-decoder implementation source.
 
@@ -71,7 +74,7 @@ returned a nonfinite value. Cycle times were approximately 0.11997–0.11999 s.
 
 | SDK field | Observed minimum | Observed maximum | Interpretation |
 | --- | ---: | ---: | --- |
-| Range variance | 0.000379506 | 0.000506981 | Reported values vary; currently discarded by our UMRR-96 callback |
+| Range variance | 0.000379506 | 0.000506981 | Reported values vary; discarded by the callback at audit time |
 | Radial speed variance | 0.000445115 | 0.000668419 | Same |
 | Azimuth variance | 0.0000694993 | 0.00132084 | Same |
 | Elevation variance | 0.0000568762 | 0.0000592398 | Same |
@@ -86,11 +89,11 @@ raw reported values with provenance is justified; immediately treating them as
 calibrated covariance weights is not. Check version validity and units before
 using them for probabilistic mapping or fusion.
 
-The current callback in `smartmicro_radar_node.cpp` already emits the corresponding
-point fields but fills all four variances, false-alarm probability, flags and peak
-index with sentinels. It also omits `GetAcquisitionSetup()`. Exposing supported
-fields would improve data quality information without changing the sensor or
-creating additional detections. The replay showed no mismatch between SDK target
+The audited callback in `smartmicro_radar_node.cpp` already emitted the corresponding
+point fields but filled all four variances, false-alarm probability, flags and peak
+index with sentinels. It also omitted `GetAcquisitionSetup()`. The implementation
+below exposes supported fields without changing the sensor or creating additional
+detections. The replay showed no mismatch between SDK target
 counts and the lists handed to the application.
 
 The parameter definition contains 29 controls, including sweep selection,
@@ -107,7 +110,7 @@ then masks to 32 bits. Masking after the load does not make the load valid.
 
 The standalone probe does not initialize the SDK or send packets. ASan reports
 `stack-buffer-overflow`, with an eight-byte read at line 178. UBSan independently
-reports insufficient storage. The installed header SHA-256 is
+reports insufficient storage. The original header SHA-256 is
 `1bfb51bfa7b2fe53c55f97a5cfe4db11424ab561e4c153253d77289aa4b1c9e2`.
 
 In an isolated header copy, replacing the punning load with a four-byte copy
@@ -119,11 +122,11 @@ std::memcpy(&bits, &tmp, sizeof(bits));
 result = bits;
 ```
 
-This is a demonstrated repair direction, not an installed patch. A production
-fix should have a reproducible extraction patch or a driver-owned serializer
-adapter, with tests for negative values, signed zero and nonfinite bit patterns.
-The code is shared by float instruction specializations, so review both read
-and write request paths. The current panel's four tuning operations use `uint8_t`.
+The extraction repair now applies this four-byte copy reproducibly. The
+ASan/UBSan regression covers negative values, signed zero, subnormals, nonfinite
+bit patterns, float read requests and existing integer conversions. The code is
+shared by float instruction specializations. The panel's four tuning operations
+continue using `uint8_t`.
 
 ## Synchronization: supported API, unverified timing contract
 
@@ -148,7 +151,7 @@ The interface distinguishes acquisition synchronization controls from time-sync
 controls. Before enabling either, establish the exact firmware protocol, clock
 units/epoch, accuracy, reboot behavior and loss-of-sync indication. A future
 clock mode must not claim synchronized acquisition time merely because SDK
-initialization succeeds. The running driver continues using ROS receive time.
+initialization succeeds. The driver continues using ROS receive time.
 
 ## Threading, lifetime and performance implications
 
@@ -158,10 +161,10 @@ It copies incoming datagrams into allocated buffers and pushes them into a
 thread invokes its selected callback synchronously, then deletes the input
 buffer. Matching implementation symbols are exported by the bundled `libosal`.
 
-Consequences for driver work:
+Consequences identified during the audit:
 
 - Keep receive callbacks short. Per-frame `std::cout << ... << std::endl` logging,
-  point-cloud allocation and ROS publication all currently occur there. A slow
+  point-cloud allocation and ROS publication all occurred there. A slow
   callback can cause backlog rather than merely lowering output frequency.
 - Preallocate point storage and remove routine flushed console logging before
   adding a new worker queue. If work is offloaded, define bounded capacity and
@@ -185,7 +188,52 @@ and a static route. Thus it cannot replace target age or successful control
 responses as a liveness check in this deployment. The manual also requires
 `alive=false` for automotive radars; enabling discovery is not the solution here.
 
-## Recommended implementation order
+## Implementation status after the audit
+
+The live driver, control node, views and RViz were stopped before rebuilding and
+remain stopped. Offline tests use loopback UDP and isolated ROS domains; no
+sensor configuration or firmware writes were performed.
+
+- F32 conversion now reads exactly four bytes, preserving the IEEE bit pattern
+  and zero-extending into the SDK's 64-bit container. Extraction applies the
+  tracked repair; CMake verifies it without mutating the SDK. The original defect
+  reproducer remains available, and the production regression runs with ASan/UBSan.
+- The UMRR-96 Ethernet callback publishes all four reported variances and peak
+  index. `PortTargetHeader` adds an opaque 16-bit acquisition setup and validity
+  flag. Other model callbacks leave that flag false. The 18-field, 72-byte point
+  layout is unchanged. Consumers of the changed custom header must be rebuilt.
+- That callback reserves the target count before filling the cloud and no longer
+  flushes a console message every frame. No additional receive queue was added.
+- Every data callback and legacy instruction-response callback registered by the
+  data node passes through a shared gate. Shutdown/destruction closes the gate,
+  rejects late entries and waits for active callbacks to finish. Construction
+  failures also drain callbacks before destroying members. The ROS shutdown hook
+  retains only gate state, avoiding a dangling node pointer. Firmware progress
+  callbacks use the same guard on their owning helper.
+- Removed the fixed two-second delay after successful synchronous SDK
+  initialization and the 100 ms shutdown delay. SDK initialization status and
+  callback draining replace those delays.
+
+All **28 focused tests** passed: 26 driver/processing checks and two RViz checks.
+The replay regression checks exact per-target quality values, acquisition setup,
+configuration isolation and orderly shutdown while packets are still arriving.
+Gate tests cover draining, late callbacks after owner destruction, retained
+shutdown hooks, repeated closure and exceptions. No firmware update was attempted.
+
+An additional ROS replay of the earlier physical-sensor capture matched all 30
+reference frames and 953 detections from the standalone SDK decoder. Every
+published variance and peak index matched exactly; acquisition setup was 49 on
+all frames. The 18-field, 72-byte layout and normal shutdown/configuration cleanup
+also passed. This uses recorded packets, not a new live sensor test.
+
+This protects node-owned state while callback code remains loaded. The vendor
+still exposes no high-level unregister/stop; singleton state, retained callbacks
+and shared-library unloading remain unresolved. Keep data/control in separate
+processes, and do not claim component unloading/reloading or lifecycle support.
+Variance calibration, flag/probability semantics and sensor-clock synchronization
+still need vendor or hardware validation.
+
+## Original recommended implementation order
 
 1. Fix and regression-test F32 instruction conversion without editing the running
    installation; retain the vendor defect reproducer.

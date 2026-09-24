@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Intentionally exercises the vendor F32 conversion; ASan should detect the SDK defect.
+// ASan detects the original vendor F32 defect; the patched header passes this probe.
 #include <Instruction.h>
 #include <iostream>
 int main() {

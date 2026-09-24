@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import struct
 import socket
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ import rclpy
 from rclpy.parameter import Parameter
 from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 from sensor_msgs.msg import PointCloud2
+from sensor_msgs_py import point_cloud2
 from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming
 import yaml
 
@@ -141,9 +143,19 @@ def test_driver_runtime():
                 else:
                     data['clients'][0].update(ip='127.0.0.1', port=port_a)
                 (sim / filename).write_text(json.dumps(data))
+            # Port 2.1 uses a 24-byte network-order generic header and a
+            # little-endian 8-byte list header followed by 56-byte target records.
+            fixture = bytearray((repo / 'simulator/targetlist_port_v2_1_0.bin').read_bytes())
+            struct.pack_into('<fHH', fixture, 24, .1, 17, 0x1234)
+            for index in range(17):
+                struct.pack_into('<10fIffH', fixture, 32 + index * 56,
+                    1.0 + index, .5, .1, .2, .01 + index, .02 + index,
+                    .03 + index, .04 + index, 2.0, 0.0, 0, 40.0, 10.0, index + 100)
+            fixture_path = run / 'known_quality_port.bin'
+            fixture_path.write_bytes(fixture)
             started_ns = node.get_clock().now().nanoseconds
             sender = launch([os.environ['SMARTMICRO_TEST_SENDER'],
-                             str(repo / 'simulator/targetlist_port_v2_1_0.bin')],
+                             str(fixture_path)],
                             SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
             wait(lambda: len(clouds) >= 5 and len(timing) >= 5 and len(headers) >= 5)
             matched = 0
@@ -161,6 +173,16 @@ def test_driver_runtime():
                 assert raw.device_timestamp_us * 1000 != ros_ns
                 assert any(h.header == cloud.header for h in headers)
                 assert cloud.point_step == 72 and cloud.width == 17
+                metadata = next(h for h in headers if h.header == cloud.header)
+                assert metadata.acquisition_setup_valid and metadata.acquisition_setup == 0x1234
+                records = point_cloud2.read_points(cloud)
+                for index, record in enumerate(records):
+                    for field, base in (('variance_range', .01), ('variance_speed', .02),
+                                        ('variance_azimuth_angle', .03),
+                                        ('variance_elevation_angle', .04)):
+                        expected = struct.unpack('<f', struct.pack('<f', base + index))[0]
+                        assert float(record[field]) == expected, (field, index, record[field])
+                    assert int(record['peak_idx']) == index + 100
             assert matched >= 3
             # The fixture deliberately repeats its original counter. ROS stamps still advance.
             assert len({t.device_timestamp_us for t in timing}) == 1
@@ -173,7 +195,12 @@ def test_driver_runtime():
             statuses.clear()
             wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
                              s.level == DiagnosticStatus.STALE for s in statuses))
+            restarted_sender = launch([os.environ['SMARTMICRO_TEST_SENDER'], str(fixture_path)],
+                SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
+            previous_count = len(clouds)
+            wait(lambda: len(clouds) >= previous_count + 3)
             stop(driver_processes[0])
+            stop(restarted_sender)
             assert len(list(run.glob('smartmicro-data-*'))) == 1
             stop(driver_processes[1])
             assert not list(run.glob('smartmicro-data-*'))

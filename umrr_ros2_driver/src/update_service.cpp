@@ -79,9 +79,9 @@ UpdateResult UpdateService::StartSoftwareUpdate(
     rclcpp::get_logger("UpdateService"), "Starting firmware download of %lu bytes...", totalSize);
 
   if (updateService->SoftwareUpdate(
-      update_image, client_id, [this](com::types::SWUpdateInfo & info) {
+      update_image, client_id, callback_gate_.wrap([this](com::types::SWUpdateInfo & info) {
         this->UpdateCallback(info);
-      }) != com::types::ERROR_CODE_OK)
+      })) != com::types::ERROR_CODE_OK)
   {
     RCLCPP_ERROR(rclcpp::get_logger("FirmwareUpdater"), "Start of software download failed");
     std::lock_guard<std::mutex> lock(mutex_);

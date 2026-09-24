@@ -313,16 +313,27 @@ namespace radar
 SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_options)
 : rclcpp::Node{"smartmicro_radar_node", node_options}
 {
-  update_config_files_from_params();
-  update_service = std::make_shared<UpdateService>();
+  try {
+    update_config_files_from_params();
+    update_service = std::make_shared<UpdateService>();
 
-  runtime_config_.activate();
-  setup_diagnostics();
+    runtime_config_.activate();
+    setup_diagnostics();
 
-  initialize_services();
-  setup_publishers();
+    initialize_services();
+    setup_publishers();
 
-  rclcpp::on_shutdown(std::bind(&SmartmicroRadarNode::on_shutdown_callback, this));
+    get_node_base_interface()->get_context()->on_shutdown(callback_gate_.shutdown_callback());
+  } catch (...) {
+    callback_gate_.close();
+    throw;
+  }
+}
+
+SmartmicroRadarNode::~SmartmicroRadarNode()
+{
+  m_shutdown_requested.store(true, std::memory_order_release);
+  callback_gate_.close();
 }
 
 builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
@@ -423,8 +434,6 @@ void SmartmicroRadarNode::initialize_services()
   data_umrra1_v2_0_1 = com::master::umrra1_t166_b_automotive_v2_0_1::DataStreamServiceIface::Get();
   data_umrra1_v3_0_0 = com::master::umrra1_t166_b_automotive_v3_0_0::DataStreamServiceIface::Get();
 
-  // Wait for initailization
-  std::this_thread::sleep_for(std::chrono::seconds(2));
   RCLCPP_INFO(this->get_logger(), "Data stream services have been received!");
 
   // create a ros2 service to change the radar parameters
@@ -546,9 +555,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v3_0_0->RegisterComObjectListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::objectlist_callback_umrra4_mse_v3_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register objectlist callback for sensor umrra4_mse_v3_0_0");
@@ -556,9 +565,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v3_0_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrra4_mse_v3_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrra4_mse_v3_0_0");
@@ -566,9 +575,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v3_0_0->RegisterFaultReportsReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::faultreport_callback_umrra4_mse_v3_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register faultreport callback for sensor umrra4_mse_v3_0_0");
@@ -578,9 +587,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v2_1_0->RegisterComObjectListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::objectlist_callback_umrra4_mse_v2_1_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register objectlist callback for sensor umrra4_mse_v2_1_0");
@@ -588,9 +597,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v2_1_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrra4_mse_v2_1_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrra4_mse_v2_1_0");
@@ -600,9 +609,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v1_0_0->RegisterComObjectListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::objectlist_callback_umrra4_mse_v1_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register objectlist callback for sensor umrra4_mse_v1_0_0");
@@ -610,9 +619,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v1_0_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrra4_mse_v1_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrra4_mse_v1_0_0");
@@ -622,9 +631,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v2_0_0->RegisterComObjectListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v2_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register objectlist callback for sensor umrr9f_mse_v2_0_0");
@@ -632,9 +641,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v2_0_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v2_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_mse_v2_0_0");
@@ -642,9 +651,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v2_0_0->RegisterFaultReportsReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::faultreport_callback_umrr9f_mse_v2_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register faultreport callback for sensor umrr9f_mse_v2_0_0");
@@ -654,9 +663,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_3_0->RegisterComObjectListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_3_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register objectlist callback for sensor umrr9f_mse_v1_3_0");
@@ -664,9 +673,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_3_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_3_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_mse_v1_3_0");
@@ -676,9 +685,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_1_0->RegisterComObjectListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_1_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register objectlist callback for sensor umrr9f_mse_v1_1_0");
@@ -686,9 +695,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_1_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_1_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_mse_v1_1_0");
@@ -698,9 +707,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_0_0->RegisterComObjectListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::objectlist_callback_umrr9f_mse_v1_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register objectlist callback for sensor umrr9f_mse_v1_0_0");
@@ -708,9 +717,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_0_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_0_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_mse_v1_0_0");
@@ -720,9 +729,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr96_v1_2_2" &&
     com::types::ERROR_CODE_OK !=
     data_umrr96->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr96, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr96_v1_2_2");
@@ -731,9 +740,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr11_v1_1_2" &&
     com::types::ERROR_CODE_OK !=
     data_umrr11->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr11, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr11_v1_1_2");
@@ -742,9 +751,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9f_v1_1_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v1_1_1->RegisterComTargetListPortReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9f_v1_1_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_v1_1_1");
@@ -753,9 +762,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9f_v2_0_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v2_0_0->RegisterComTargetListPortReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9f_v2_0_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_v2_0_0");
@@ -764,9 +773,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9f_v2_1_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v2_1_1->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9f_v2_1_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_v2_1_1");
@@ -775,9 +784,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9f_v2_2_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v2_2_1->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9f_v2_2_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_v2_2_1");
@@ -786,9 +795,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9f_v2_4_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v2_4_1->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9f_v2_4_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_v2_4_1");
@@ -797,9 +806,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9f_v3_0_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v3_0_0->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9f_v3_0_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_v3_0_0");
@@ -809,9 +818,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_v3_2_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrr9f_v3_2_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrr9f_v3_2_0");
@@ -819,9 +828,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_v3_2_0->RegisterFaultReportsReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::faultreport_callback_umrr9f_v3_2_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register faultreport callback for sensor umrr9f_v3_2_0");
@@ -832,9 +841,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9d_v1_0_3" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_0_3->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9d_v1_0_3, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9d_v1_0_3");
@@ -843,9 +852,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9d_v1_2_2" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_2_2->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9d_v1_2_2, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9d_v1_2_2");
@@ -854,9 +863,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9d_v1_4_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_4_1->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9d_v1_4_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9d_v1_4_1");
@@ -865,9 +874,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrr9d_v1_5_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_5_0->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9d_v1_5_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrr9d_v1_5_0");
@@ -879,14 +888,14 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
       sensor_idx, sensor.id);
 
     const auto target_cb_ret = data_umrr9d_v1_7_0->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrr9d_v1_7_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2));
+        std::placeholders::_1, std::placeholders::_2)));
 
     const auto fault_cb_ret = data_umrr9d_v1_7_0->RegisterFaultReportsReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::faultreport_callback_umrr9d_v1_7_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2));
+        std::placeholders::_1, std::placeholders::_2)));
 
     if (
       com::types::ERROR_CODE_OK !=
@@ -907,9 +916,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrra4_v1_0_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrra4_v1_0_1->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrra4_v1_0_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrra4_v1_0_1");
@@ -918,9 +927,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrra4_v1_2_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrra4_v1_2_1->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrra4_v1_2_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrra4_v1_2_1");
@@ -929,9 +938,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrra4_v1_4_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrra4_v1_4_0->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrra4_v1_4_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrra4_v1_4_0");
@@ -941,9 +950,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_v1_6_0->RegisterComTargetListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::targetlist_callback_umrra4_v1_6_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register targetlist callback for sensor umrra4_v1_6_0");
@@ -951,9 +960,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_v1_6_0->RegisterFaultReportsReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::faultreport_callback_umrra4_v1_6_0, this, sensor_idx,
-          std::placeholders::_1, std::placeholders::_2)))
+          std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(), "Failed to register faultreport callback for sensor umrra4_v1_6_0");
@@ -964,9 +973,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrra1_v1_0_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrra1_v1_0_0->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrra1_v1_0_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrra1_v1_0_0");
@@ -975,9 +984,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrra1_v2_0_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrra1_v2_0_0->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrra1_v2_0_0");
@@ -986,9 +995,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrra1_v2_0_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrra1_v2_0_1->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrra1_v2_0_1");
@@ -997,9 +1006,9 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
     sensor.model == "umrra1_v3_0_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrra1_v3_0_0->RegisterComTargetListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::targetlist_callback_umrra1_v3_0_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register targetlist callback for sensor umrra1_v3_0_0");
@@ -1044,9 +1053,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v2_1_0->RegisterComObjectBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v2_1_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1055,9 +1064,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v2_1_0->RegisterComTargetBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v2_1_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1068,9 +1077,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v1_0_0->RegisterComObjectBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v1_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1079,9 +1088,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v1_0_0->RegisterComTargetBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v1_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1092,9 +1101,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_3_0->RegisterComObjectBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_3_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1103,9 +1112,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_3_0->RegisterComTargetBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_3_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1116,9 +1125,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_1_0->RegisterComObjectBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_1_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1127,9 +1136,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_1_0->RegisterComTargetBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_1_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1140,9 +1149,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_0_0->RegisterComObjectBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1151,9 +1160,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v1_0_0->RegisterComTargetBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1164,9 +1173,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v3_0_0->RegisterComObjectBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v3_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1175,9 +1184,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrra4_mse_v3_0_0->RegisterComTargetBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v3_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1188,9 +1197,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v2_0_0->RegisterComObjectBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v2_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1199,9 +1208,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     if (
       com::types::ERROR_CODE_OK !=
       data_umrr9f_mse_v2_0_0->RegisterComTargetBaseListReceiveCallback(
-        sensor.id, std::bind(
+        sensor.id, callback_gate_.wrap(std::bind(
           &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v2_0_0, this,
-          sensor_idx, std::placeholders::_1, std::placeholders::_2)))
+          sensor_idx, std::placeholders::_1, std::placeholders::_2))))
     {
       RCLCPP_INFO(
         this->get_logger(),
@@ -1212,9 +1221,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr96_can_v1_2_2" &&
     com::types::ERROR_CODE_OK !=
     data_umrr96->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr96, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr96_can_v1_2_2");
@@ -1223,9 +1232,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr11_can_v1_1_2" &&
     com::types::ERROR_CODE_OK !=
     data_umrr11->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr11, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr11_can_v1_1_2");
@@ -1234,9 +1243,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9f_can_v2_1_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v2_1_1->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_1_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9f_can_v2_1_1");
@@ -1245,9 +1254,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9f_can_v2_2_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v2_2_1->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_2_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9f_can_v2_2_1");
@@ -1256,9 +1265,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9f_can_v2_4_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v2_4_1->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_4_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9f_can_v2_4_1");
@@ -1267,9 +1276,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9f_can_v3_0_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v3_0_0->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_0_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9f_can_v3_0_0");
@@ -1278,9 +1287,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9f_can_v3_2_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9f_v3_2_0->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_2_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9f_can_v3_2_0");
@@ -1289,9 +1298,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9d_can_v1_0_3" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_0_3->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_0_3, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9d_can_v1_0_3");
@@ -1300,9 +1309,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9d_can_v1_2_2" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_2_2->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_2_2, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9d_can_v1_2_2");
@@ -1311,9 +1320,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9d_can_v1_4_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_4_1->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_4_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9d_can_v1_4_1");
@@ -1322,9 +1331,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9d_can_v1_5_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_5_0->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_5_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9d_can_v1_5_0");
@@ -1333,9 +1342,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrr9d_can_v1_7_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrr9d_v1_7_0->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_7_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrr9d_can_v1_7_0");
@@ -1344,9 +1353,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrra4_can_v1_0_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrra4_v1_0_1->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_0_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrra4_can_v1_0_1");
@@ -1355,9 +1364,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrra4_can_v1_2_1" &&
     com::types::ERROR_CODE_OK !=
     data_umrra4_v1_2_1->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_2_1, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrra4_can_v1_2_1");
@@ -1366,9 +1375,9 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrra4_can_v1_4_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrra4_v1_4_0->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_4_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrra4_can_v1_4_0");
@@ -1377,22 +1386,13 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
     sensor.model == "umrra4_can_v1_6_0" &&
     com::types::ERROR_CODE_OK !=
     data_umrra4_v1_6_0->RegisterComTargetBaseListReceiveCallback(
-      sensor.id, std::bind(
+      sensor.id, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_6_0, this, sensor_idx,
-        std::placeholders::_1, std::placeholders::_2)))
+        std::placeholders::_1, std::placeholders::_2))))
   {
     RCLCPP_INFO(
       this->get_logger(), "Failed to register CAN targetlist for sensor umrra4_can_v1_6_0");
   }
-}
-
-void SmartmicroRadarNode::on_shutdown_callback()
-{
-  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Shutdown called!");
-  m_shutdown_requested.store(true, std::memory_order_release);
-  rclcpp::Rate sleepRate(std::chrono::milliseconds(100));
-  sleepRate.sleep();
-  m_services.reset();
 }
 
 void SmartmicroRadarNode::firmware_download(
@@ -1585,9 +1585,9 @@ void SmartmicroRadarNode::set_radar_mode(
   if (
     com::types::ERROR_CODE_OK !=
     inst->SendInstructionBatch(
-      batch, std::bind(
+      batch, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::mode_response, this, client_id, std::placeholders::_2,
-        request->params, section_name)))
+        request->params, section_name))))
   {
     result->res = "Error: Check params are valid for this sensor and values within range!";
     return;
@@ -1639,8 +1639,8 @@ void SmartmicroRadarNode::ip_address(
   if (
     com::types::ERROR_CODE_OK !=
     inst->SendInstructionBatch(
-      batch, std::bind(
-        &SmartmicroRadarNode::sensor_response_ip, this, client_id, std::placeholders::_2)))
+      batch, callback_gate_.wrap(std::bind(
+        &SmartmicroRadarNode::sensor_response_ip, this, client_id, std::placeholders::_2))))
   {
     result->res_ip = "Service not conducted";
     return;
@@ -1705,9 +1705,9 @@ void SmartmicroRadarNode::radar_command(
 
   if (
     com::types::ERROR_CODE_OK != inst->SendInstructionBatch(
-      batch, std::bind(
+      batch, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::command_response, this, client_id,
-        std::placeholders::_2, command_name, section_name)))
+        std::placeholders::_2, command_name, section_name))))
   {
     result->res = "Error in sending command to the sensor!";
     return;
@@ -1805,9 +1805,9 @@ void SmartmicroRadarNode::get_radar_status(
   if (
     com::types::ERROR_CODE_OK !=
     inst->SendInstructionBatch(
-      batch, std::bind(
+      batch, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::status_response, this, client_id, std::placeholders::_2,
-        request->statuses, section_name)))
+        request->statuses, section_name))))
   {
     result->res = "Error: Check status are valid for this sensor!";
     return;
@@ -1903,9 +1903,9 @@ void SmartmicroRadarNode::get_radar_mode(
   if (
     com::types::ERROR_CODE_OK !=
     inst->SendInstructionBatch(
-      batch, std::bind(
+      batch, callback_gate_.wrap(std::bind(
         &SmartmicroRadarNode::param_response, this, client_id, std::placeholders::_2,
-        request->params, section_name)))
+        request->params, section_name))))
   {
     result->res = "Error: Check params are valid for this sensor!";
     return;
@@ -3133,7 +3133,6 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
   targetlist_port_umrr96,
   const com::types::ClientId client_id)
 {
-  std::cout << "Targetlist for umrr96_v1_2_2" << std::endl;
   if (!m_shutdown_requested.load(std::memory_order_acquire)) {
     std::shared_ptr<com::master::umrr96_t153_automotive_v1_2_2::comtargetlist::PortHeader>
     port_header;
@@ -3162,7 +3161,11 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
     header.header_ver_minor = port_header->GetHeaderVersionMinor();
     header.cycle_time = target_header->GetCycleTime();
     header.number_of_targets = target_header->GetNumberOfTargets();
-    for (const auto & target : targetlist_port_umrr96->GetTargetList()) {
+    header.acquisition_setup = target_header->GetAcquisitionSetup();
+    header.acquisition_setup_valid = true;
+    const auto targets = targetlist_port_umrr96->GetTargetList();
+    modifier.reserve(targets.size());
+    for (const auto & target : targets) {
       const auto range = target->GetRange();
       const auto elevation_angle = target->GetElevationAngle();
       const auto range_2d = range * std::cos(elevation_angle);
@@ -3172,9 +3175,9 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
         {range_2d * std::cos(azimuth_angle), range_2d * std::sin(azimuth_angle),
           range * std::sin(elevation_angle), target->GetSpeedRadial(), target->GetPower(),
           target->GetRCS(), target->GetNoise(), snr, azimuth_angle, elevation_angle, range,
-          kRadarFloatSentinel, kRadarFloatSentinel,
-          kRadarFloatSentinel, kRadarFloatSentinel,
-          kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
+          target->GetVarianceRange(), target->GetVarianceSpeed(),
+          target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
+          kRadarFloatSentinel, kRadarFlagsSentinel, target->GetPeakIdx()});
     }
 
     m_publishers[sensor_idx]->publish(msg);
