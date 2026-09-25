@@ -117,6 +117,33 @@ excluded from ghost scoring because the person may really pass beyond 3.4 m):
 Progression: without the background model and continuous ghost test, ghost
 tracks appeared in 17–52% of scans and the walk split into 20 ids.
 
+## Short-path ghosts and `tracked_targets`
+
+A 91.6 s capture (`scoot`: one person scooting back and forth on a chair
+within ~3 m) showed ghosting that the single-scan rules miss: 30% of scans with
+movers contained more than one moving cluster. The extra clusters were
+typically 0.4–1.4 m (median 0.9 m) beyond the nearest one — inside the 1.5 m
+`range_gap` — at a bearing ~28° away, with 0.87× the speed, the same Doppler
+sign (89%), 12 dB weaker SNR and a single point: short bounces off nearby
+surfaces.
+
+A single-scan "weaker farther copy" rule halved multi-cluster scans (→ 12%)
+but removed 11–14% of the person's real returns on `walk` (limbs share the
+signature) and only about a third of the remaining labelled ghosts, so it was
+not adopted. Temporal consistency works better: `~/tracked_targets` publishes
+only `moving_targets` within `track_radius` (0.8 m) of a confirmed track.
+
+| | `moving_targets` | `tracked_targets` |
+|---|---:|---:|
+| `scoot`: scans with >1 moving cluster (node replay) | 30.4% | 6.6% |
+| `walk`: labelled ghosts left after the single-scan rules | 100% | 18% |
+| `walk`: real returns kept (relative) | 100% | 85% |
+| `walk`: person shown while walking | — | 85% of scans |
+
+Cost: a new object appears only after confirmation (~0.4 s), and some limb
+returns away from the track centre are dropped. `moving_targets` remains the
+low-latency, unconfirmed stream; RViz shows `tracked_targets` in red.
+
 ## Nav2 obstacle evidence (`smartmicro_processing/obstacles.py`)
 
 `~/obstacles` (sensor frame, scan stamp, z = `obstacle_height`) contains:

@@ -56,14 +56,31 @@ Visualization Manager:
       Decay Time: 0.5
       Use Fixed Frame: true
     - Class: rviz_default_plugins/PointCloud2
-      Name: Moving targets
-      Enabled: true
+      Name: Moving targets (unconfirmed)
+      Enabled: false
       Topic:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /umrr96_processing/moving_targets
+      Position Transformer: XYZ
+      Color Transformer: FlatColor
+      Color: 255; 170; 150
+      Style: Spheres
+      Size (m): 0.2
+      Alpha: 1
+      Decay Time: 0.5
+      Use Fixed Frame: true
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Tracked targets
+      Enabled: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /umrr96_processing/tracked_targets
       Position Transformer: XYZ
       Color Transformer: FlatColor
       Color: 255; 60; 40

@@ -21,14 +21,14 @@ from visualization_msgs.msg import Marker, MarkerArray
 from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
 from .doppler import fit_velocity, FitConfig
 from .ghosts import ghost_mask, GhostConfig
-from .obstacles import obstacle_points, ObstacleConfig, PersistenceFilter
+from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter
 from .ros_support import declare, DiagnosticsRateLimiter
 from .tracker import MovingObjectTracker, TrackerConfig
 
 # Relative by default so a namespace moves the input with the node; remap it in launch.
 DEFAULT_INPUT = 'smart_radar/port_targets_0'
 CLOUD_OUTPUTS = ('quality_targets', 'doppler_inliers', 'doppler_outliers', 'unclassified_targets',
-                 'moving_targets', 'moving_ghosts')
+                 'moving_targets', 'moving_ghosts', 'tracked_targets')
 FIT_PARAMETERS = {
     'doppler_sign': ('+1: input Doppler is positive receding; -1: positive approaching.',
                      -1, 1, 2),
@@ -239,9 +239,13 @@ class RadarProcessing(Node):
                 static, self.persistence.step(static), selected[movers, :3], ghosts,
                 [t.x[:2] for t in tracks], self.obstacle_config, novel)
             self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
+            track_xy = [t.x[:2] for t in tracks]
+            on_track = near_tracks(selected[local, :3], track_xy,
+                                   self.obstacle_config.track_radius)
             partitions = {'doppler_inliers': indices[result.inliers],
                           'doppler_outliers': indices[movers], 'unclassified_targets': [],
                           'moving_targets': moving,
+                          'tracked_targets': moving[on_track],
                           'moving_ghosts': indices[movers][ghosts]}
             twist = TwistWithCovarianceStamped(header=cloud.header)
             linear = twist.twist.twist.linear
@@ -270,7 +274,7 @@ class RadarProcessing(Node):
                                         np.empty(0, bool), [], self.obstacle_config)
             self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
             partitions = {'doppler_inliers': [], 'doppler_outliers': [],
-                          'moving_targets': [], 'moving_ghosts': [],
+                          'moving_targets': [], 'moving_ghosts': [], 'tracked_targets': [],
                           'unclassified_targets': indices}
             stats.update(inliers=0, outliers=0, moving=0, ghosts=0, unclassified=len(indices))
         for name, subset in partitions.items():

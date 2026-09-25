@@ -62,6 +62,15 @@ class PersistenceFilter:
         self.history.clear()
 
 
+def near_tracks(xyz, track_xy, radius):
+    """Mask of points within ``radius`` (planar) of any confirmed track position."""
+    xyz = np.asarray(xyz, float).reshape(-1, 3)
+    track_xy = np.asarray(track_xy, float).reshape(-1, 2)
+    if not len(xyz) or not len(track_xy):
+        return np.zeros(len(xyz), bool)
+    return np.min(np.linalg.norm(xyz[:, None, :2] - track_xy[None], axis=2), axis=1) < radius
+
+
 def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, config,
                     novel=None):
     """
@@ -86,11 +95,7 @@ def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, co
     keep_static = static_xyz[keep]
     ok = ~np.asarray(mover_ghost, bool)
     near_mover = np.linalg.norm(mover_xyz[:, :2], axis=1) < config.safety_range
-    if len(track_xy) and len(mover_xyz):
-        on_track = np.min(np.linalg.norm(
-            mover_xyz[:, None, :2] - track_xy[None], axis=2), axis=1) < config.track_radius
-    else:
-        on_track = np.zeros(len(mover_xyz), bool)
+    on_track = near_tracks(mover_xyz, track_xy, config.track_radius)
     parts = [keep_static, mover_xyz[ok & (on_track | near_mover)]]
     if config.include_tracks and len(track_xy):
         parts.append(np.c_[track_xy, np.zeros(len(track_xy))])
