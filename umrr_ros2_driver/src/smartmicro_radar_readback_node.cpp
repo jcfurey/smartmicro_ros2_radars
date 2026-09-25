@@ -167,7 +167,7 @@ public:
         response->res = write(*request).dump(2);
       });
     diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
-    diagnostics_->setHardwareID(std::to_string(sensor_id_));
+    diagnostics_->setHardwareID("umrr96@" + sensor_ip);
     diagnostics_->add("Control requests", [this](diagnostic_updater::DiagnosticStatusWrapper & stat) {
         using Status = diagnostic_msgs::msg::DiagnosticStatus;
         if (!last_error_.empty()) {
@@ -177,6 +177,7 @@ public:
         } else {
           stat.summary(Status::OK, "Last request succeeded; no automatic polling");
         }
+        stat.add("sensor_id", sensor_id_);
         stat.add("requests_sent_or_attempted", exchanges_);
         stat.add("invalid_requests", invalid_requests_);
         stat.add("failed_requests", failed_requests_);
