@@ -18,7 +18,6 @@
 #define UMRR_ROS2_DRIVER__UPDATE_SERVICE_HPP_
 
 #include <CommunicationServicesIface.h>
-#include <DeviceMonitorServiceIface.h>
 #include <Instruction.h>
 #include <InstructionBatch.h>
 #include <InstructionServiceIface.h>

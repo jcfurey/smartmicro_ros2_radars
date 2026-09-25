@@ -77,7 +77,6 @@
 #include <umrr_ros2_driver/visibility_control.hpp>
 
 #include <array>
-#include <atomic>
 #include <memory>
 #include <string>
 #include <utility>
@@ -1462,99 +1461,100 @@ private:
 
   std::size_t m_number_of_sensors{};
   std::size_t m_number_of_adapters{};
-  std::uint64_t response_type{};
   std::shared_ptr<UpdateService> update_service;
-  std::atomic_bool m_shutdown_requested{false};
+
+  // SDK service handles are owned by the node (not namespace-scope globals in an
+  // installed header) and released before the SDK's own static objects.
+  std::shared_ptr<com::master::CommunicationServicesIface> m_services{};
+  std::shared_ptr<
+    com::master::umrra4_automotive_v1_0_1::DataStreamServiceIface>
+  data_umrra4_v1_0_1{};
+  std::shared_ptr<
+    com::master::umrra4_automotive_v1_2_1::DataStreamServiceIface>
+  data_umrra4_v1_2_1{};
+  std::shared_ptr<
+    com::master::umrra4_automotive_v1_4_0::DataStreamServiceIface>
+  data_umrra4_v1_4_0{};
+  std::shared_ptr<
+    com::master::umrra4_automotive_v1_6_0::DataStreamServiceIface>
+  data_umrra4_v1_6_0{};
+  std::shared_ptr<
+    com::master::umrr11_t132_automotive_v1_1_2::DataStreamServiceIface>
+  data_umrr11{};
+  std::shared_ptr<
+    com::master::umrr96_t153_automotive_v1_2_2::DataStreamServiceIface>
+  data_umrr96{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_automotive_v1_1_1::DataStreamServiceIface>
+  data_umrr9f_v1_1_1{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_automotive_v2_0_0::DataStreamServiceIface>
+  data_umrr9f_v2_0_0{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_automotive_v2_1_1::DataStreamServiceIface>
+  data_umrr9f_v2_1_1{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_automotive_v2_2_1::DataStreamServiceIface>
+  data_umrr9f_v2_2_1{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_automotive_v2_4_1::DataStreamServiceIface>
+  data_umrr9f_v2_4_1{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_automotive_v3_0_0::DataStreamServiceIface>
+  data_umrr9f_v3_0_0{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_automotive_v3_2_0::DataStreamServiceIface>
+  data_umrr9f_v3_2_0{};
+  std::shared_ptr<
+    com::master::umrr9d_t152_automotive_v1_0_3::DataStreamServiceIface>
+  data_umrr9d_v1_0_3{};
+  std::shared_ptr<
+    com::master::umrr9d_t152_automotive_v1_2_2::DataStreamServiceIface>
+  data_umrr9d_v1_2_2{};
+  std::shared_ptr<
+    com::master::umrr9d_t152_automotive_v1_4_1::DataStreamServiceIface>
+  data_umrr9d_v1_4_1{};
+  std::shared_ptr<
+    com::master::umrr9d_t152_automotive_v1_5_0::DataStreamServiceIface>
+  data_umrr9d_v1_5_0{};
+  std::shared_ptr<
+    com::master::umrr9d_t152_automotive_v1_7_0::DataStreamServiceIface>
+  data_umrr9d_v1_7_0{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_mse_v1_0_0::DataStreamServiceIface>
+  data_umrr9f_mse_v1_0_0{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_mse_v1_1_0::DataStreamServiceIface>
+  data_umrr9f_mse_v1_1_0{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_mse_v1_3_0::DataStreamServiceIface>
+  data_umrr9f_mse_v1_3_0{};
+  std::shared_ptr<
+    com::master::umrr9f_t169_mse_v2_0_0::DataStreamServiceIface>
+  data_umrr9f_mse_v2_0_0{};
+  std::shared_ptr<
+    com::master::umrra4_mse_v1_0_0::DataStreamServiceIface>
+  data_umrra4_mse_v1_0_0{};
+  std::shared_ptr<
+    com::master::umrra4_mse_v2_1_0::DataStreamServiceIface>
+  data_umrra4_mse_v2_1_0{};
+  std::shared_ptr<
+    com::master::umrra4_mse_v3_0_0::DataStreamServiceIface>
+  data_umrra4_mse_v3_0_0{};
+  std::shared_ptr<
+    com::master::umrra1_t166_b_automotive_v1_0_0::DataStreamServiceIface>
+  data_umrra1_v1_0_0{};
+  std::shared_ptr<
+    com::master::umrra1_t166_b_automotive_v2_0_0::DataStreamServiceIface>
+  data_umrra1_v2_0_0{};
+  std::shared_ptr<
+    com::master::umrra1_t166_b_automotive_v2_0_1::DataStreamServiceIface>
+  data_umrra1_v2_0_1{};
+  std::shared_ptr<
+    com::master::umrra1_t166_b_automotive_v3_0_0::DataStreamServiceIface>
+  data_umrra1_v3_0_0{};
 };
 
-std::shared_ptr<com::master::CommunicationServicesIface> m_services{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_0_1::DataStreamServiceIface>
-data_umrra4_v1_0_1{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_2_1::DataStreamServiceIface>
-data_umrra4_v1_2_1{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_4_0::DataStreamServiceIface>
-data_umrra4_v1_4_0{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_6_0::DataStreamServiceIface>
-data_umrra4_v1_6_0{};
-std::shared_ptr<
-  com::master::umrr11_t132_automotive_v1_1_2::DataStreamServiceIface>
-data_umrr11{};
-std::shared_ptr<
-  com::master::umrr96_t153_automotive_v1_2_2::DataStreamServiceIface>
-data_umrr96{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v1_1_1::DataStreamServiceIface>
-data_umrr9f_v1_1_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_0_0::DataStreamServiceIface>
-data_umrr9f_v2_0_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_1_1::DataStreamServiceIface>
-data_umrr9f_v2_1_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_2_1::DataStreamServiceIface>
-data_umrr9f_v2_2_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_4_1::DataStreamServiceIface>
-data_umrr9f_v2_4_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v3_0_0::DataStreamServiceIface>
-data_umrr9f_v3_0_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v3_2_0::DataStreamServiceIface>
-data_umrr9f_v3_2_0{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_0_3::DataStreamServiceIface>
-data_umrr9d_v1_0_3{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_2_2::DataStreamServiceIface>
-data_umrr9d_v1_2_2{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_4_1::DataStreamServiceIface>
-data_umrr9d_v1_4_1{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_5_0::DataStreamServiceIface>
-data_umrr9d_v1_5_0{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_7_0::DataStreamServiceIface>
-data_umrr9d_v1_7_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v1_0_0::DataStreamServiceIface>
-data_umrr9f_mse_v1_0_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v1_1_0::DataStreamServiceIface>
-data_umrr9f_mse_v1_1_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v1_3_0::DataStreamServiceIface>
-data_umrr9f_mse_v1_3_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v2_0_0::DataStreamServiceIface>
-data_umrr9f_mse_v2_0_0{};
-std::shared_ptr<
-  com::master::umrra4_mse_v1_0_0::DataStreamServiceIface>
-data_umrra4_mse_v1_0_0{};
-std::shared_ptr<
-  com::master::umrra4_mse_v2_1_0::DataStreamServiceIface>
-data_umrra4_mse_v2_1_0{};
-std::shared_ptr<
-  com::master::umrra4_mse_v3_0_0::DataStreamServiceIface>
-data_umrra4_mse_v3_0_0{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v1_0_0::DataStreamServiceIface>
-data_umrra1_v1_0_0{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v2_0_0::DataStreamServiceIface>
-data_umrra1_v2_0_0{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v2_0_1::DataStreamServiceIface>
-data_umrra1_v2_0_1{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v3_0_0::DataStreamServiceIface>
-data_umrra1_v3_0_0{};
 
 }  // namespace radar
 }  // namespace drivers
