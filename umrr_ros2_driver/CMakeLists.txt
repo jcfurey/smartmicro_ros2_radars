@@ -238,6 +238,7 @@ if(BUILD_TESTING)
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_umrr96_measure test/test_umrr96_measure.py
         TIMEOUT 30 ENV ${offline_environment})
+    ament_add_pytest_test(test_umrr96_python_lint test/test_umrr96_python_lint.py TIMEOUT 120)
     ament_add_pytest_test(test_readback test/readback_smoke.py
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py

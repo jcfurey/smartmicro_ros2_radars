@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+
 import pytest
 import rclpy
 from sensor_msgs.msg import PointField
@@ -38,9 +39,11 @@ def test_capture_statistics_are_json_serializable_and_do_not_invent_missing_qual
 
 
 class FakeControl:
+    """In-memory radar parameters that can fail on the Nth write."""
+
     def __init__(self, manual=0, fail=None):
-        self.values = dict(prf_selector_manual=manual, prf_manual_value_idx=2,
-                           frequency_sweep_idx=2)
+        self.values = {'prf_selector_manual': manual, 'prf_manual_value_idx': 2,
+                       'frequency_sweep_idx': 2}
         self.original = self.values.copy()
         self.calls = 0
         self.fail = fail
@@ -59,8 +62,9 @@ class FakeControl:
 @pytest.mark.parametrize('fail', (None, 1, 3, 8))
 def test_prf_restore_after_success_or_partially_applied_write(manual, fail):
     control = FakeControl(manual, fail)
-    report = dict(parameters_before=control.read(), windows=[])
+    report = {'parameters_before': control.read(), 'windows': []}
     saves = []
+
     def run():
         measure.prf_trials(control, lambda: {'frames': 100}, report,
                            lambda: saves.append(report['restoration']))
@@ -78,7 +82,8 @@ def test_prf_restore_after_success_or_partially_applied_write(manual, fail):
 def test_interrupt_and_missing_data_restore_profile():
     for error in (KeyboardInterrupt(), RuntimeError('capture failed')):
         control = FakeControl()
-        report = dict(parameters_before=control.read(), windows=[])
+        report = {'parameters_before': control.read(), 'windows': []}
+
         def interrupt():
             raise error
         with pytest.raises(type(error)):
@@ -92,7 +97,8 @@ def test_interrupt_and_missing_data_restore_profile():
 
 def test_concurrent_change_is_reported_and_unrelated_values_are_preserved():
     control = FakeControl()
-    report = dict(parameters_before=control.read(), windows=[])
+    report = {'parameters_before': control.read(), 'windows': []}
+
     def changed():
         control.values['frequency_sweep_idx'] = 1
         return {'frames': 20}
@@ -104,7 +110,8 @@ def test_concurrent_change_is_reported_and_unrelated_values_are_preserved():
 
 def test_failed_restoration_is_never_reported_as_verified():
     control = FakeControl()
-    report = dict(parameters_before=control.read(), windows=[])
+    report = {'parameters_before': control.read(), 'windows': []}
+
     def fail():
         control.write = lambda values: (_ for _ in ()).throw(RuntimeError('Disconnected'))
         raise RuntimeError('Lost connection')
@@ -117,16 +124,19 @@ def test_failed_restoration_is_never_reported_as_verified():
 def test_read_only_cli_captures_profile_and_raw_data(tmp_path):
     rclpy.init()
     node = rclpy.create_node('measure_cli_fixture')
+
     def reply(request, response):
         names = request.params if hasattr(request, 'params') else request.statuses
-        response.res = json.dumps(dict(success=True, sensor_id=request.sensor_id,
-            values={n: dict(response_type=1, value=0) for n in names}))
+        response.res = json.dumps({'success': True, 'sensor_id': request.sensor_id,
+                                   'values': {n: {'response_type': 1, 'value': 0}
+                                              for n in names}})
         return response
     node.create_service(GetMode, '/measure_fixture/get_radar_mode', reply)
     node.create_service(GetStatus, '/measure_fixture/get_radar_status', reply)
     publisher = node.create_publisher(measure.PointCloud2, '/measure_fixture/port_targets_0', 10)
     fields = [PointField(name=n, offset=i * 4, datatype=PointField.FLOAT32, count=1)
               for i, n in enumerate(('range', 'snr', 'radial_speed'))]
+
     def publish():
         publisher.publish(point_cloud2.create_cloud(
             Header(stamp=node.get_clock().now().to_msg()), fields, [(2, 20, 0), (8, 10, -1)]))
@@ -141,7 +151,8 @@ def test_read_only_cli_captures_profile_and_raw_data(tmp_path):
         deadline = time.monotonic() + 12
         while process.poll() is None and time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=.05)
-        assert process.poll() == 0, process.communicate(timeout=1)[0] if process.poll() is not None else 'CLI timeout'
+        assert process.poll() == 0, (process.communicate(timeout=1)[0]
+                                     if process.poll() is not None else 'CLI timeout')
         report = json.loads(output.read_text())
         assert report['success'] and report['restoration'] == 'not_needed'
         assert len(report['parameters_before']) == 29 and len(report['statuses']) == 14
