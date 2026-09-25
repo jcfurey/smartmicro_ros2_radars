@@ -72,6 +72,19 @@ Visualization Manager:
       Alpha: 1
       Decay Time: 0.5
       Use Fixed Frame: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Tracks (id, speed, velocity)
+      Enabled: true
+      Namespaces:
+        label: true
+        track: true
+        velocity: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /umrr96_processing/track_markers
   Enabled: true
   Global Options:
     Background Color: 22; 27; 35

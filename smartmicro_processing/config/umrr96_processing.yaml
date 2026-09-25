@@ -22,6 +22,16 @@
     range_gap: 1.5
     speed_tolerance: 0.25
     wall_azimuth_deg: 4.0
+    # Moving-object tracker (walk-through: person tracked in 96% of walking scans,
+    # ghost tracks in 0.7% of labelled scans). The background model assumes the
+    # radar is fixed in the scene.
+    cluster_radius: 0.6
+    gate: 1.2
+    confirm_hits: 8
+    confirm_window: 10
+    max_coast: 1.0
+    static_hold: 5.0
+    background_time_constant: 30.0
     max_input_age: 0.5
     future_tolerance: 0.05
     stale_timeout: 0.5

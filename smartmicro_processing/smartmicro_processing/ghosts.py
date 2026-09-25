@@ -38,7 +38,9 @@ def ghost_mask(mover_xyz, mover_speed, static_xyz, config=GhostConfig()):
     ranges = np.linalg.norm(mover_xyz, axis=1)
     farther = ranges[:, None] - ranges[None, :] > config.range_gap
     same_speed = np.abs(speed[:, None] - speed[None, :]) < config.speed_tolerance
-    ghosts = np.any(farther & same_speed, axis=1)
+    # A second-order bounce (radar-target-wall-target-radar) roughly doubles the speed.
+    double_speed = np.abs(speed[:, None] - 2 * speed[None, :]) < 2 * config.speed_tolerance
+    ghosts = np.any(farther & (same_speed | double_speed), axis=1)
     if len(static_xyz):
         azimuth = np.arctan2(mover_xyz[:, 1], mover_xyz[:, 0])
         static_azimuth = np.arctan2(static_xyz[:, 1], static_xyz[:, 0])

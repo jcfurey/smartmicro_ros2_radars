@@ -89,9 +89,38 @@ Scored on `walk` (real kept = movers < 3 m retained; ghosts removed = movers
 - Replay of `walk`: 96.9% real kept, 84.7% ghosts removed; 22.8% of
   `moving_targets` are still ghosts. 123 processing tests pass.
 
+## Moving-object tracker (`smartmicro_processing/tracker.py`)
+
+Clusters `moving_targets` (0.6 m), runs a constant-velocity EKF per track with
+position and radial-speed updates, confirms tracks on 8 hits in 10 scans and
+coasts 1 s. A confirmed track may hold for 5 s on *novel* zero-Doppler
+detections (standing still, tangential motion); a 30 s background occupancy
+model keeps walls from holding tracks. A track farther than another confirmed
+track with the same or double radial speed (first/second-order bounce) is a
+ghost and is not published. The ghost rules gained the same doubled-speed test
+per detection: 96.3% real kept, 90.4% ghosts removed.
+
+Outputs: `~/tracked_objects` (PointCloud2: x, y, z, vx, vy, speed, track_id,
+age) and `~/track_markers` (MarkerArray, only with subscribers).
+
+Scored on `walk` (`scripts/umrr96_tracker_eval.py`; enter/leave windows are
+excluded from ghost scoring because the person may really pass beyond 3.4 m):
+
+| Phase | Person tracked | Track ids | Ghost track present |
+|---|---:|---:|---:|
+| Walking (6–40 s) | 95.6% | 4 | 1.8% |
+| Standing still | 60.7% | 2 | 0% |
+| Swaying | 58.3% | 1 | 0% |
+| Absent | — | — | 0% |
+| All labelled scans | | | 0.7% (1 id) |
+
+Progression: without the background model and continuous ghost test, ghost
+tracks appeared in 17–52% of scans and the walk split into 20 ids.
+
 ## Limits
 
-- One room, one person, stationary radar. Two movers at the same speed and
+- One room, one person, stationary radar; parameters are tuned on the same
+  recording they are scored on (no held-out data yet). Two movers at the same speed and
   bearing, ≥ 1.5 m apart in range, lose the farther one.
 - Ego-velocity settings are validated only with the sensor at rest; motion
   may raise Doppler noise and needs a moving-platform check before fusion.
@@ -100,11 +129,10 @@ Scored on `walk` (real kept = movers < 3 m retained; ghosts removed = movers
 ## Next steps
 
 1. **Live check** of `moving_targets` vs `moving_ghosts` in RViz while walking.
-2. **Moving-object tracker**: cluster `moving_targets`, constant-velocity
-   tracks with confirmation (M-of-N) — expected to remove most remaining
-   ghosts (they rarely form consistent tracks) and to hold a person through
-   tangential motion and standing still (zero Doppler) using nearby static
-   detections.
+2. ~~Moving-object tracker~~ — done (above). Remaining: standing coverage
+   (61%) is limited by ~0.7 direct returns per scan; the background model
+   assumes a fixed sensor — on a moving platform it must run in a fixed frame
+   (odom) with TF, like the accumulation node.
 3. **Nav2 obstacle persistence**: k-of-n polar/voxel persistence on the
    sensor-frame cloud to drop the 3% flicker; decide how to treat persistent
    ghosts (e.g. the ≈5 m / −40° return) — candidates: occlusion reasoning

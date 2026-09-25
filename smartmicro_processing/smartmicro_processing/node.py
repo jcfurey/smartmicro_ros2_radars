@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Passive experimental Doppler node; the existing estimator retains all TF ownership."""
+import copy
 import math
 import time
 
@@ -12,13 +13,16 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
+from sensor_msgs_py.point_cloud2 import create_cloud
 from std_msgs.msg import Header
+from visualization_msgs.msg import Marker, MarkerArray
 
 from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
 from .doppler import fit_velocity, FitConfig
 from .ghosts import ghost_mask, GhostConfig
 from .ros_support import declare, DiagnosticsRateLimiter
+from .tracker import MovingObjectTracker, TrackerConfig
 
 # Relative by default so a namespace moves the input with the node; remap it in launch.
 DEFAULT_INPUT = 'smart_radar/port_targets_0'
@@ -43,6 +47,20 @@ GHOST_PARAMETERS = {
     'speed_tolerance': ('Compensated-speed match for the same-speed ghost rule (m/s).', .01, 5),
     'wall_azimuth_deg': ('Bearing match for the behind-static-return ghost rule (deg).', .1, 30),
 }
+TRACKER_PARAMETERS = {
+    'cluster_radius': ('Moving targets closer than this form one measurement (m).', .05, 10),
+    'gate': ('Association distance from a predicted track position (m).', .05, 20),
+    'confirm_hits': ('Hits within confirm_window scans needed to confirm a track.', 1, 64, 1),
+    'confirm_window': ('Scan window for track confirmation.', 1, 64, 1),
+    'max_coast': ('Delete a track after this long without support (s).', .05, 30),
+    'static_hold': ('A confirmed track may live on novel zero-Doppler support this long (s).',
+                    .01, 600),
+    'background_time_constant': ('Memory of the static background used to tell novel '
+                                 'zero-Doppler support from walls (s). Valid only while '
+                                 'the input frame is fixed in the scene.', 1, 3600),
+}
+TRACK_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
+                for i, n in enumerate(('x', 'y', 'z', 'vx', 'vy', 'speed', 'track_id', 'age'))]
 GATE_PARAMETERS = {
     'min_range': ('Minimum XYZ range of a quality target (m).', 0, 300),
     'max_range': ('Maximum XYZ range of a quality target (m).', 0, 300),
@@ -85,6 +103,11 @@ class RadarProcessing(Node):
         self.fit_config = _declare_config(self, FitConfig, FIT_PARAMETERS)
         self.gate_config = _declare_config(self, GateConfig, GATE_PARAMETERS)
         self.ghost_config = _declare_config(self, GhostConfig, GHOST_PARAMETERS)
+        self.tracker_config = _declare_config(self, TrackerConfig, TRACKER_PARAMETERS)
+        self.tracker = MovingObjectTracker(self.tracker_config)
+        self.track_pub = self.create_publisher(PointCloud2, '~/tracked_objects',
+                                               qos_profile_sensor_data)
+        self.marker_pub = self.create_publisher(MarkerArray, '~/track_markers', 10)
         self.cloud_publishers = {
             name: self.create_publisher(PointCloud2, '~/' + name, qos_profile_sensor_data)
             for name in CLOUD_OUTPUTS}
@@ -138,6 +161,9 @@ class RadarProcessing(Node):
         message = empty_cloud(Header(stamp=stamp, frame_id=self.frame))
         for publisher in self.cloud_publishers.values():
             publisher.publish(message)
+        self.track_pub.publish(message)
+        self.tracker = MovingObjectTracker(self.tracker_config)
+        self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
 
     def reject(self, reason, detail=''):
         self.rejected_inputs += 1
@@ -182,9 +208,14 @@ class RadarProcessing(Node):
             movers = ~result.inliers
             ghosts = ghost_mask(selected[movers, :3], result.residuals[movers],
                                 selected[result.inliers, :3], self.ghost_config)
+            moving = indices[movers][~ghosts]
+            local = np.flatnonzero(movers)[~ghosts]
+            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3],
+                                       result.residuals[local], selected[result.inliers, :3])
+            self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
             partitions = {'doppler_inliers': indices[result.inliers],
                           'doppler_outliers': indices[movers], 'unclassified_targets': [],
-                          'moving_targets': indices[movers][~ghosts],
+                          'moving_targets': moving,
                           'moving_ghosts': indices[movers][ghosts]}
             twist = TwistWithCovarianceStamped(header=cloud.header)
             linear = twist.twist.twist.linear
@@ -199,6 +230,7 @@ class RadarProcessing(Node):
             stats.update(inliers=int(result.inliers.sum()),
                          outliers=int((~result.inliers).sum()),
                          moving=int((~ghosts).sum()), ghosts=int(ghosts.sum()),
+                         tracks=len(tracks),
                          unclassified=0, condition=result.condition, residual_rmse=result.rmse,
                          vx=float(result.velocity[0]), vy=float(result.velocity[1]),
                          vz=float(result.velocity[2]),
@@ -217,6 +249,36 @@ class RadarProcessing(Node):
                      processing_ms=1000 * (time.monotonic() - start))
         self.stats = stats
         self.publish_diagnostics()
+
+    def publish_tracks(self, header, tracks, now):
+        rows = [(t.x[0], t.x[1], 0.0, t.x[2], t.x[3], t.speed, t.track_id, now - t.first_stamp)
+                for t in tracks]
+        self.track_pub.publish(create_cloud(header, TRACK_FIELDS, rows))
+        if not self.marker_pub.get_subscription_count():
+            return
+        markers = [Marker(action=Marker.DELETEALL)]
+        for t in tracks:
+            body = Marker(header=header, ns='track', id=t.track_id, type=Marker.CYLINDER)
+            body.pose.position.x, body.pose.position.y = float(t.x[0]), float(t.x[1])
+            body.pose.position.z = 0.8
+            body.pose.orientation.w = 1.0
+            body.scale.x = body.scale.y = 0.5
+            body.scale.z = 1.6
+            body.color.r, body.color.g, body.color.b, body.color.a = 1.0, 0.55, 0.1, 0.6
+            label = Marker(header=header, ns='label', id=t.track_id, type=Marker.TEXT_VIEW_FACING)
+            label.pose = copy.deepcopy(body.pose)
+            label.pose.position.z = 1.9
+            label.scale.z = 0.3
+            label.color.r = label.color.g = label.color.b = label.color.a = 1.0
+            label.text = f'#{t.track_id} {t.speed:.1f} m/s'
+            arrow = Marker(header=header, ns='velocity', id=t.track_id, type=Marker.ARROW)
+            arrow.scale.x, arrow.scale.y, arrow.scale.z = 0.08, 0.16, 0.2
+            arrow.color.r, arrow.color.g, arrow.color.b, arrow.color.a = 1.0, 0.9, 0.2, 1.0
+            start = body.pose.position
+            tip = type(start)(x=start.x + float(t.x[2]), y=start.y + float(t.x[3]), z=0.1)
+            arrow.points = [type(start)(x=start.x, y=start.y, z=0.1), tip]
+            markers += [body, label, arrow]
+        self.marker_pub.publish(MarkerArray(markers=markers))
 
     def watchdog(self):
         now = self.now_ns()

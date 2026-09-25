@@ -14,6 +14,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_cloud test/test_cloud.py TIMEOUT 30)
   ament_add_pytest_test(test_accumulation test/test_accumulation.py TIMEOUT 30)
   ament_add_pytest_test(test_ghosts test/test_ghosts.py TIMEOUT 30)
+  ament_add_pytest_test(test_tracker test/test_tracker.py TIMEOUT 30)
   ament_add_pytest_test(test_vectorized_equivalence test/test_vectorized_equivalence.py
     TIMEOUT 60)
   set(SMARTMICRO_PROCESSING_TEST_DOMAIN_ID 178 CACHE STRING "Isolated processing test domain")
