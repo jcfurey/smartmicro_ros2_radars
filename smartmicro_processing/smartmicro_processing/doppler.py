@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Robust sensor-origin translation from a majority world-static radar scene.
+"""
+Robust sensor-origin translation from a majority world-static radar scene.
 
 No ROS, pose integration, SDK variance interpretation, or radiometric weighting.
 Covariance is an experimental model with explicit floors, not calibrated error.
@@ -66,7 +67,8 @@ def huber_weights(residuals, residual_threshold):
 
 
 def fit_velocity(xyz, radial_speed, config=FitConfig()):
-    """Fit d = -u.v in 3D. Unknown vertical motion is never forced to zero.
+    """
+    Fit d = -u.v in 3D. Unknown vertical motion is never forced to zero.
 
     RANSAC finds a majority consensus; bounded Huber reweighting refines it.
     A valid result still depends on correct Doppler sign and a static majority.

@@ -48,8 +48,8 @@ def measurements(cloud):
                 for offset, dtype in zip(offsets, formats)]
     if any(a & b for i, a in enumerate(occupied) for b in occupied[i + 1:]):
         raise ValueError('Required measurement fields overlap')
-    dtype = np.dtype(dict(names=REQUIRED, formats=formats, offsets=offsets,
-                          itemsize=cloud.point_step))
+    dtype = np.dtype({'names': REQUIRED, 'formats': formats, 'offsets': offsets,
+                      'itemsize': cloud.point_step})
     if cloud.width == 0:
         return np.empty((0, len(REQUIRED)), dtype=float)
     points = np.ndarray((cloud.height, cloud.width), dtype=dtype, buffer=cloud.data,
@@ -63,15 +63,16 @@ def select_measurements(values, config=GateConfig()):
     in_range = np.isfinite(ranges) & (ranges >= config.min_range) & (ranges <= config.max_range)
     enough_snr = values[:, 4] >= config.min_snr_db
     mask = finite & in_range & enough_snr
-    stats = dict(input=len(values), accepted=int(mask.sum()),
-                 rejected_nonfinite=int((~finite).sum()),
-                 rejected_range=int((finite & ~in_range).sum()),
-                 rejected_snr=int((finite & in_range & ~enough_snr).sum()))
+    stats = {'input': len(values), 'accepted': int(mask.sum()),
+             'rejected_nonfinite': int((~finite).sum()),
+             'rejected_range': int((finite & ~in_range).sum()),
+             'rejected_snr': int((finite & in_range & ~enough_snr).sum())}
     return np.flatnonzero(mask), stats
 
 
 def subset_cloud(cloud, indices):
-    """Gather whole point records; indices refer to row-major input points.
+    """
+    Gather whole point records; indices refer to row-major input points.
 
     Padding bytes inside a record and unknown fields survive unchanged; row
     padding between input rows is dropped because the output is one packed row.
@@ -98,6 +99,6 @@ def subset_cloud(cloud, indices):
 
 def empty_cloud(header):
     return PointCloud2(header=deepcopy(header), height=1, width=0,
-                       fields=[PointField(name=name, offset=4*i, datatype=PointField.FLOAT32, count=1)
-                               for i, name in enumerate(REQUIRED)],
+                       fields=[PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32,
+                                          count=1) for i, name in enumerate(REQUIRED)],
                        point_step=20, row_step=0, data=b'', is_dense=False)

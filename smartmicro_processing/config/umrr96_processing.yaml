@@ -1,4 +1,6 @@
-/umrr96_processing:
+# Matches a node named umrr96_processing in any namespace (see the namespace
+# launch argument). Integer values are accepted for floating-point settings.
+/**/umrr96_processing:
   ros__parameters:
     # Experimental defaults; calibrate against independent controlled motion.
     doppler_sign: 1  # +1 assumes positive receding; -1 means positive approaching.
@@ -17,3 +19,4 @@
     max_input_age: 0.5
     future_tolerance: 0.05
     stale_timeout: 0.5
+    diagnostics_period: 1.0  # Unchanged /diagnostics at most this often; changes publish at once.

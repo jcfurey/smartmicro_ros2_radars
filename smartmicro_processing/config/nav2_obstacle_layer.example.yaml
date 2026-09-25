@@ -1,0 +1,46 @@
+# Example only: merge into your Nav2 costmap parameters; not loaded by this package.
+# Radar evidence marks obstacles but never clears: empty cells mean "unknown", and
+# sparse radar returns cannot justify free-space ray clearing.
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      plugins: ["voxel_layer", "radar_layer", "inflation_layer"]
+      radar_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: radar_confirmed
+        radar_confirmed:
+          # Pose-compensated, confirmed cells (>= min_support_scans scans).
+          topic: /umrr96_accumulation/confirmed_targets
+          data_type: "PointCloud2"
+          # The cloud is in odom; without sensor_frame Nav2 would raytrace from
+          # the odom origin. The stamp is the newest contributing scan, so the
+          # sensor pose is available in TF when the observation is buffered.
+          sensor_frame: umrr96
+          marking: true
+          clearing: false
+          # Heights are in the costmap's global frame. Keep ground and overhead
+          # multipath out of the 2D costmap.
+          min_obstacle_height: 0.10
+          max_obstacle_height: 2.0
+          obstacle_max_range: 20.0
+          # The accumulator already bounds history (window_seconds); do not
+          # stack a second persistence window on top of it.
+          observation_persistence: 0.0
+          expected_update_rate: 0.0
+          inf_is_valid: false
+
+      # Alternative: skip the accumulator and let the costmap persist the
+      # per-scan Doppler inliers in the sensor frame. Prefer this when TF is
+      # the only pose source Nav2 should trust, or to avoid a second evidence
+      # window: the costmap transforms each scan at its own stamp.
+      # radar_inliers:
+      #   topic: /umrr96_processing/doppler_inliers
+      #   data_type: "PointCloud2"
+      #   sensor_frame: ""        # the cloud's own frame (umrr96)
+      #   marking: true
+      #   clearing: false
+      #   min_obstacle_height: 0.10
+      #   max_obstacle_height: 2.0
+      #   obstacle_max_range: 20.0
+      #   observation_persistence: 0.5   # match the accumulator's window

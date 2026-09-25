@@ -30,7 +30,8 @@ class AccumulationConfig:
 
 
 def transform_measurements(values, translation, quaternion):
-    """Apply target-from-sensor translation and XYZW rotation to XYZ only.
+    """
+    Apply target-from-sensor translation and XYZW rotation to XYZ only.
 
     Other columns retain their sensor-measurement meaning. The returned points
     are transformed detections, never interpolated surfaces or voxel centres.
@@ -70,7 +71,8 @@ def pose_step(previous, current):
 
 def pose_step_limits(translation_step, rotation_step, dt_seconds=0.0,
                      max_speed=0.0, max_angular_speed=0.0):
-    """Discontinuity thresholds for scans ``dt_seconds`` apart.
+    """
+    Discontinuity thresholds for scans ``dt_seconds`` apart.
 
     A fixed per-scan step would reject ordinary motion above ``step * rate``
     and after dropped scans, so the allowance grows with elapsed time.
@@ -118,6 +120,8 @@ def _group_starts(sorted_keys):
 
 
 class TemporalEvidence:
+    """Scan-support evidence per voxel over a bounded time window."""
+
     def __init__(self, config=AccumulationConfig()):
         self.config = config
         self.frames = deque()
@@ -206,10 +210,10 @@ class TemporalEvidence:
 
     def snapshot(self, now_ns):
         """List-of-dicts form of :meth:`snapshot_array` for analysis scripts and tests."""
-        return [dict(value=record['value'].copy(), source_index=int(record['source_index']),
-                     source_stamp_ns=int(record['source_stamp_ns']),
-                     first_stamp_ns=int(record['first_stamp_ns']),
-                     support_scans=int(record['support_scans']),
-                     age_seconds=float(record['age_seconds']),
-                     span_seconds=float(record['span_seconds']))
+        return [{'value': record['value'].copy(), 'source_index': int(record['source_index']),
+                 'source_stamp_ns': int(record['source_stamp_ns']),
+                 'first_stamp_ns': int(record['first_stamp_ns']),
+                 'support_scans': int(record['support_scans']),
+                 'age_seconds': float(record['age_seconds']),
+                 'span_seconds': float(record['span_seconds'])}
                 for record in self.snapshot_array(now_ns)]

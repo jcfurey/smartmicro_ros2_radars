@@ -13,7 +13,15 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_doppler test/test_doppler.py TIMEOUT 30)
   ament_add_pytest_test(test_cloud test/test_cloud.py TIMEOUT 30)
   ament_add_pytest_test(test_accumulation test/test_accumulation.py TIMEOUT 30)
+  ament_add_pytest_test(test_vectorized_equivalence test/test_vectorized_equivalence.py
+    TIMEOUT 60)
   set(SMARTMICRO_PROCESSING_TEST_DOMAIN_ID 178 CACHE STRING "Isolated processing test domain")
+  ament_add_pytest_test(test_node_logic test/test_node_logic.py
+    TIMEOUT 60 ENV
+    "ROS_DOMAIN_ID=${SMARTMICRO_PROCESSING_TEST_DOMAIN_ID}"
+    "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST"
+    "ROS_LOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/test_ros_logs"
+    "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp")
   ament_add_pytest_test(test_processing_runtime test/test_processing_runtime.py
     TIMEOUT 60 ENV
     "ROS_DOMAIN_ID=${SMARTMICRO_PROCESSING_TEST_DOMAIN_ID}"
@@ -29,5 +37,19 @@ if(BUILD_TESTING)
     "ROS_LOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/test_ros_logs"
     "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
     "CYCLONEDDS_URI=<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"lo\" multicast=\"false\"/></Interfaces><AllowMulticast>false</AllowMulticast></General></Domain></CycloneDDS>")
+
+  # Lint first-party sources; files carry SPDX identifiers but no copyright
+  # notices, so ament_copyright is not applied.
+  find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_pep257 REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+  find_package(ament_cmake_lint_cmake REQUIRED)
+  ament_flake8()
+  ament_flake8(TESTNAME flake8_scripts
+    scripts/umrr96_processing scripts/umrr96_processing_audit
+    scripts/umrr96_accumulation scripts/umrr96_accumulation_audit)
+  ament_pep257()
+  ament_xmllint()
+  ament_lint_cmake()
 endif()
 ament_package()
