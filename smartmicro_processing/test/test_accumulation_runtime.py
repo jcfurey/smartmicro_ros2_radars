@@ -6,11 +6,11 @@ import signal
 import subprocess
 import time
 
+from diagnostic_msgs.msg import DiagnosticArray
+from geometry_msgs.msg import TransformStamped
 import numpy as np
 import pytest
 import rclpy
-from diagnostic_msgs.msg import DiagnosticArray
-from geometry_msgs.msg import TransformStamped
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from rosgraph_msgs.msg import Clock
@@ -76,7 +76,8 @@ def test_installed_accumulator(tmp_path, mode):
         broadcaster.sendTransform(msg)
 
     fields = [PointField(name=n, offset=i*4, datatype=PointField.FLOAT32, count=1)
-              for i, n in enumerate(('x', 'y', 'z', 'radial_speed', 'snr', 'false_alarm_probability'))]
+              for i, n in enumerate(('x', 'y', 'z', 'radial_speed', 'snr',
+                                     'false_alarm_probability'))]
 
     def scan(seconds, xyz):
         msg = create_cloud(Header(frame_id='test_radar', stamp=clock(seconds)), fields,
@@ -133,7 +134,8 @@ def test_installed_accumulator(tmp_path, mode):
             wait_for(lambda: confirmed and confirmed[-1].width == 1)
             before = len(states)
             publisher.publish(last_scan)
-            wait_for(lambda: any(s.get('dropped_nonmonotonic_stamp') == '1' for s in states[before:]))
+            wait_for(lambda: any(s.get('dropped_nonmonotonic_stamp') == '1'
+                                 for s in states[before:]))
             assert latest()[0]['support_scans'] in (2, 3)
             if broadcaster:
                 transform(100.3, [10, 0, 0])

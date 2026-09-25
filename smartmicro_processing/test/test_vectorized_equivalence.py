@@ -7,11 +7,10 @@ import math
 import numpy as np
 import pytest
 from sensor_msgs.msg import PointCloud2, PointField
-from std_msgs.msg import Header
-
 from smartmicro_processing.accumulation import AccumulationConfig, TemporalEvidence
 from smartmicro_processing.cloud import subset_cloud
 from smartmicro_processing.evidence_cloud import DTYPE, evidence_cloud
+from std_msgs.msg import Header
 
 
 def reference_subset_cloud(cloud, indices):
@@ -88,10 +87,10 @@ class ReferenceEvidence:
                 previous = cells.get(key)
                 support = 1 if previous is None else previous['support_scans'] + 1
                 first = stamp if previous is None else previous['first_stamp_ns']
-                cells[key] = dict(value=value, source_index=index, source_stamp_ns=stamp,
-                                  first_stamp_ns=first, support_scans=support,
-                                  age_seconds=max(0, now_ns - stamp) * 1e-9,
-                                  span_seconds=(stamp - first) * 1e-9)
+                cells[key] = {'value': value, 'source_index': index, 'source_stamp_ns': stamp,
+                              'first_stamp_ns': first, 'support_scans': support,
+                              'age_seconds': max(0, now_ns - stamp) * 1e-9,
+                              'span_seconds': (stamp - first) * 1e-9}
         return [cells[key] for key in sorted(cells)]
 
 
@@ -137,7 +136,8 @@ def test_subset_cloud_accepts_list_data_and_rejects_invalid_indices():
     cloud = random_cloud(np.random.default_rng(1), 4, 1, 20, 0, False)
     listed = deepcopy(cloud)
     listed.data = list(bytes(cloud.data))
-    assert bytes(subset_cloud(listed, [2, 0]).data) == bytes(reference_subset_cloud(cloud, [2, 0]).data)
+    expected = bytes(reference_subset_cloud(cloud, [2, 0]).data)
+    assert bytes(subset_cloud(listed, [2, 0]).data) == expected
     for invalid in ([-1], [4], [[0]]):
         with pytest.raises(ValueError):
             subset_cloud(cloud, invalid)
@@ -171,7 +171,8 @@ def test_temporal_evidence_and_cloud_match_dict_implementation(seed):
             stamp -= 5_000_000_000
             now = stamp
         values, indices = random_scan(rng, config.voxel_size)
-        assert reference.add(values, indices, stamp, now) == actual.add(values, indices, stamp, now)
+        accepted = reference.add(values, indices, stamp, now)
+        assert actual.add(values, indices, stamp, now) == accepted
         assert (reference.observations, reference.capacity_drops, len(reference.frames)) == (
             actual.observations, actual.capacity_drops, len(actual.frames))
         expected = reference.snapshot(now)

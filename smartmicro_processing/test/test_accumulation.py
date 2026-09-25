@@ -3,12 +3,12 @@ import math
 
 import numpy as np
 import pytest
-from sensor_msgs_py.point_cloud2 import read_points
 from sensor_msgs.msg import PointField
-from std_msgs.msg import Header
-
-from smartmicro_processing.accumulation import AccumulationConfig, TemporalEvidence, transform_measurements
+from sensor_msgs_py.point_cloud2 import read_points
+from smartmicro_processing.accumulation import (AccumulationConfig, TemporalEvidence,
+                                                transform_measurements)
 from smartmicro_processing.evidence_cloud import evidence_cloud
+from std_msgs.msg import Header
 
 
 def add(evidence, values, stamp, now=None):
@@ -117,16 +117,16 @@ def test_evidence_cloud_has_explicit_source_metadata_and_empty_layout():
     assert not len(read_points(empty)) and empty.fields == message.fields
 
 
-@pytest.mark.parametrize('options', [dict(window_seconds=0), dict(window_seconds=float('nan')),
-                                    dict(voxel_size=.001), dict(max_scans=0),
-                                    dict(min_support_scans=33), dict(max_observations=2.5)])
+@pytest.mark.parametrize('options', [{'window_seconds': 0}, {'window_seconds': float('nan')},
+                                     {'voxel_size': .001}, {'max_scans': 0},
+                                     {'min_support_scans': 33}, {'max_observations': 2.5}])
 def test_invalid_config(options):
     with pytest.raises(ValueError):
         AccumulationConfig(**options)
 
 
 @pytest.mark.parametrize('translation,rotation', [([0, 0, 0], [0, 0, 0, 0]),
-                                                 ([float('nan'), 0, 0], [0, 0, 0, 1])])
+                                                  ([float('nan'), 0, 0], [0, 0, 0, 1])])
 def test_invalid_transform_rejected(translation, rotation):
     with pytest.raises(ValueError):
         transform_measurements([[1, 0, 0, 0, 30]], translation, rotation)

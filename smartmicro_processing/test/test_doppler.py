@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from smartmicro_processing.doppler import FitConfig, fit_velocity
+from smartmicro_processing.doppler import fit_velocity, FitConfig
 
 
 def scene():
@@ -67,7 +67,8 @@ def test_no_majority_consensus():
     assert result.reason == 'insufficient_consensus'
 
 
-@pytest.mark.parametrize('failure', ['sparse', 'nan', 'zero_range', 'shape', 'speed', 'covariance'])
+@pytest.mark.parametrize('failure', ['sparse', 'nan', 'zero_range', 'shape', 'speed',
+                                     'covariance'])
 def test_invalid_measurements_and_implausible_fit(failure):
     xyz, speed, _ = scene()
     config = FitConfig()
@@ -86,9 +87,9 @@ def test_invalid_measurements_and_implausible_fit(failure):
     assert not fit_velocity(xyz, speed, config).valid
 
 
-@pytest.mark.parametrize('options', [dict(doppler_sign=0), dict(min_inlier_fraction=.5),
-                                    dict(noise_floor=float('nan')), dict(min_inliers=3),
-                                    dict(ransac_trials=0), dict(max_condition=1)])
+@pytest.mark.parametrize('options', [{'doppler_sign': 0}, {'min_inlier_fraction': .5},
+                                     {'noise_floor': float('nan')}, {'min_inliers': 3},
+                                     {'ransac_trials': 0}, {'max_condition': 1}])
 def test_invalid_config(options):
     with pytest.raises(ValueError):
         FitConfig(**options)

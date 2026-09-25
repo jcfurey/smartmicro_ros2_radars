@@ -12,7 +12,7 @@ import time
 import numpy as np
 
 from .cloud import GateConfig, measurements, select_measurements
-from .doppler import FitConfig, fit_velocity
+from .doppler import fit_velocity, FitConfig
 
 
 def summary(values):
@@ -61,17 +61,18 @@ def audit(bag, topic, fit_config, gate_config):
     for path in sorted(bag.rglob('*')) if bag.is_dir() else [bag]:
         if path.is_file() and path.suffix in ('.mcap', '.db3', '.yaml'):
             with path.open('rb') as source:
-                sources.append(dict(file=str(path), bytes=path.stat().st_size,
-                                    sha256=hashlib.file_digest(source, 'sha256').hexdigest()))
-    return dict(generated_at=datetime.now(timezone.utc).isoformat(), topic=topic, sources=sources,
-                frames=dict(frames), scans=sum(frames.values()), reasons=dict(reasons),
-                counts=dict(totals), fit_config=asdict(fit_config), gate_config=asdict(gate_config),
-                fitted_speed_mps=summary(speeds), direction_condition=summary(conditions),
-                residual_rmse_mps=summary(rmses), model_max_velocity_std_mps=summary(covariances),
-                processing_ms=summary(compute_ms), independent_reference_available=False,
-                interpretation='Numerical replay only; fit residuals are not velocity accuracy. '
-                               'Doppler sign, timing, extrinsics and covariance are uncalibrated. '
-                               'Historical replay does not exercise live freshness checks.')
+                sources.append({'file': str(path), 'bytes': path.stat().st_size,
+                                'sha256': hashlib.file_digest(source, 'sha256').hexdigest()})
+    return {'generated_at': datetime.now(timezone.utc).isoformat(), 'topic': topic,
+            'sources': sources, 'frames': dict(frames), 'scans': sum(frames.values()),
+            'reasons': dict(reasons), 'counts': dict(totals), 'fit_config': asdict(fit_config),
+            'gate_config': asdict(gate_config), 'fitted_speed_mps': summary(speeds),
+            'direction_condition': summary(conditions), 'residual_rmse_mps': summary(rmses),
+            'model_max_velocity_std_mps': summary(covariances),
+            'processing_ms': summary(compute_ms), 'independent_reference_available': False,
+            'interpretation': 'Numerical replay only; fit residuals are not velocity accuracy. '
+                              'Doppler sign, timing, extrinsics and covariance are uncalibrated. '
+                              'Historical replay does not exercise live freshness checks.'}
 
 
 def main():
@@ -87,7 +88,8 @@ def main():
     with args.output.open('x') as output:
         json.dump(result, output, indent=2, allow_nan=False)
         output.write('\n')
-    print(json.dumps(dict(scans=result['scans'], reasons=result['reasons'], counts=result['counts'])))
+    print(json.dumps({'scans': result['scans'], 'reasons': result['reasons'],
+                      'counts': result['counts']}))
 
 
 if __name__ == '__main__':

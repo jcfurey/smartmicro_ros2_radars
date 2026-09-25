@@ -5,11 +5,11 @@ import signal
 import subprocess
 import time
 
+from diagnostic_msgs.msg import DiagnosticArray
+from geometry_msgs.msg import TwistWithCovarianceStamped
 import numpy as np
 import pytest
 import rclpy
-from diagnostic_msgs.msg import DiagnosticArray
-from geometry_msgs.msg import TwistWithCovarianceStamped
 from rclpy.qos import qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2, PointField
@@ -18,7 +18,8 @@ from std_msgs.msg import Header
 
 
 @pytest.mark.parametrize('sim_time', [False, True])
-def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock_reset(tmp_path, sim_time):
+def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock_reset(
+        tmp_path, sim_time):
     rclpy.init()
     node = rclpy.create_node('processing_test_controller')
     child = None
@@ -31,7 +32,8 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
     for name, messages in outputs.items():
         node.create_subscription(PointCloud2, '/umrr96_processing/' + name, messages.append,
                                  qos_profile_sensor_data)
-    node.create_subscription(TwistWithCovarianceStamped, '/umrr96_processing/experimental_velocity',
+    node.create_subscription(TwistWithCovarianceStamped,
+                             '/umrr96_processing/experimental_velocity',
                              velocities.append, 10)
 
     def diagnostic(message):
