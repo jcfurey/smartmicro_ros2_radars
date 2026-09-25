@@ -286,6 +286,7 @@ if(BUILD_TESTING)
     # linted there.
     set(PROJECT_PY_FILES
       launch/radar.launch.py
+      launch/umrr96_live.launch.py
       test/compare_umrr96_settings.py
       test/radar_node_test.launch.py
       test/readback_smoke.py

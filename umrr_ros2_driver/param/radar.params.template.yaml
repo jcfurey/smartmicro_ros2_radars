@@ -1,4 +1,4 @@
-/smart_radar:
+/**/smart_radar:
   ros__parameters:
     adapters:
       adapter_0:
