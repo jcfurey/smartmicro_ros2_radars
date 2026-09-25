@@ -117,6 +117,39 @@ excluded from ghost scoring because the person may really pass beyond 3.4 m):
 Progression: without the background model and continuous ghost test, ghost
 tracks appeared in 17–52% of scans and the walk split into 20 ids.
 
+## Nav2 obstacle evidence (`smartmicro_processing/obstacles.py`)
+
+`~/obstacles` (sensor frame, scan stamp, z = `obstacle_height`) contains:
+static Doppler inliers whose polar cell (0.5 m × 3°, no neighbourhood) was hit
+in ≥ 3 of the last 5 scans; non-ghost movers within 0.8 m of a confirmed track;
+each confirmed track position; and any non-ghost return within 1 m. While a
+track exists, *novel* static returns (outside the 30 s background) more than
+1.5 m beyond the nearest track are dropped as its multipath. If the Doppler
+fit fails, all quality targets pass through persistence alone (conservative).
+
+Scored with `scripts/umrr96_obstacle_eval.py` ("far" = novel points beyond
+3.4 m, i.e. ghosts in this room):
+
+| | Raw | Filtered |
+|---|---:|---:|
+| Static: flicker detections kept | 100% | 22% |
+| Static: persistent structure kept | 100% | 97.4% |
+| Walk: person marked while walking | 83% | 85% |
+| Walk: person marked while standing | 57% | 44% |
+| Far points/scan, walking | 10.8 | 0.06 |
+| Far points/scan, standing | 9.5 | 1.5 |
+| Far points/scan, person out of view | 1.3 | 1.0 |
+
+A 3×3 neighbourhood let flicker borrow persistence from adjacent structure
+(58% kept); 2-of-4 persistence doubled the flicker kept for +10% standing
+coverage. The out-of-view reflection (≈5 m, −40°) has no track to attribute
+it to and remains.
+
+Nav2: an ObstacleLayer keeps marks until a clearing source raytraces them, so
+pair the radar source with a clearing lidar source (radar ghosts in space the
+lidar sees as free are then cleared), or use STVL with voxel decay for a
+radar-only costmap. See `config/nav2_obstacle_layer.example.yaml`.
+
 ## Limits
 
 - One room, one person, stationary radar; parameters are tuned on the same
@@ -133,10 +166,11 @@ tracks appeared in 17–52% of scans and the walk split into 20 ids.
    (61%) is limited by ~0.7 direct returns per scan; the background model
    assumes a fixed sensor — on a moving platform it must run in a fixed frame
    (odom) with TF, like the accumulation node.
-3. **Nav2 obstacle persistence**: k-of-n polar/voxel persistence on the
-   sensor-frame cloud to drop the 3% flicker; decide how to treat persistent
-   ghosts (e.g. the ≈5 m / −40° return) — candidates: occlusion reasoning
-   against the static map, or lidar cross-check when available.
+3. ~~Nav2 obstacle persistence~~ — done (above). Remaining: untracked
+   persistent ghosts (the ≈5 m / −40° return) need lidar clearing or a map;
+   standing coverage (44%); a live Nav2 costmap test; on a moving platform the
+   polar persistence window (5 scans ≈ 0.28 s) must stay below one cell of
+   motion, or the filter must move to a fixed frame.
 4. **Moving-sensor validation** of the ego-velocity covariance (NEES against
    lidar/odometry) and the Doppler sign, then feed `experimental_velocity` to
    RESPLE/deliriom trials.

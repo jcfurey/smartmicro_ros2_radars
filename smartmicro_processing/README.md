@@ -44,6 +44,9 @@ in separate runs. Run one publisher for these output names at a time.
 | `doppler_outliers` | Quality targets outside that model's residual gate; not automatically moving objects |
 | `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`) |
 | `moving_ghosts` | Doppler outliers rejected as ghosts: a nearer same-speed mover, or a nearer static return at the same bearing. On a 2026-09-24 walk-through (stationary sensor, one person, 3 m room) the rules removed 85% of ghosts and kept 97% of real returns; about 23% of `moving_targets` remained ghosts. Two movers at the same speed and bearing lose the farther one. |
+| `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id, age (sensor frame) |
+| `track_markers` | RViz markers for the tracks (built only with subscribers) |
+| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height` |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 

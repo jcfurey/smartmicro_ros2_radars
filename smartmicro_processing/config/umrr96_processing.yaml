@@ -32,6 +32,15 @@
     max_coast: 1.0
     static_hold: 5.0
     background_time_constant: 30.0
+    # Nav2 obstacle evidence (~/obstacles, marking only). Static capture: 78% of
+    # flicker removed, 97% of structure kept; walk: stationary ghosts beyond the
+    # person cut 99% while walking, 84% while standing.
+    persistence_hits: 3
+    persistence_window: 5
+    safety_range: 1.0
+    track_radius: 0.8
+    obstacle_height: 0.3  # sensor frame; set so mount height + this is within the layer limits
+    shadow_gap: 1.5
     max_input_age: 0.5
     future_tolerance: 0.05
     stale_timeout: 0.5

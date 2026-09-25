@@ -1,6 +1,11 @@
 # Example only: merge into your Nav2 costmap parameters; not loaded by this package.
 # Radar evidence marks obstacles but never clears: empty cells mean "unknown", and
 # sparse radar returns cannot justify free-space ray clearing.
+#
+# ObstacleLayer keeps a marked cell until some source raytraces it clear, so a
+# radar-only ObstacleLayer accumulates a trail behind every moving person.
+# Pair radar marking with a lidar (or depth) source that has clearing: true on
+# the same layer, or use spatio_temporal_voxel_layer with decay (below).
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -8,27 +13,67 @@ local_costmap:
       radar_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-        observation_sources: radar_confirmed
-        radar_confirmed:
-          # Pose-compensated, confirmed cells (>= min_support_scans scans).
-          topic: /umrr96_accumulation/confirmed_targets
+        observation_sources: radar_obstacles lidar_clearing
+        radar_obstacles:
+          # Per-scan, sensor-frame evidence from umrr96_processing: persistent
+          # static returns, ghost-filtered movers on confirmed tracks, track
+          # positions, and anything non-ghost within safety_range. z is
+          # flattened to obstacle_height in the sensor frame.
+          topic: /umrr96_processing/obstacles
           data_type: "PointCloud2"
-          # The cloud is in odom; without sensor_frame Nav2 would raytrace from
-          # the odom origin. The stamp is the newest contributing scan, so the
-          # sensor pose is available in TF when the observation is buffered.
-          sensor_frame: umrr96
+          sensor_frame: ""        # the cloud's own frame (umrr96)
           marking: true
           clearing: false
-          # Heights are in the costmap's global frame. Keep ground and overhead
-          # multipath out of the 2D costmap.
-          min_obstacle_height: 0.10
+          min_obstacle_height: 0.10  # global-frame heights: mount height + obstacle_height
           max_obstacle_height: 2.0
           obstacle_max_range: 20.0
-          # The accumulator already bounds history (window_seconds); do not
-          # stack a second persistence window on top of it.
-          observation_persistence: 0.0
-          expected_update_rate: 0.0
+          observation_persistence: 0.0  # persistence is applied upstream
+          expected_update_rate: 0.2     # ~18 Hz input; flags a stalled radar
           inf_is_valid: false
+        lidar_clearing:
+          # Clears radar ghosts that land in space the lidar sees as free.
+          topic: /lidar/points
+          data_type: "PointCloud2"
+          marking: false
+          clearing: true
+          raytrace_max_range: 20.0
+
+      # Radar-only alternative with time decay instead of lidar clearing:
+      # stvl_radar_layer:
+      #   plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+      #   observation_sources: radar_obstacles
+      #   voxel_decay: 1.5          # s; a walking person's trail fades
+      #   decay_model: 0            # linear
+      #   radar_obstacles:
+      #     data_type: PointCloud2
+      #     topic: /umrr96_processing/obstacles
+      #     marking: true
+      #     clearing: false
+      #     min_obstacle_height: 0.10
+      #     max_obstacle_height: 2.0
+
+      # Previous option, kept for reference: pose-compensated accumulator cells.
+      # radar_confirmed:
+
+      # Pose-compensated, confirmed cells (>= min_support_scans scans).
+      #   topic: /umrr96_accumulation/confirmed_targets
+      #   data_type: "PointCloud2"
+      # The cloud is in odom; without sensor_frame Nav2 would raytrace from
+      # the odom origin. The stamp is the newest contributing scan, so the
+      # sensor pose is available in TF when the observation is buffered.
+      #   sensor_frame: umrr96
+      #   marking: true
+      #   clearing: false
+      # Heights are in the costmap's global frame. Keep ground and overhead
+      # multipath out of the 2D costmap.
+      #   min_obstacle_height: 0.10
+      #   max_obstacle_height: 2.0
+      #   obstacle_max_range: 20.0
+      # The accumulator already bounds history (window_seconds); do not
+      # stack a second persistence window on top of it.
+      #   observation_persistence: 0.0
+      #   expected_update_rate: 0.0
+      #   inf_is_valid: false
 
       # Alternative: skip the accumulator and let the costmap persist the
       # per-scan Doppler inliers in the sensor frame. Prefer this when TF is

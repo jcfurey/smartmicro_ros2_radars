@@ -148,6 +148,14 @@ costs; publishing an empty cloud alone does not erase already marked costmap cel
 
 ## Feeding a Nav2 costmap
 
+**Preferred source (2026-09-24):** `/umrr96_processing/obstacles`, the per-scan
+sensor-frame evidence described in
+[the filtering notes](../docs/umrr96-filtering-20260924.md#nav2-obstacle-evidence).
+It already applies persistence, ghost rejection and track association, so set
+`observation_persistence: 0.0`. An ObstacleLayer never clears cells on its own:
+pair radar marking with a clearing lidar source, or use STVL decay. The
+accumulator source below remains available.
+
 [`config/nav2_obstacle_layer.example.yaml`](config/nav2_obstacle_layer.example.yaml)
 is a starting point for an `ObstacleLayer` observation source:
 

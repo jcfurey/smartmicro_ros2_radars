@@ -21,6 +21,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
 from .doppler import fit_velocity, FitConfig
 from .ghosts import ghost_mask, GhostConfig
+from .obstacles import obstacle_points, ObstacleConfig, PersistenceFilter
 from .ros_support import declare, DiagnosticsRateLimiter
 from .tracker import MovingObjectTracker, TrackerConfig
 
@@ -59,6 +60,19 @@ TRACKER_PARAMETERS = {
                                  'zero-Doppler support from walls (s). Valid only while '
                                  'the input frame is fixed in the scene.', 1, 3600),
 }
+OBSTACLE_PARAMETERS = {
+    'persistence_hits': ('Static returns pass when their polar cell was hit in this many of '
+                         'the last persistence_window scans.', 1, 64, 1),
+    'persistence_window': ('Scan window for static persistence.', 1, 64, 1),
+    'safety_range': ('Non-ghost returns nearer than this pass immediately (m).', 0.01, 50),
+    'track_radius': ('Moving returns this close to a confirmed track pass (m).', .05, 10),
+    'obstacle_height': ('Output z in the sensor frame (m); negative keeps the measured z, '
+                        'which is unreliable on this sensor.', -1, 10),
+    'shadow_gap': ('Novel static returns this far beyond the nearest confirmed track are '
+                   'treated as its multipath (m); <= 0 disables.', -1, 50),
+}
+OBSTACLE_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
+                   for i, n in enumerate('xyz')]
 TRACK_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
                 for i, n in enumerate(('x', 'y', 'z', 'vx', 'vy', 'speed', 'track_id', 'age'))]
 GATE_PARAMETERS = {
@@ -108,6 +122,10 @@ class RadarProcessing(Node):
         self.track_pub = self.create_publisher(PointCloud2, '~/tracked_objects',
                                                qos_profile_sensor_data)
         self.marker_pub = self.create_publisher(MarkerArray, '~/track_markers', 10)
+        self.obstacle_config = _declare_config(self, ObstacleConfig, OBSTACLE_PARAMETERS)
+        self.persistence = PersistenceFilter(self.obstacle_config)
+        self.obstacle_pub = self.create_publisher(PointCloud2, '~/obstacles',
+                                                  qos_profile_sensor_data)
         self.cloud_publishers = {
             name: self.create_publisher(PointCloud2, '~/' + name, qos_profile_sensor_data)
             for name in CLOUD_OUTPUTS}
@@ -162,6 +180,8 @@ class RadarProcessing(Node):
         for publisher in self.cloud_publishers.values():
             publisher.publish(message)
         self.track_pub.publish(message)
+        self.obstacle_pub.publish(message)
+        self.persistence.reset()
         self.tracker = MovingObjectTracker(self.tracker_config)
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
 
@@ -213,6 +233,12 @@ class RadarProcessing(Node):
             tracks = self.tracker.step(stamp * 1e-9, selected[local, :3],
                                        result.residuals[local], selected[result.inliers, :3])
             self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
+            static = selected[result.inliers, :3]
+            novel = ~self.tracker.background.is_background(static[:, :2])
+            obstacles = obstacle_points(
+                static, self.persistence.step(static), selected[movers, :3], ghosts,
+                [t.x[:2] for t in tracks], self.obstacle_config, novel)
+            self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
             partitions = {'doppler_inliers': indices[result.inliers],
                           'doppler_outliers': indices[movers], 'unclassified_targets': [],
                           'moving_targets': moving,
@@ -230,13 +256,19 @@ class RadarProcessing(Node):
             stats.update(inliers=int(result.inliers.sum()),
                          outliers=int((~result.inliers).sum()),
                          moving=int((~ghosts).sum()), ghosts=int(ghosts.sum()),
-                         tracks=len(tracks),
+                         tracks=len(tracks), obstacles=len(obstacles),
                          unclassified=0, condition=result.condition, residual_rmse=result.rmse,
                          vx=float(result.velocity[0]), vy=float(result.velocity[1]),
                          vz=float(result.velocity[2]),
                          max_velocity_std=float(np.sqrt(np.max(
                              np.linalg.eigvalsh(result.covariance)))))
         else:
+            # No valid static/moving split: fail conservative for marking and pass every
+            # quality target through persistence alone (ghosts cannot be told apart here).
+            points = selected[:, :3]
+            obstacles = obstacle_points(points, self.persistence.step(points), np.empty((0, 3)),
+                                        np.empty(0, bool), [], self.obstacle_config)
+            self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
             partitions = {'doppler_inliers': [], 'doppler_outliers': [],
                           'moving_targets': [], 'moving_ghosts': [],
                           'unclassified_targets': indices}
