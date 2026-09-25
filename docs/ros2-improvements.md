@@ -40,6 +40,7 @@ hardware configuration as part of this batch.
 
 ## Follow-up work
 
+A full code review with an issue register is in [review-2026-09-24](review-2026-09-24.md).
 The sensor-output priorities are tracked separately in
 [UMRR-96 output improvements](umrr96-output-priorities.md), with implementation,
 validation results and remaining hardware/vendor dependencies.
