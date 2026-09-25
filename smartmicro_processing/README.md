@@ -42,6 +42,8 @@ in separate runs. Run one publisher for these output names at a time.
 | `quality_targets` | Finite XYZ/Doppler/SNR, range and modest SNR gates; keeps both static and moving returns |
 | `doppler_inliers` | Quality targets compatible with the fitted static-scene Doppler model |
 | `doppler_outliers` | Quality targets outside that model's residual gate; not automatically moving objects |
+| `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`) |
+| `moving_ghosts` | Doppler outliers rejected as ghosts: a nearer same-speed mover, or a nearer static return at the same bearing. On a 2026-09-24 walk-through (stationary sensor, one person, 3 m room) the rules removed 85% of ghosts and kept 97% of real returns; about 23% of `moving_targets` remained ghosts. Two movers at the same speed and bearing lose the farther one. |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 

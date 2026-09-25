@@ -7,15 +7,21 @@
     min_range: 0.15
     max_range: 120.0
     min_snr_db: 6.0
-    residual_threshold: 0.20
+    # Tightened from 0.20/0.05/0.10 on 2026-09-24 static + walk captures (stationary
+    # sensor): 0.20 absorbed 17% of a walking person's detections into the static fit.
+    residual_threshold: 0.05
     min_inliers: 8
     min_inlier_fraction: 0.60
     max_condition: 30.0
     ransac_trials: 128
-    noise_floor: 0.05
-    velocity_std_floor: 0.10
+    noise_floor: 0.02
+    velocity_std_floor: 0.05  # Static noise was ~3 mm/s; kept conservative until moving-sensor data.
     max_velocity_std: 1.0
     max_speed: 15.0
+    # Multipath-ghost rejection for moving_targets (85% ghosts removed, 97% real kept).
+    range_gap: 1.5
+    speed_tolerance: 0.25
+    wall_azimuth_deg: 4.0
     max_input_age: 0.5
     future_tolerance: 0.05
     stale_timeout: 0.5

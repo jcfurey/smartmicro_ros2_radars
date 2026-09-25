@@ -17,11 +17,13 @@ from std_msgs.msg import Header
 
 from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
 from .doppler import fit_velocity, FitConfig
+from .ghosts import ghost_mask, GhostConfig
 from .ros_support import declare, DiagnosticsRateLimiter
 
 # Relative by default so a namespace moves the input with the node; remap it in launch.
 DEFAULT_INPUT = 'smart_radar/port_targets_0'
-CLOUD_OUTPUTS = ('quality_targets', 'doppler_inliers', 'doppler_outliers', 'unclassified_targets')
+CLOUD_OUTPUTS = ('quality_targets', 'doppler_inliers', 'doppler_outliers', 'unclassified_targets',
+                 'moving_targets', 'moving_ghosts')
 FIT_PARAMETERS = {
     'doppler_sign': ('+1: input Doppler is positive receding; -1: positive approaching.',
                      -1, 1, 2),
@@ -34,6 +36,12 @@ FIT_PARAMETERS = {
     'velocity_std_floor': ('Standard deviation added to every velocity axis (m/s).', 1e-4, 10),
     'max_velocity_std': ('Reject fits whose largest velocity std exceeds this (m/s).', 1e-4, 100),
     'max_speed': ('Reject fits faster than this sensor speed (m/s).', .01, 300),
+}
+GHOST_PARAMETERS = {
+    'range_gap': ('A mover this much farther than a nearer same-speed mover or a static '
+                  'return at its bearing is a multipath ghost (m).', .1, 20),
+    'speed_tolerance': ('Compensated-speed match for the same-speed ghost rule (m/s).', .01, 5),
+    'wall_azimuth_deg': ('Bearing match for the behind-static-return ghost rule (deg).', .1, 30),
 }
 GATE_PARAMETERS = {
     'min_range': ('Minimum XYZ range of a quality target (m).', 0, 300),
@@ -76,6 +84,7 @@ class RadarProcessing(Node):
             raise ValueError('Invalid freshness limits')
         self.fit_config = _declare_config(self, FitConfig, FIT_PARAMETERS)
         self.gate_config = _declare_config(self, GateConfig, GATE_PARAMETERS)
+        self.ghost_config = _declare_config(self, GhostConfig, GHOST_PARAMETERS)
         self.cloud_publishers = {
             name: self.create_publisher(PointCloud2, '~/' + name, qos_profile_sensor_data)
             for name in CLOUD_OUTPUTS}
@@ -170,8 +179,13 @@ class RadarProcessing(Node):
         result = fit_velocity(selected[:, :3], selected[:, 3], self.fit_config)
         self.cloud_publishers['quality_targets'].publish(subset_cloud(cloud, indices))
         if result.valid:
+            movers = ~result.inliers
+            ghosts = ghost_mask(selected[movers, :3], result.residuals[movers],
+                                selected[result.inliers, :3], self.ghost_config)
             partitions = {'doppler_inliers': indices[result.inliers],
-                          'doppler_outliers': indices[~result.inliers], 'unclassified_targets': []}
+                          'doppler_outliers': indices[movers], 'unclassified_targets': [],
+                          'moving_targets': indices[movers][~ghosts],
+                          'moving_ghosts': indices[movers][ghosts]}
             twist = TwistWithCovarianceStamped(header=cloud.header)
             linear = twist.twist.twist.linear
             linear.x, linear.y, linear.z = (float(v) for v in result.velocity)
@@ -184,6 +198,7 @@ class RadarProcessing(Node):
             self.last_fit_wall = time.monotonic()
             stats.update(inliers=int(result.inliers.sum()),
                          outliers=int((~result.inliers).sum()),
+                         moving=int((~ghosts).sum()), ghosts=int(ghosts.sum()),
                          unclassified=0, condition=result.condition, residual_rmse=result.rmse,
                          vx=float(result.velocity[0]), vy=float(result.velocity[1]),
                          vz=float(result.velocity[2]),
@@ -191,8 +206,9 @@ class RadarProcessing(Node):
                              np.linalg.eigvalsh(result.covariance)))))
         else:
             partitions = {'doppler_inliers': [], 'doppler_outliers': [],
+                          'moving_targets': [], 'moving_ghosts': [],
                           'unclassified_targets': indices}
-            stats.update(inliers=0, outliers=0, unclassified=len(indices))
+            stats.update(inliers=0, outliers=0, moving=0, ghosts=0, unclassified=len(indices))
         for name, subset in partitions.items():
             self.cloud_publishers[name].publish(subset_cloud(cloud, subset))
         self.outputs_hold_data = True

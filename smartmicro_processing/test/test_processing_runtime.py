@@ -5,6 +5,7 @@ import signal
 import subprocess
 import time
 
+from ament_index_python.packages import get_package_share_directory
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import TwistWithCovarianceStamped
 import numpy as np
@@ -15,6 +16,15 @@ from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py.point_cloud2 import create_cloud
 from std_msgs.msg import Header
+import yaml
+
+
+def velocity_std_floor():
+    path = os.path.join(get_package_share_directory('smartmicro_processing'),
+                        'config', 'umrr96_processing.yaml')
+    with open(path) as stream:
+        config = yaml.safe_load(stream)
+    return config['/**/umrr96_processing']['ros__parameters']['velocity_std_floor']
 
 
 @pytest.mark.parametrize('sim_time', [False, True])
@@ -105,7 +115,7 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
             actual = velocity.twist.twist.linear
             np.testing.assert_allclose([actual.x, actual.y, actual.z], truth, atol=1e-5)
             cov = np.asarray(velocity.twist.covariance).reshape(6, 6)
-            assert np.linalg.eigvalsh(cov[:3, :3]).min() > .01
+            assert np.linalg.eigvalsh(cov[:3, :3]).min() >= .999 * velocity_std_floor() ** 2
             np.testing.assert_allclose(cov[3:, 3:], np.eye(3)*1e6)
             assert outputs['quality_targets'][-1].data == first.data
             assert outputs['doppler_inliers'][-1].width == 72
