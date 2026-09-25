@@ -71,5 +71,35 @@ inline ModeValue parse_mode_value(const std::string & text, uint8_t type)
           "invalid value type " + std::to_string(type) +
           "; must be 0 (float32), 1 (uint32), 2 (uint16) or 3 (uint8)");
 }
+
+// SendCommand.value is float32 but the SDK command argument is uint32 (commands
+// include resets and EEPROM saves): accept only finite whole numbers that float32
+// represents exactly, 0..2^24. A cast of a negative, NaN or out-of-range float
+// is undefined behaviour, and a fraction would be truncated silently.
+inline uint32_t parse_command_value(float value)
+{
+  constexpr float kMaxExact = 16777216.0F;  // 2^24
+  if (!std::isfinite(value) || value < 0.0F || value > kMaxExact || std::trunc(value) != value) {
+    throw std::invalid_argument(
+            "command value must be a whole number within 0..16777216, got " +
+            std::to_string(value));
+  }
+  return static_cast<uint32_t>(value);
+}
+
+// SetIp.value_ip (first octet in the most significant byte, as the sensor reads
+// it back) is saved to EEPROM at once. Reject addresses the sensor could not be
+// reached on after its restart: 0.0.0.0/8, loopback, and multicast, reserved or
+// broadcast (224.0.0.0 and above).
+inline void validate_sensor_ipv4(uint32_t address)
+{
+  const auto first = address >> 24;
+  if (first == 0 || first == 127 || first >= 224) {
+    throw std::invalid_argument(
+            "IP address " + std::to_string(first) + "." + std::to_string((address >> 16) & 255) +
+            "." + std::to_string((address >> 8) & 255) + "." + std::to_string(address & 255) +
+            " is not a usable unicast sensor address");
+  }
+}
 }  // namespace smartmicro::drivers::radar
 #endif  // UMRR_ROS2_DRIVER__SERVICE_PARSING_HPP_

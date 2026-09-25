@@ -48,6 +48,7 @@
 #include <umrr_ros2_driver/visibility_control.hpp>
 
 #include <array>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -439,6 +440,7 @@ private:
   std::shared_ptr<UpdateService> update_service;
   std::mutex firmware_worker_mutex_;
   std::thread firmware_worker_;
+  std::atomic<bool> firmware_active_{false};  // From request acceptance to worker exit.
 
   // SDK service handles are owned by the node (not namespace-scope globals in an
   // installed header) and released before the SDK's own static objects.

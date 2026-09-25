@@ -3,10 +3,13 @@
 #include <umrr_ros2_driver/sensor_models.hpp>
 #include <umrr_ros2_driver/service_parsing.hpp>
 
+#include <limits>
 #include <string>
 #include <variant>
 
+using smartmicro::drivers::radar::parse_command_value;
 using smartmicro::drivers::radar::parse_mode_value;
+using smartmicro::drivers::radar::validate_sensor_ipv4;
 using smartmicro::drivers::radar::validate_sensor_config;
 
 TEST(ServiceParsing, AcceptsCompleteInRangeValues)
@@ -32,6 +35,29 @@ TEST(ServiceParsing, RejectsWrapTruncationAndNonFinite)
   }
   EXPECT_THROW(parse_mode_value("1e90", 0), std::out_of_range);
   EXPECT_THROW(parse_mode_value("1", 4), std::invalid_argument);
+}
+
+TEST(ServiceParsing, CommandValuesAreExactUnsignedIntegers)
+{
+  EXPECT_EQ(parse_command_value(0.0F), 0U);
+  EXPECT_EQ(parse_command_value(2010.0F), 2010U);
+  EXPECT_EQ(parse_command_value(16777216.0F), 16777216U);
+  for (const float value : {-1.0F, 1.7F, 16777218.0F, 1e10F,
+      std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()})
+  {
+    EXPECT_THROW(parse_command_value(value), std::invalid_argument) << value;
+  }
+}
+
+TEST(ServiceParsing, SensorIpMustBeUsableUnicast)
+{
+  EXPECT_NO_THROW(validate_sensor_ipv4(3232238347U));  // 192.168.11.11
+  EXPECT_NO_THROW(validate_sensor_ipv4(0x0A000001U));  // 10.0.0.1
+  for (const uint32_t address : {0U, 0x00FFFFFFU, 0x7F000001U, 0xE0000001U, 0xF0000000U,
+      0xFFFFFFFFU})
+  {
+    EXPECT_THROW(validate_sensor_ipv4(address), std::invalid_argument) << address;
+  }
 }
 
 TEST(SensorConfig, RejectsUnknownOrInconsistentConfiguration)

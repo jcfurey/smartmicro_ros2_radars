@@ -51,7 +51,9 @@ using com::master::Response;
 using com::master::ResponseBatch;
 using com::master::SetParamRequest;
 using smartmicro::drivers::radar::ModeValue;
+using smartmicro::drivers::radar::parse_command_value;
 using smartmicro::drivers::radar::parse_mode_value;
+using smartmicro::drivers::radar::validate_sensor_ipv4;
 
 namespace
 {
@@ -170,14 +172,24 @@ builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
 void SmartmicroRadarNode::setup_diagnostics()
 {
   auto descriptor = startup_descriptor();
-  descriptor.description = "Target stream silence threshold in seconds; restart to change.";
-  rcl_interfaces::msg::FloatingPointRange range;
-  range.from_value = 0.1;
-  range.to_value = 3600.0;
-  descriptor.floating_point_range.push_back(range);
-  stale_timeout_seconds_ = declare_parameter("diagnostics.stale_timeout", 2.0, descriptor);
-  if (!std::isfinite(stale_timeout_seconds_)) {
-    throw std::invalid_argument("diagnostics.stale_timeout must be finite");
+  descriptor.description =
+    "Target stream silence threshold in seconds (0.1..3600); restart to change.";
+  descriptor.additional_constraints = "Number within [0.1, 3600]";
+  // Dynamic typing: an integer such as `stale_timeout: 5` is accepted, as in the Python nodes.
+  descriptor.dynamic_typing = true;
+  const auto stale_timeout =
+    declare_parameter("diagnostics.stale_timeout", rclcpp::ParameterValue(2.0), descriptor);
+  if (stale_timeout.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER) {
+    stale_timeout_seconds_ = static_cast<double>(stale_timeout.get<int64_t>());
+  } else if (stale_timeout.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+    stale_timeout_seconds_ = stale_timeout.get<double>();
+  } else {
+    throw std::invalid_argument("diagnostics.stale_timeout must be a number");
+  }
+  if (!std::isfinite(stale_timeout_seconds_) || stale_timeout_seconds_ < 0.1 ||
+    stale_timeout_seconds_ > 3600.0)
+  {
+    throw std::invalid_argument("diagnostics.stale_timeout must be within 0.1..3600 s");
   }
   diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
   // hardware_id identifies the physical device: <model>@<ip> for Ethernet,
@@ -452,24 +464,39 @@ void SmartmicroRadarNode::firmware_download(
     return;
   }
   std::lock_guard<std::mutex> lock(firmware_worker_mutex_);
-  if (update_service->Busy()) {
+  // firmware_active_ is set before the worker starts: Busy() only turns true once the
+  // worker is inside StartSoftwareUpdate, and joining a running worker here would block
+  // this executor for the whole transfer.
+  if (firmware_active_ || update_service->Busy()) {
     response.res = firmware_download_result(UpdateResult::kBusy);
     download_srv_->send_response(*request_header, response);
     return;
   }
   if (firmware_worker_.joinable()) {
-    firmware_worker_.join();  // The previous update has finished; reap its thread.
+    firmware_worker_.join();  // The previous worker has finished; reap its thread.
   }
-  firmware_worker_ = std::thread(
-    [this, request_header, client_id = request->sensor_id, image = request->file_path]() {
-      umrr_ros2_msgs::srv::FirmwareDownload::Response result;
-      result.res = firmware_download_result(update_service->StartSoftwareUpdate(client_id, image));
-      try {
-        download_srv_->send_response(*request_header, result);
-      } catch (const std::exception & error) {
-        RCLCPP_ERROR(get_logger(), "Could not send firmware download reply: %s", error.what());
-      }
-    });
+  firmware_active_ = true;
+  try {
+    firmware_worker_ = std::thread(
+      [this, request_header, client_id = request->sensor_id, image = request->file_path]() {
+        struct ClearActive
+        {
+          std::atomic<bool> & active;
+          ~ClearActive() {active = false;}
+        } clear_active{firmware_active_};
+        umrr_ros2_msgs::srv::FirmwareDownload::Response result;
+        result.res =
+        firmware_download_result(update_service->StartSoftwareUpdate(client_id, image));
+        try {
+          download_srv_->send_response(*request_header, result);
+        } catch (const std::exception & error) {
+          RCLCPP_ERROR(get_logger(), "Could not send firmware download reply: %s", error.what());
+        }
+      });
+  } catch (...) {
+    firmware_active_ = false;
+    throw;
+  }
 }
 
 std::string SmartmicroRadarNode::firmware_download_result(UpdateResult update_result)
@@ -596,6 +623,12 @@ void SmartmicroRadarNode::ip_address(
     result->res_ip = "Sensor ID entered is not listed in the param file! ";
     return;
   }
+  try {
+    validate_sensor_ipv4(request->value_ip);
+  } catch (const std::invalid_argument & error) {
+    result->res_ip = std::string("Error: ") + error.what();
+    return;
+  }
   std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
   if (!inst) {
     result->res_ip = "Failed to get instruction service";
@@ -665,6 +698,14 @@ void SmartmicroRadarNode::radar_command(
     return;
   }
 
+  uint32_t command_value{};
+  try {
+    command_value = parse_command_value(request->value);
+  } catch (const std::invalid_argument & error) {
+    result->res = std::string("Error: ") + error.what();
+    return;
+  }
+
   std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
   if (!inst) {
     result->res = "Failed to get instruction service";
@@ -678,7 +719,7 @@ void SmartmicroRadarNode::radar_command(
   }
 
   std::shared_ptr<CmdRequest> radar_command =
-    std::make_shared<CmdRequest>(section_name, request->command, request->value);
+    std::make_shared<CmdRequest>(section_name, request->command, command_value);
 
   if (!batch->AddRequest(radar_command)) {
     result->res = "Failed to add instruction! ";

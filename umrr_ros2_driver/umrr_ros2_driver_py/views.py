@@ -381,12 +381,15 @@ class RadarViews(Node):
         self.grid.decay(now)
         header = self.header()
         grid_header = self.header(self.grid_frame)
+        # Read each count once: a subscriber arriving between two reads must not
+        # reach a publish without samples.
         grid_subscribed = self.grid_pub.get_subscription_count()
-        if grid_subscribed or self.cells_pub.get_subscription_count():
+        cells_subscribed = self.cells_pub.get_subscription_count()
+        if grid_subscribed or cells_subscribed:
             samples = self.grid.samples()
         if grid_subscribed:
             self.grid_pub.publish(self.grid_marker(grid_header, samples))
-        if self.cells_pub.get_subscription_count():
+        if cells_subscribed:
             self.cells_pub.publish(point_cloud2.create_cloud(
                 grid_header, fields('density'), samples))
         # Instantaneous fan targets disappear after one second without input.
