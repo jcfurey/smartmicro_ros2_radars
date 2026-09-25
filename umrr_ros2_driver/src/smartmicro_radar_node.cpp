@@ -188,6 +188,9 @@ constexpr auto kUIMajorVTag = "user_interface_major_v";
 constexpr auto kUIMinorVTag = "user_interface_minor_v";
 constexpr auto kUIPatchVTag = "user_interface_patch_v";
 
+// CAN object lists report heading in degrees (UIF signal HeadingDeg, unit _deg);
+// port object lists and the published cloud use radians (REP 103).
+constexpr float kDegreesToRadians = static_cast<float>(3.14159265358979323846 / 180.0);
 constexpr float kRadarFloatSentinel = std::numeric_limits<float>::quiet_NaN();
 constexpr uint32_t kRadarFlagsSentinel = std::numeric_limits<uint32_t>::max();
 constexpr uint16_t kRadarPeakIdxSentinel = std::numeric_limits<uint16_t>::max();
@@ -3207,9 +3210,13 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_0_0(
 
     header.cycle_time = target_header->GetCycleTime();
     header.number_of_targets = target_header->GetNumberOfTargets();
-    header.acquisition_tx_ant_idx = target_header->GetAcquisitionTxAnt();
+    // The v2.0.0 getter names are swapped relative to their meaning: the UIF
+    // serialization (com_target_list_port.xml) documents offset 6 "AcquisitionTx"
+    // as the TX antenna index and offset 8 "AcquisitionTxAnt" as the centre
+    // frequency index, the same layout as other port target lists.
+    header.acquisition_tx_ant_idx = target_header->GetAcquisitionTx();
     header.acquisition_sweep_idx = target_header->GetAcquisitionSweep();
-    header.acquisition_cf_idx = target_header->GetAcquisitionTx();
+    header.acquisition_cf_idx = target_header->GetAcquisitionTxAnt();
     header.acquisition_start = target_header->GetAcquisitionStart();
     const auto & targets = targetlist_port_umrr9f_v2_0_0->GetTargetList();
     modifier.reserve(targets.size());
@@ -4619,7 +4626,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v2_1_0(
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
       const auto speed_abs = object->GetSpeedAbs();
-      const auto heading = object->GetHeadingDeg();
+      const auto heading = object->GetHeadingDeg() * kDegreesToRadians;
       const auto length = object->GetObjectLen();
       const auto quality = object->GetQuality();
       const auto acceleration = object->GetAcceleration();
@@ -4726,7 +4733,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v1_0_0(
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
       const auto speed_abs = object->GetSpeedAbs();
-      const auto heading = object->GetHeadingDeg();
+      const auto heading = object->GetHeadingDeg() * kDegreesToRadians;
       const auto length = object->GetObjectLen();
       const auto quality = object->GetQuality();
       const auto acceleration = object->GetAcceleration();
@@ -4833,7 +4840,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_0_0(
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
       const auto speed_abs = object->GetSpeedAbs();
-      const auto heading = object->GetHeadingDeg();
+      const auto heading = object->GetHeadingDeg() * kDegreesToRadians;
       const auto length = object->GetObjectLen();
       const auto quality = object->GetQuality();
       const auto acceleration = object->GetAcceleration();
@@ -4941,7 +4948,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_1_0(
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
       const auto speed_abs = object->GetSpeedAbs();
-      const auto heading = object->GetHeadingDeg();
+      const auto heading = object->GetHeadingDeg() * kDegreesToRadians;
       const auto length = object->GetObjectLen();
       const auto quality = object->GetQuality();
       const auto acceleration = object->GetAcceleration();
@@ -5048,7 +5055,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v1_3_0(
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
       const auto speed_abs = object->GetSpeedAbs();
-      const auto heading = object->GetHeadingDeg();
+      const auto heading = object->GetHeadingDeg() * kDegreesToRadians;
       const auto length = object->GetObjectLen();
       const auto quality = object->GetQuality();
       const auto acceleration = object->GetAcceleration();
@@ -5978,7 +5985,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrra4_mse_v3_0_0(
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
       const auto speed_abs = object->GetSpeedAbs();
-      const auto heading = object->GetHeadingDeg();
+      const auto heading = object->GetHeadingDeg() * kDegreesToRadians;
       const auto length = object->GetObjectLen();
       const auto quality = object->GetQuality();
       const auto acceleration = object->GetAcceleration();
@@ -6074,7 +6081,7 @@ void SmartmicroRadarNode::CAN_objectlist_callback_umrr9f_mse_v2_0_0(
       const auto y_pos = object->GetYPoint1();
       const auto z_pos = object->GetZPoint1();
       const auto speed_abs = object->GetSpeedAbs();
-      const auto heading = object->GetHeadingDeg();
+      const auto heading = object->GetHeadingDeg() * kDegreesToRadians;
       const auto length = object->GetObjectLen();
       const auto quality = object->GetQuality();
       const auto acceleration = object->GetAcceleration();
