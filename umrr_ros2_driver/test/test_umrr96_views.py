@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Offline density math and synthetic ROS topic checks; no radar required."""
 
-import importlib.util
+from collections import deque
 import json
 import math
 from pathlib import Path
@@ -10,28 +10,28 @@ import sys
 import time
 import unittest
 
-import numpy as np
-import rclpy
 from geometry_msgs.msg import TransformStamped
+import numpy as np
+from rcl_interfaces.srv import SetParametersAtomically
+import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.parameter import Parameter
-from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
-from rcl_interfaces.srv import SetParametersAtomically
+from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile
+from rclpy.time import Time
 from sensor_msgs.msg import Image, PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import Header, String
 from std_srvs.srv import Empty
 from visualization_msgs.msg import Marker, MarkerArray
 
-
-source = Path(__file__).resolve().parents[1] / 'scripts/umrr96_views.py'
-sys.path.insert(0, str(source.parent))
-spec = importlib.util.spec_from_file_location('umrr96_views', source)
-views = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(views)
+# Test the source tree's package even when an older build is sourced.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from umrr_ros2_driver_py import detection_filter, views  # noqa: E402, I100
 
 
 class DensityTests(unittest.TestCase):
+    """Density grid binning and decay."""
+
     def test_cell_boundaries_and_hit_count(self):
         grid = views.DensityGrid(.25, 2)
         grid.add([(1.01, -.01), (1.24, -.24), (1.25, 0), (float('nan'), 0)], 0)
@@ -79,6 +79,8 @@ class DensityTests(unittest.TestCase):
 
 
 class FanImageTests(unittest.TestCase):
+    """Fan image projection and binning."""
+
     def test_forward_left_projection_and_visible_pixels(self):
         renderer = views.FanImage(20, math.pi / 2)
         radius, angle = 8.125, math.radians(23)
@@ -117,10 +119,12 @@ class FanImageTests(unittest.TestCase):
 
 
 class FilterTests(unittest.TestCase):
+    """Detection filter modes."""
+
     @staticmethod
     def point(radius=3.1, angle=.2, snr=20, speed=0):
-        return dict(x=radius * math.cos(angle), y=radius * math.sin(angle), z=0,
-                    range=radius, azimuth_angle=angle, snr=snr, radial_speed=speed)
+        return {'x': radius * math.cos(angle), 'y': radius * math.sin(angle), 'z': 0,
+                'range': radius, 'azimuth_angle': angle, 'snr': snr, 'radial_speed': speed}
 
     def test_off_preserves_every_point(self):
         points = [self.point(snr=-50), self.point(radius=float('nan'))]
@@ -169,6 +173,8 @@ class FilterTests(unittest.TestCase):
 
 
 class RosViewTests(unittest.TestCase):
+    """Synthetic ROS topic checks."""
+
     def test_decay_change_preserves_pending_transform_hit_age(self):
         rclpy.init(args=['--ros-args', '-p', 'grid_frame_id:=odom', '-p', 'tf_wait_seconds:=2.0'])
         radar_views = views.RadarViews()
@@ -232,7 +238,8 @@ class RosViewTests(unittest.TestCase):
 
         try:
             deadline = time.monotonic() + 3
-            while radar_views.fan_pub.get_subscription_count() == 0 and time.monotonic() < deadline:
+            while (radar_views.fan_pub.get_subscription_count() == 0
+                   and time.monotonic() < deadline):
                 executor.spin_once(timeout_sec=.05)
             # The same world target as the sensor translates, yaws, and pitches.
             transform(10, 0)
@@ -284,7 +291,8 @@ class RosViewTests(unittest.TestCase):
                                  lambda msg: statuses.append(json.loads(msg.data)),
                                  QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         publisher = peer.create_publisher(PointCloud2, '/smart_radar/port_targets_0', 1)
-        client = peer.create_client(SetParametersAtomically, '/umrr96_views/set_parameters_atomically')
+        client = peer.create_client(SetParametersAtomically,
+                                    '/umrr96_views/set_parameters_atomically')
 
         def wait(predicate):
             deadline = time.monotonic() + 5
@@ -316,7 +324,8 @@ class RosViewTests(unittest.TestCase):
             return cloud
 
         try:
-            wait(lambda: publisher.get_subscription_count() and statuses and client.service_is_ready())
+            wait(lambda: publisher.get_subscription_count() and statuses
+                 and client.service_is_ready())
             cloud = send()
             self.assertEqual(filtered[-1].data, cloud.data)
             self.assertEqual(statuses[-1]['mode'], 'off')
@@ -417,7 +426,8 @@ class RosViewTests(unittest.TestCase):
 
             # A subscriber joining after startup must still receive the fan guides.
             peer.create_subscription(MarkerArray, '/smart_radar/fan_guides', guides.append,
-                                     QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+                                     QoSProfile(depth=1,
+                                                durability=DurabilityPolicy.TRANSIENT_LOCAL))
             wait(lambda: guides)
             self.assertTrue({'5 m', '10 m', '15 m', '20 m'}.issubset(
                 {marker.text for marker in guides[-1].markers}))
@@ -430,7 +440,8 @@ class RosViewTests(unittest.TestCase):
             reset = peer.create_client(Empty, '/smart_radar/reset_density')
             self.assertTrue(reset.wait_for_service(timeout_sec=2))
             future = reset.call_async(Empty.Request())
-            wait(lambda: future.done() and cells[-1].width == 0 and markers[-1].action == Marker.DELETE)
+            wait(lambda: future.done() and cells[-1].width == 0
+                 and markers[-1].action == Marker.DELETE)
             cloud.header.frame_id = 'wrong_frame'
             publisher.publish(cloud)
             until = time.monotonic() + .3
@@ -440,7 +451,7 @@ class RosViewTests(unittest.TestCase):
 
             # A target with elevation has different XY and range/azimuth projections.
             elevated = point_cloud2.create_cloud(Header(frame_id='umrr96'), fields,
-                                                  [(1.1, 0, 5, 0, 25)])
+                                                 [(1.1, 0, 5, 0, 25)])
             publisher.publish(elevated)
             wait(lambda: fan[-1].width == 1 and cells[-1].width == 1)
             self.assertEqual(float(point_cloud2.read_points(fan[-1])[0]['x']), 5)
@@ -455,6 +466,210 @@ class RosViewTests(unittest.TestCase):
             radar_views.destroy_node()
             executor.shutdown()
             rclpy.shutdown()
+
+
+class ReferenceFilter:
+    """The original per-point DetectionFilter loop (before P6), for equivalence."""
+
+    def __init__(self, mode, min_snr_db=6.0, min_abs_speed=.25):
+        self.mode, self.min_snr_db, self.min_abs_speed = mode, min_snr_db, min_abs_speed
+        self.history = deque(maxlen=2)
+        self.last_stamp = None
+
+    def select(self, points, stamp):
+        stats = {'mode': self.mode, 'input': len(points), 'accepted': 0,
+                 'rejected_quality': 0, 'rejected_motion': 0, 'rejected_temporal': 0,
+                 'min_snr_db': self.min_snr_db, 'min_abs_speed': self.min_abs_speed}
+        if self.mode == 'off':
+            stats['accepted'] = len(points)
+            return list(range(len(points))), stats
+        if self.last_stamp is not None and stamp <= self.last_stamp:
+            self.history.clear()
+        self.last_stamp = stamp
+        while self.history and stamp - self.history[0][0] > .5:
+            self.history.popleft()
+        candidates, accepted = [], []
+        for index, point in enumerate(points):
+            x, y, z, radius, angle, snr, speed = (float(point[name]) for name in (
+                'x', 'y', 'z', 'range', 'azimuth_angle', 'snr', 'radial_speed'))
+            if (not all(math.isfinite(v) for v in (x, y, z, radius, angle, snr, speed))
+                    or radius < 0 or abs(angle) > math.pi or snr < self.min_snr_db):
+                stats['rejected_quality'] += 1
+                continue
+            if self.mode == 'moving' and abs(speed) < self.min_abs_speed:
+                stats['rejected_motion'] += 1
+                continue
+            candidates.append((radius, angle))
+            if self.mode == 'mapping' and not any(
+                abs(radius - old_range) <= .5
+                and abs(math.remainder(angle - old_angle, 2 * math.pi)) <= math.radians(3)
+                for _, prior in self.history for old_range, old_angle in prior
+            ):
+                stats['rejected_temporal'] += 1
+                continue
+            accepted.append(index)
+        self.history.append((stamp, candidates))
+        stats['accepted'] = len(accepted)
+        return accepted, stats
+
+
+class VectorizedFilterTests(unittest.TestCase):
+    NAMES = ('x', 'y', 'z', 'range', 'azimuth_angle', 'snr', 'radial_speed')
+
+    def scan(self, rng, count, anchors):
+        """Clustered float32 targets near earlier ranges/azimuths, gate edges and +/-pi."""
+        dtype = np.dtype([(name, '<f4') for name in self.NAMES])
+        points = np.zeros(count, dtype=dtype)
+        base = anchors[rng.integers(0, len(anchors), count)]
+        radius = base[:, 0] + rng.choice([0, .5, -.5, .49, .51, 1.0], count) * (
+            rng.random(count) < .5) + rng.normal(0, .2, count)
+        angle = base[:, 1] + rng.choice([0, 1, -1, .99, 1.01, 2], count) * math.radians(3) * (
+            rng.random(count) < .5) + rng.normal(0, .02, count)
+        angle[rng.random(count) < .05] = math.pi
+        angle[rng.random(count) < .05] = -math.pi
+        angle = np.where(np.abs(angle) > math.pi * 1.01, -angle, angle)
+        points['range'], points['azimuth_angle'] = radius, angle
+        points['x'], points['y'] = radius * np.cos(angle), radius * np.sin(angle)
+        points['snr'] = rng.uniform(0, 40, count)
+        points['radial_speed'] = rng.normal(0, 1, count)
+        for name in ('x', 'range', 'snr', 'radial_speed'):
+            points[name][rng.random(count) < .02] = np.nan
+        points['range'][rng.random(count) < .02] *= -1
+        return points
+
+    def test_matches_reference_loop_in_every_mode(self):
+        for seed, count in ((0, 40), (1, 300), (2, 1500), (3, 4096)):
+            rng = np.random.default_rng(seed)
+            anchors = np.column_stack((rng.uniform(0, 60, 64), rng.uniform(-3.2, 3.2, 64)))
+            for mode in ('quality', 'mapping', 'moving', 'off'):
+                reference = ReferenceFilter(mode, 12.0, .5)
+                actual = views.DetectionFilter(mode, 12.0, .5)
+                stamp, accepted, temporal = 100.0, 0, 0
+                for step in range(8):
+                    stamp += (.1, .1, .3, .1, -.2, .1, .6, .1)[step]
+                    points = self.scan(rng, count if step % 3 else count // 4, anchors)
+                    expected = reference.select(points, stamp)
+                    self.assertEqual(actual.select(points, stamp), expected, (seed, mode, step))
+                    self.assertEqual([h[0] for h in actual.history],
+                                     [h[0] for h in reference.history])
+                    accepted += expected[1]['accepted']
+                    temporal += expected[1]['rejected_temporal']
+                if mode == 'mapping':  # Both gate outcomes were exercised.
+                    self.assertGreater(accepted, 0)
+                    self.assertGreater(temporal, 0)
+
+    def test_hash_and_pairwise_search_agree_on_gate_boundaries(self):
+        prior_range = np.array([10.0, 10.0, 3.0, 3.0, 7.25])
+        prior_angle = np.array([math.pi, -math.pi, 0.0, math.radians(3), -3.1])
+        query_range = np.array([10.5, 9.5, 3.5000001, 3.0, 7.75, 10.0])
+        query_angle = np.array([-math.pi + math.radians(2.9), math.pi, 0.0,
+                                math.radians(6), 3.1, -math.pi + math.radians(3.1)])
+        expected = [any(abs(r - pr) <= .5 and abs(math.remainder(a - pa, 2 * math.pi))
+                        <= math.radians(3) for pr, pa in zip(prior_range, prior_angle))
+                    for r, a in zip(query_range, query_angle)]
+        tiled = detection_filter.BRUTE_FORCE_PAIRS
+        many_range = np.tile(query_range, tiled // len(query_range) + 1)
+        many_angle = np.tile(query_angle, tiled // len(query_angle) + 1)
+        hashed = detection_filter.confirmed(many_range, many_angle, prior_range, prior_angle)
+        self.assertEqual(hashed[:len(expected)].tolist(), expected)
+        self.assertEqual(detection_filter.confirmed(
+            query_range, query_angle, prior_range, prior_angle).tolist(), expected)
+
+
+def make_views(*overrides):
+    args = ['--ros-args']
+    for override in overrides:
+        args += ['-p', override]
+    rclpy.init(args=args)
+    return views.RadarViews()
+
+
+class Recorder:
+    """Publisher stand-in; ``subscribers`` controls the reported subscription count."""
+
+    def __init__(self, subscribers=1):
+        self.messages, self.subscribers = [], subscribers
+
+    def publish(self, message):
+        self.messages.append(message)
+
+    def get_subscription_count(self):
+        return self.subscribers
+
+
+class ViewsNodeTests(unittest.TestCase):
+    LAYOUT = [PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32, count=1)
+              for i, name in enumerate(('x', 'y', 'z', 'range', 'azimuth_angle', 'snr',
+                                        'radial_speed'))]
+
+    def tearDown(self):
+        rclpy.try_shutdown()
+
+    def test_integer_overrides_and_runtime_integer_sets(self):
+        radar_views = make_views('max_range:=20', 'publish_hz:=5', 'decay_seconds:=3',
+                                 'filter_min_snr_db:=8', 'cell_size:=1', 'tf_wait_seconds:=1')
+        try:
+            self.assertEqual((radar_views.range, radar_views.grid.decay_seconds), (20.0, 3.0))
+            self.assertEqual(radar_views.grid.resolution, 1.0)
+            self.assertEqual(radar_views.filter.min_snr_db, 8.0)
+            self.assertEqual(radar_views.timer.timer_period_ns, 200_000_000)
+            self.assertTrue(radar_views.describe_parameter('max_range').description)
+            self.assertTrue(radar_views.set_parameters_atomically(
+                [Parameter('decay_seconds', value=1)]).successful)
+            self.assertEqual(radar_views.grid.decay_seconds, 1.0)
+            self.assertTrue(radar_views.set_parameters_atomically(
+                [Parameter('filter_min_abs_speed', value=1)]).successful)
+            self.assertEqual(radar_views.filter.min_abs_speed, 1.0)
+            for invalid in ('high', 31, True):
+                self.assertFalse(radar_views.set_parameters_atomically(
+                    [Parameter('decay_seconds', value=invalid)]).successful)
+            self.assertEqual(radar_views.grid.decay_seconds, 1.0)
+        finally:
+            radar_views.destroy_node()
+
+    def test_filter_change_clears_filtered_cloud_with_a_current_stamp(self):
+        radar_views = make_views()
+        filtered = Recorder()
+        try:
+            radar_views.filtered_pub = filtered
+            header = Header(frame_id='umrr96')
+            header.stamp.sec = 10  # An old receive stamp.
+            radar_views.receive(point_cloud2.create_cloud(
+                header, self.LAYOUT, [(1, 0, 0, 1, 0, 20, 0)]))
+            self.assertEqual(filtered.messages[-1].header.stamp.sec, 10)
+            before = radar_views.get_clock().now().nanoseconds
+            self.assertTrue(radar_views.set_parameters_atomically(
+                [Parameter('filter_mode', value='quality')]).successful)
+            clear = filtered.messages[-1]
+            self.assertEqual(clear.width, 0)
+            self.assertEqual(clear.fields, filtered.messages[0].fields)
+            self.assertGreaterEqual(Time.from_msg(clear.header.stamp).nanoseconds, before)
+            self.assertEqual(clear.header.frame_id, 'umrr96')
+        finally:
+            radar_views.destroy_node()
+
+    def test_headless_builds_no_display_messages_or_image(self):
+        radar_views = make_views()
+        try:
+            for name in ('grid_pub', 'cells_pub', 'fan_pub', 'image_pub'):
+                setattr(radar_views, name, Recorder(subscribers=0))
+            filtered = radar_views.filtered_pub = Recorder(subscribers=0)
+            header = Header(frame_id='umrr96')
+            header.stamp = radar_views.get_clock().now().to_msg()
+            radar_views.receive(point_cloud2.create_cloud(
+                header, self.LAYOUT, [(1, 0, 0, 1, 0, 20, 0)]))
+            radar_views.publish()
+            self.assertEqual(len(filtered.messages), 1)  # The navigation output still flows.
+            self.assertEqual(len(radar_views.grid.samples()), 1)  # Density history too.
+            self.assertTrue(all(not getattr(radar_views, name).messages for name in (
+                'grid_pub', 'cells_pub', 'fan_pub', 'image_pub')))
+            self.assertIsNone(radar_views._image_renderer)
+            radar_views.cells_pub.subscribers = 1
+            radar_views.publish()
+            self.assertEqual(radar_views.cells_pub.messages[-1].width, 1)
+            self.assertFalse(radar_views.grid_pub.messages)
+        finally:
+            radar_views.destroy_node()
 
 
 if __name__ == '__main__':
