@@ -1,9 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
 #include "smart_rviz_plugin/smart_recorder.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <QHBoxLayout>
 #include <QMessageBox>
-#include <opencv2/opencv.hpp>
+#include <QSignalBlocker>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
+
+#include "panel_util.hpp"
 
 const double radToDeg = 180.0 / M_PI;
 namespace smart_rviz_plugin
@@ -13,62 +18,34 @@ SmartRadarRecorder::SmartRadarRecorder(QWidget * parent) : rviz_common::Panel(pa
   initialize();
 }
 
+namespace
+{
+const char * const kSelect = "Select a Topic";
+bool is_radar_cloud(const std::string & name)
+{
+  for (const char * kind : {"port_targets", "can_targets", "port_objects", "can_objects"}) {
+    if (name.find(kind) != std::string::npos) {return true;}
+  }
+  return false;
+}
+}  // namespace
+
 void SmartRadarRecorder::initialize()
 {
-  node_ = rclcpp::Node::make_shared("smart_radar_recorder_gui_node");
+  node_ = std::make_shared<rclcpp::Node>(
+    panel_util::unique_node_name("smart_radar_recorder_gui_node"),
+    rclcpp::NodeOptions().use_global_arguments(false));
+  executor_.add_node(node_);
 
-  subscription_ = node_->create_subscription<sensor_msgs::msg::CompressedImage>(
-    "/ip_camera_front_right/image_raw/compressed", 10,
-    [this](const sensor_msgs::msg::CompressedImage::SharedPtr msg) { image_callback(msg); });
-
-  publisher_ =
-    node_->create_publisher<sensor_msgs::msg::Image>("/ip_camera_front_right/image_raw", 10);
-
-  // Reorder setup
   gui_layout_ = new QVBoxLayout();
   topic_dropdown_ = new QComboBox();
-  topic_dropdown_->addItem("Select a Topic");
-
-  // Retrieve available topics
-  auto topic_names_and_types = node_->get_topic_names_and_types();
-
-  // Create subscribers for selected topics
-  for (const auto & topic : topic_names_and_types) {
-    if (topic.first.find("port_targets") != std::string::npos) {
-      subscribers_[topic.first] = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
-        topic.first, 10, [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          port_target_callback(msg, topic.first);
-        });
-
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    } else if (topic.first.find("can_targets") != std::string::npos) {
-      subscribers_[topic.first] = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
-        topic.first, 10, [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          can_target_callback(msg, topic.first);
-        });
-
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    } else if (topic.first.find("port_objects") != std::string::npos) {
-      object_subscribers_[topic.first] = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
-        topic.first, 10, [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          port_object_callback(msg, topic.first);
-        });
-
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    } else if (topic.first.find("can_objects") != std::string::npos) {
-      object_subscribers_[topic.first] = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
-        topic.first, 10, [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-          can_object_callback(msg, topic.first);
-        });
-
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    }
-  }
-
+  topic_dropdown_->setObjectName("topic");
+  topic_dropdown_->addItem(kSelect);
   connect(topic_dropdown_, SIGNAL(currentIndexChanged(int)), this, SLOT(update_table()));
 
   // Table one layout
   table_data_ = new QTableWidget();
+  table_data_->setObjectName("data_table");
   table_data_->setColumnCount(20);
   table_data_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   table_data_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
@@ -76,6 +53,7 @@ void SmartRadarRecorder::initialize()
 
   table_timestamps_ = new QTableWidget();
   table_timestamps_->setColumnCount(2);
+  table_timestamps_->setRowCount(1);
   table_timestamps_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
   table_timestamps_->setHorizontalHeaderLabels({"TsSec", "TsNanoSec"});
 
@@ -94,107 +72,172 @@ void SmartRadarRecorder::initialize()
   connect(timer_, SIGNAL(timeout()), this, SLOT(check_data()));
   timer_->start(50);
 
+  // The graph is usually still empty when RViz starts with the driver: refresh periodically.
+  topic_refresh_timer_ = new QTimer(this);
+  connect(topic_refresh_timer_, SIGNAL(timeout()), this, SLOT(refresh_topic_list()));
+  topic_refresh_timer_->start(1000);
+
+  auto * limit_layout = new QHBoxLayout();
+  limit_layout->addWidget(new QLabel("Recording limit:"));
+  max_rows_ = new QSpinBox();
+  max_rows_->setObjectName("max_rows");
+  max_rows_->setRange(100, 50000000);
+  max_rows_->setSingleStep(100000);
+  max_rows_->setValue(static_cast<int>(DEFAULT_MAX_RECORDED_ROWS));
+  max_rows_->setSuffix(" rows");
+  max_rows_->setToolTip("Recording stops automatically when this many targets/objects are held.");
+  limit_layout->addWidget(max_rows_);
+  gui_layout_->addLayout(limit_layout);
+
   start_button_ = new QPushButton("Record");
+  start_button_->setObjectName("record");
   connect(start_button_, SIGNAL(clicked()), this, SLOT(start_recording()));
 
   stop_button_ = new QPushButton("Stop Recording");
+  stop_button_->setObjectName("stop");
   connect(stop_button_, SIGNAL(clicked()), this, SLOT(stop_recording()));
   stop_button_->setEnabled(false);
 
   save_button_ = new QPushButton("Save Data as CSV");
+  save_button_->setObjectName("save");
   connect(save_button_, SIGNAL(clicked()), this, SLOT(save_data()));
   save_button_->setEnabled(false);
+
+  status_ = new QLabel("Select a radar topic.");
+  status_->setObjectName("status");
+  status_->setWordWrap(true);
 
   gui_layout_->addWidget(start_button_);
   gui_layout_->addWidget(stop_button_);
   gui_layout_->addWidget(save_button_);
+  gui_layout_->addWidget(status_);
 
   setLayout(gui_layout_);
-
-  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Recorder Plugin Created!");
+  refresh_topic_list();
 }
 
-void SmartRadarRecorder::image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
+void SmartRadarRecorder::load(const rviz_common::Config & config)
 {
-  cv_bridge::CvImagePtr cv_ptr;
-  try {
-    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-  } catch (cv_bridge::Exception & e) {
-    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "cv_bridge exception: %s", e.what());
+  rviz_common::Panel::load(config);
+  int rows = 0;
+  if (config.mapGetInt("MaxRecordedRows", &rows)) {
+    max_rows_->setValue(rows);
+  }
+}
+
+void SmartRadarRecorder::save(rviz_common::Config config) const
+{
+  rviz_common::Panel::save(config);
+  config.mapSetValue("MaxRecordedRows", max_rows_->value());
+}
+
+void SmartRadarRecorder::refresh_topic_list()
+{
+  if (!rclcpp::ok()) {return;}
+  std::vector<std::string> topics;
+  for (const auto & [name, types] : node_->get_topic_names_and_types()) {
+    // Count only topics with a publisher: our own subscription keeps a topic in the graph.
+    if (!is_radar_cloud(name) || node_->count_publishers(name) == 0) {continue;}
+    for (const auto & type : types) {
+      if (type == "sensor_msgs/msg/PointCloud2") {
+        topics.push_back(name);
+        break;
+      }
+    }
+  }
+  // Keep the recorded topic selectable while recording, even if its publisher paused.
+  const bool keep = (recording_active_ || pending_save_) && !selected_topic_.empty();
+  if (keep && std::find(topics.begin(), topics.end(), selected_topic_) == topics.end()) {
+    topics.push_back(selected_topic_);
+  }
+  if (topics == topics_) {return;}
+  topics_ = topics;
+
+  const std::string previous = selected_topic_;
+  int index = 0;
+  {
+    const QSignalBlocker blocker(topic_dropdown_);
+    topic_dropdown_->clear();
+    topic_dropdown_->addItem(kSelect);
+    for (const auto & name : topics_) {
+      topic_dropdown_->addItem(QString::fromStdString(name));
+    }
+    if (!previous.empty()) {
+      index = std::max(0, topic_dropdown_->findText(QString::fromStdString(previous)));
+      topic_dropdown_->setCurrentIndex(index);
+    }
+  }
+  if (!previous.empty() && index == 0) {
+    update_table();  // Selected topic vanished: unsubscribe and clear.
+  }
+}
+
+void SmartRadarRecorder::subscribe_selected()
+{
+  if (selected_topic_ == subscribed_topic_ && (subscription_ || selected_topic_.empty())) {
     return;
   }
-
-  sensor_msgs::msg::Image ros_image;
-  ros_image.header = msg->header;
-  ros_image.height = cv_ptr->image.rows;
-  ros_image.width = cv_ptr->image.cols;
-  ros_image.encoding = sensor_msgs::image_encodings::BGR8;
-  ros_image.is_bigendian = false;
-  ros_image.step = sizeof(unsigned char) * cv_ptr->image.cols * cv_ptr->image.channels();
-  ros_image.data.assign(
-    cv_ptr->image.data, cv_ptr->image.data + cv_ptr->image.total() * cv_ptr->image.elemSize());
-
-  publisher_->publish(ros_image);
+  subscription_.reset();
+  subscribed_topic_ = selected_topic_;
+  if (selected_topic_.empty()) {return;}
+  const std::string topic = selected_topic_;
+  subscription_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
+    topic, 10, [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+      try {
+        if (topic.find("port_targets") != std::string::npos) {
+          port_target_callback(msg, topic);
+        } else if (topic.find("can_targets") != std::string::npos) {
+          can_target_callback(msg, topic);
+        } else if (topic.find("port_objects") != std::string::npos) {
+          port_object_callback(msg, topic);
+        } else {
+          can_object_callback(msg, topic);
+        }
+      } catch (const std::exception & error) {
+        // For example a cloud without the expected fields; never propagate into Qt.
+        table_data_->setUpdatesEnabled(true);
+        status_->setText(QString("Cannot display %1: %2")
+          .arg(QString::fromStdString(topic), error.what()));
+      }
+    });
 }
 
-void SmartRadarRecorder::update_target_recorded_data(
-  const std::string & topic_name, float range, float power, float azimuth_deg,
+bool SmartRadarRecorder::has_capacity()
+{
+  const auto rows = target_recorded_data.size() + object_recorded_data.size();
+  if (rows < static_cast<std::size_t>(max_rows_->value())) {return true;}
+  finish_recording(QString("Recording stopped at the limit of %1 rows. Save or discard it.")
+    .arg(max_rows_->value()));
+  return false;
+}
+
+bool SmartRadarRecorder::update_target_recorded_data(
+  float range, float power, float azimuth_deg,
   float elevation_deg, float rcs, float noise, float snr, float radial_speed,
   float azimuth_angle, float elevation_angle, float variance_range, float variance_speed,
   float variance_azimuth_angle, float variance_elevation_angle, float false_alarm_probability,
   uint32_t flags, uint16_t peak_idx, uint32_t timestamp_sec, uint32_t timestamp_nanosec)
 {
-  TargetData data;
-  data.topic_name = topic_name;
-  data.range = range;
-  data.power = power;
-  data.azimuth_deg = azimuth_deg;
-  data.elevation_deg = elevation_deg;
-  data.rcs = rcs;
-  data.noise = noise;
-  data.snr = snr;
-  data.radial_speed = radial_speed;
-  data.azimuth_angle = azimuth_angle;
-  data.elevation_angle = elevation_angle;
-  data.variance_range = variance_range;
-  data.variance_speed = variance_speed;
-  data.variance_azimuth_angle = variance_azimuth_angle;
-  data.variance_elevation_angle = variance_elevation_angle;
-  data.false_alarm_probability = false_alarm_probability;
-  data.flags = flags;
-  data.peak_idx = peak_idx;
-  data.timestamp_sec = timestamp_sec;
-  data.timestamp_nanosec = timestamp_nanosec;
-
-  target_recorded_data.push_back(data);
+  if (!has_capacity()) {return false;}
+  target_recorded_data.push_back(TargetData{
+    range, power, azimuth_deg, elevation_deg, rcs, noise, snr, radial_speed, azimuth_angle,
+    elevation_angle, variance_range, variance_speed, variance_azimuth_angle,
+    variance_elevation_angle, false_alarm_probability, flags, peak_idx, timestamp_sec,
+    timestamp_nanosec});
+  return true;
 }
 
-void SmartRadarRecorder::update_object_recorded_data(
-  const std::string & topic_name, float x_pos, float y_pos, float z_pos, float speed_abs,
+bool SmartRadarRecorder::update_object_recorded_data(
+  float x_pos, float y_pos, float z_pos, float speed_abs,
   float heading, float length, float mileage, float quality, float acceleration,
   int16_t object_id, uint16_t idle_cycles, uint16_t spline_idx, uint8_t object_class,
   uint16_t status, uint32_t timestamp_sec, uint32_t timestamp_nanosec)
 {
-  ObjectData data;
-  data.topic_name = topic_name;
-  data.x_pos = x_pos;
-  data.y_pos = y_pos;
-  data.z_pos = z_pos;
-  data.speed_abs = speed_abs;
-  data.heading = heading;
-  data.length = length;
-  data.mileage = mileage;
-  data.quality = quality;
-  data.object_id = object_id;
-  data.acceleration = acceleration;
-  data.idle_cycles = idle_cycles;
-  data.spline_idx = spline_idx;
-  data.object_class = object_class;
-  data.status = status;
-  data.timestamp_sec = timestamp_sec;
-  data.timestamp_nanosec = timestamp_nanosec;
-
-  object_recorded_data.push_back(data);
+  if (!has_capacity()) {return false;}
+  object_recorded_data.push_back(ObjectData{
+    x_pos, y_pos, z_pos, speed_abs, heading, length, mileage, quality, acceleration, object_id,
+    idle_cycles, spline_idx, object_class, status, timestamp_sec, timestamp_nanosec});
+  return true;
 }
 
 void SmartRadarRecorder::port_target_callback(
@@ -227,9 +270,11 @@ void SmartRadarRecorder::port_target_callback(
     sensor_msgs::PointCloud2ConstIterator<uint32_t> iter_flags(*msg, "flags");
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_peak_idx(*msg, "peak_idx");
 
-    table_data_->setRowCount(0);
+    const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    table_data_->setUpdatesEnabled(false);
+    table_data_->setRowCount(static_cast<int>(num_points));
 
-    for (size_t i = 0; i < msg->height * msg->width; ++i, ++iter_x, ++iter_y, ++iter_z,
+    for (size_t i = 0; i < num_points; ++i, ++iter_x, ++iter_y, ++iter_z,
                 ++iter_radial_speed, ++iter_power, ++iter_rcs, ++iter_noise, ++iter_snr,
                 ++iter_azimuth_angle, ++iter_elevation_angle, ++iter_range,
                 ++iter_variance_range, ++iter_variance_speed, ++iter_variance_azimuth_angle,
@@ -241,7 +286,7 @@ void SmartRadarRecorder::port_target_callback(
       // Update the recorded data
       if (recording_active_ && topic_name == recording_topic_) {
         update_target_recorded_data(
-          topic_name, *iter_range, *iter_power, azimuth_deg, elevation_deg, *iter_rcs,
+          *iter_range, *iter_power, azimuth_deg, elevation_deg, *iter_rcs,
           *iter_noise, *iter_snr, *iter_radial_speed, *iter_azimuth_angle,
           *iter_elevation_angle, *iter_variance_range, *iter_variance_speed,
           *iter_variance_azimuth_angle, *iter_variance_elevation_angle,
@@ -249,9 +294,7 @@ void SmartRadarRecorder::port_target_callback(
           timestamp_nanosec);
       }
 
-      // Add items to the table
-      int row_index = table_data_->rowCount();
-      table_data_->insertRow(row_index);
+      const int row_index = static_cast<int>(i);
       table_data_->setItem(row_index, 0, new QTableWidgetItem(QString::number(*iter_x, 'f', 2)));
       table_data_->setItem(row_index, 1, new QTableWidgetItem(QString::number(*iter_y, 'f', 2)));
       table_data_->setItem(row_index, 2, new QTableWidgetItem(QString::number(*iter_z, 'f', 2)));
@@ -289,9 +332,9 @@ void SmartRadarRecorder::port_target_callback(
       table_data_->setItem(row_index, 19, new QTableWidgetItem(QString::number(*iter_peak_idx)));
     }
 
+    table_data_->setUpdatesEnabled(true);
+
     // Update the timestamp table
-    table_timestamps_->setRowCount(0);
-    table_timestamps_->insertRow(0);
     table_timestamps_->setItem(0, 0, new QTableWidgetItem(QString::number(timestamp_sec)));
     table_timestamps_->setItem(0, 1, new QTableWidgetItem(QString::number(timestamp_nanosec)));
   }
@@ -327,9 +370,11 @@ void SmartRadarRecorder::can_target_callback(
     sensor_msgs::PointCloud2ConstIterator<uint32_t> iter_flags(*msg, "flags");
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_peak_idx(*msg, "peak_idx");
 
-    table_data_->setRowCount(0);
+    const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    table_data_->setUpdatesEnabled(false);
+    table_data_->setRowCount(static_cast<int>(num_points));
 
-    for (size_t i = 0; i < msg->height * msg->width; ++i, ++iter_x, ++iter_y, ++iter_z,
+    for (size_t i = 0; i < num_points; ++i, ++iter_x, ++iter_y, ++iter_z,
                 ++iter_radial_speed, ++iter_power, ++iter_rcs, ++iter_noise, ++iter_snr,
                 ++iter_azimuth_angle, ++iter_elevation_angle, ++iter_range,
                 ++iter_variance_range, ++iter_variance_speed, ++iter_variance_azimuth_angle,
@@ -341,7 +386,7 @@ void SmartRadarRecorder::can_target_callback(
       // Update the recorded data
       if (recording_active_ && topic_name == recording_topic_) {
         update_target_recorded_data(
-          topic_name, *iter_range, *iter_power, azimuth_deg, elevation_deg, *iter_rcs,
+          *iter_range, *iter_power, azimuth_deg, elevation_deg, *iter_rcs,
           *iter_noise, *iter_snr, *iter_radial_speed, *iter_azimuth_angle,
           *iter_elevation_angle, *iter_variance_range, *iter_variance_speed,
           *iter_variance_azimuth_angle, *iter_variance_elevation_angle,
@@ -349,9 +394,7 @@ void SmartRadarRecorder::can_target_callback(
           timestamp_nanosec);
       }
 
-      // Add items to the table
-      int row_index = table_data_->rowCount();
-      table_data_->insertRow(row_index);
+      const int row_index = static_cast<int>(i);
       table_data_->setItem(row_index, 0, new QTableWidgetItem(QString::number(*iter_x, 'f', 2)));
       table_data_->setItem(row_index, 1, new QTableWidgetItem(QString::number(*iter_y, 'f', 2)));
       table_data_->setItem(row_index, 2, new QTableWidgetItem(QString::number(*iter_z, 'f', 2)));
@@ -390,12 +433,11 @@ void SmartRadarRecorder::can_target_callback(
 
     }
 
+    table_data_->setUpdatesEnabled(true);
+
     // Update the timestamp table
-    table_timestamps_->setRowCount(0);
-    table_timestamps_->insertRow(0);
     table_timestamps_->setItem(0, 0, new QTableWidgetItem(QString::number(timestamp_sec)));
     table_timestamps_->setItem(0, 1, new QTableWidgetItem(QString::number(timestamp_nanosec)));
-    // }
   }
 }
 
@@ -422,8 +464,9 @@ void SmartRadarRecorder::port_object_callback(
     sensor_msgs::PointCloud2ConstIterator<uint8_t> iter_object_class(*msg, "object_class");
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_status(*msg, "status");
 
-    table_data_->setRowCount(0);
-    size_t num_points = msg->height * msg->width;
+    const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    table_data_->setUpdatesEnabled(false);
+    table_data_->setRowCount(static_cast<int>(num_points));
 
     for (size_t i = num_points; i > 0; --i, ++iter_x, ++iter_y, ++iter_z, ++iter_speed_absolute,
                 ++iter_heading, ++iter_length, ++iter_mileage, ++iter_quality, ++iter_acceleration,
@@ -434,15 +477,13 @@ void SmartRadarRecorder::port_object_callback(
       // Update the recorded data
       if (recording_active_ && topic_name == recording_topic_) {
         update_object_recorded_data(
-          topic_name, *iter_x, *iter_y, *iter_z, *iter_speed_absolute, *iter_heading,
+          *iter_x, *iter_y, *iter_z, *iter_speed_absolute, *iter_heading,
           *iter_length, *iter_mileage, *iter_quality, *iter_acceleration,
           static_cast<int16_t>(*iter_object_id), *iter_idle_cycles, *iter_spline_idx,
           *iter_object_class, *iter_status, timestamp_sec, timestamp_nanosec);
       }
 
-      // Add items to the table
-      int row_index = table_data_->rowCount();
-      table_data_->insertRow(row_index);
+      const int row_index = static_cast<int>(num_points - i);
       table_data_->setItem(row_index, 0, new QTableWidgetItem(QString::number(*iter_x, 'f', 2)));
       table_data_->setItem(row_index, 1, new QTableWidgetItem(QString::number(*iter_y, 'f', 2)));
       table_data_->setItem(row_index, 2, new QTableWidgetItem(QString::number(*iter_z, 'f', 2)));
@@ -466,9 +507,9 @@ void SmartRadarRecorder::port_object_callback(
       table_data_->setItem(row_index, 13, new QTableWidgetItem(QString::number(*iter_status)));
     }
 
+    table_data_->setUpdatesEnabled(true);
+
     // Update the timestamp table
-    table_timestamps_->setRowCount(0);
-    table_timestamps_->insertRow(0);
     table_timestamps_->setItem(0, 0, new QTableWidgetItem(QString::number(timestamp_sec)));
     table_timestamps_->setItem(0, 1, new QTableWidgetItem(QString::number(timestamp_nanosec)));
   }
@@ -497,9 +538,9 @@ void SmartRadarRecorder::can_object_callback(
     sensor_msgs::PointCloud2ConstIterator<uint8_t> iter_object_class(*msg, "object_class");
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_status(*msg, "status");
 
-    table_data_->setRowCount(0);
-
-    size_t num_points = msg->height * msg->width;
+    const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    table_data_->setUpdatesEnabled(false);
+    table_data_->setRowCount(static_cast<int>(num_points));
 
     for (size_t i = num_points; i > 0; --i, ++iter_x, ++iter_y, ++iter_z, ++iter_speed_abs,
                 ++iter_heading, ++iter_length, ++iter_quality, ++iter_acceleration,
@@ -508,14 +549,13 @@ void SmartRadarRecorder::can_object_callback(
       // Update the recorded data
       if (recording_active_ && topic_name == recording_topic_) {
         update_object_recorded_data(
-          topic_name, *iter_x, *iter_y, *iter_z, *iter_speed_abs, *iter_heading, *iter_length,
+          *iter_x, *iter_y, *iter_z, *iter_speed_abs, *iter_heading, *iter_length,
           *iter_mileage, *iter_quality, *iter_acceleration, *iter_object_id, *iter_idle_cycles,
           *iter_spline_idx, *iter_object_class, *iter_status, timestamp_sec,
           timestamp_nanosec);
       }
 
-      int row_index = table_data_->rowCount();
-      table_data_->insertRow(row_index);
+      const int row_index = static_cast<int>(num_points - i);
       table_data_->setItem(row_index, 0, new QTableWidgetItem(QString::number(*iter_x, 'f', 2)));
       table_data_->setItem(row_index, 1, new QTableWidgetItem(QString::number(*iter_y, 'f', 2)));
       table_data_->setItem(row_index, 2, new QTableWidgetItem(QString::number(*iter_z, 'f', 2)));
@@ -540,9 +580,9 @@ void SmartRadarRecorder::can_object_callback(
       table_data_->setItem(row_index, 13, new QTableWidgetItem(QString::number(*iter_status)));
     }
 
+    table_data_->setUpdatesEnabled(true);
+
     // Update the timestamp table
-    table_timestamps_->setRowCount(0);
-    table_timestamps_->insertRow(0);
     table_timestamps_->setItem(0, 0, new QTableWidgetItem(QString::number(timestamp_sec)));
     table_timestamps_->setItem(0, 1, new QTableWidgetItem(QString::number(timestamp_nanosec)));
   }
@@ -551,7 +591,11 @@ void SmartRadarRecorder::can_object_callback(
 void SmartRadarRecorder::update_table()
 {
   table_data_->setRowCount(0);
-  selected_topic_ = topic_dropdown_->currentText().toStdString();
+  const auto choice = topic_dropdown_->currentText().toStdString();
+  selected_topic_ = choice == kSelect ? std::string() : choice;
+  subscribe_selected();
+  status_->setText(selected_topic_.empty() ? "Select a radar topic." :
+    "Showing " + QString::fromStdString(selected_topic_) + ".");
   for (int col = 0; col < table_data_->columnCount(); ++col) {
     table_data_->setColumnHidden(col, false);
   }
@@ -599,7 +643,7 @@ void SmartRadarRecorder::update_table()
 void SmartRadarRecorder::start_recording()
 {
   if (pending_save_) {
-    qDebug() << "Save or discard the completed recording before starting another one.";
+    status_->setText("Save or discard the completed recording before starting another one.");
     return;
   }
 
@@ -608,12 +652,12 @@ void SmartRadarRecorder::start_recording()
     selected_topic_.empty() || selected_topic_ == "Select a Topic" ||
     selected_topic_.find("/smart_radar/") == std::string::npos)
   {
-    qDebug() << "Please select a valid /smart_radar topic before recording.";
+    status_->setText("Please select a valid /smart_radar topic before recording.");
     return;
   }
 
   recording_topic_ = selected_topic_;
-  qDebug() << "Recording started!";
+  status_->setText("Recording " + QString::fromStdString(recording_topic_) + "…");
   recording_active_ = true;
   start_button_->setText("Recording...");
   start_button_->setEnabled(false);
@@ -646,18 +690,27 @@ void SmartRadarRecorder::stop_recording()
     return;
   }
 
-  qDebug() << "Recording stopped!";
-  recording_active_ = false;
+  finish_recording("Recording stopped.");
+  if (pending_save_) {
+    stop_recording();  // Offer save/discard now.
+  }
+}
 
+void SmartRadarRecorder::finish_recording(const QString & reason)
+{
+  recording_active_ = false;
   if (target_recorded_data.empty() && object_recorded_data.empty()) {
     return_to_ready_state();
+    status_->setText(reason + " Nothing was recorded.");
     return;
   }
-
   pending_save_ = true;
   stop_button_->setText("Save or Discard...");
+  stop_button_->setEnabled(true);
   save_button_->setEnabled(true);
-  stop_recording();
+  start_button_->setText("Record");
+  status_->setText(reason + QString(" %1 rows held.")
+    .arg(target_recorded_data.size() + object_recorded_data.size()));
 }
 
 void SmartRadarRecorder::clear_recorded_data()
@@ -680,7 +733,6 @@ void SmartRadarRecorder::return_to_ready_state()
 
 void SmartRadarRecorder::save_data()
 {
-  qDebug() << "Saving data to CSV!";
   bool data_saved = false;
   if (!target_recorded_data.empty() || !object_recorded_data.empty()) {
     QFileDialog file_dialog;
@@ -695,7 +747,7 @@ void SmartRadarRecorder::save_data()
         bool wrote_can_target_header = false;
         for (const auto & data_row : target_recorded_data) {
           const bool is_port_target_topic =
-            data_row.topic_name.find("port_targets") != std::string::npos;
+            recording_topic_.find("port_targets") != std::string::npos;
 
           if (is_port_target_topic) {
             if (!wrote_port_target_header) {
@@ -719,7 +771,7 @@ void SmartRadarRecorder::save_data()
 
           QStringList data_str_list;
           data_str_list << "Target";
-          data_str_list << QString::fromStdString(data_row.topic_name);
+          data_str_list << QString::fromStdString(recording_topic_);
           data_str_list << QString::number(data_row.range, 'f', 2);
           data_str_list << QString::number(data_row.power, 'f', 2);
           data_str_list << QString::number(data_row.azimuth_angle * 180.0 / M_PI, 'f', 2);
@@ -751,7 +803,7 @@ void SmartRadarRecorder::save_data()
         // Write object data grouped by schema to avoid exporting CAN sentinel-only columns.
         for (const auto & object : object_recorded_data) {
           const bool is_port_object_topic =
-            object.topic_name.find("port_objects") != std::string::npos;
+            recording_topic_.find("port_objects") != std::string::npos;
 
           if (is_port_object_topic) {
             if (!wrote_port_object_header) {
@@ -772,7 +824,7 @@ void SmartRadarRecorder::save_data()
 
           QStringList data_str_list;
           data_str_list << "Object";
-          data_str_list << QString::fromStdString(object.topic_name);
+          data_str_list << QString::fromStdString(recording_topic_);
           data_str_list << QString::number(object.x_pos, 'f', 2);
           data_str_list << QString::number(object.y_pos, 'f', 2);
           data_str_list << QString::number(object.z_pos, 'f', 2);
@@ -800,16 +852,17 @@ void SmartRadarRecorder::save_data()
         csvfile.close();
         data_saved = true;
       } else {
-        qDebug() << "Error: Could not open the file for writing.";
+        status_->setText("Error: could not open " + file_path + " for writing.");
       }
     }
   } else {
-    qDebug() << "No recorded data to save.";
+    status_->setText("No recorded data to save.");
   }
 
   if (data_saved) {
     clear_recorded_data();
     return_to_ready_state();
+    status_->setText("Recording saved.");
   }
 }
 
@@ -817,7 +870,7 @@ void SmartRadarRecorder::check_data()
 {
   if (rclcpp::ok())  // Check if ROS2 is still running
   {
-    rclcpp::spin_some(node_);
+    executor_.spin_some(std::chrono::milliseconds(2));
   }
 }
 

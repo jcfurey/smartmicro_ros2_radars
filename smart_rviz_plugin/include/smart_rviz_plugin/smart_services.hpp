@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef SMART_RVIZ_PLUGIN__SMART_SERVICES_HPP_
 #define SMART_RVIZ_PLUGIN__SMART_SERVICES_HPP_
 
@@ -13,9 +14,12 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QFormLayout>
+#include <chrono>
+#include <functional>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/panel.hpp>
 
@@ -42,6 +46,7 @@ public:
   /// @brief      Constructor for the SmartRadarService class.
   /// @param      parent  The parent widget. Defaults to nullptr.
   explicit SmartRadarService(QWidget * parent = nullptr);
+  ~SmartRadarService() override;
 
 private slots:
   /// @brief      Slot function to send a parameter instruction to the sensor.
@@ -94,8 +99,31 @@ private:
   /// @brief      Populates the table with the available user interface files.
   void populate_file_menu();
 
+  /// @brief      Spin the panel's executor and expire overdue requests.
+  void tick();
+
+  /// @brief      Send a request without blocking the GUI thread.
+  template<typename ServiceT>
+  void send_request(
+    const typename rclcpp::Client<ServiceT>::SharedPtr & client,
+    typename ServiceT::Request::SharedPtr request, const QString & service_name);
+
+  /// @brief      Drop the outstanding request, if any, so a late reply is ignored.
+  void cancel_pending();
+
+  /// @brief      Enable or disable the send buttons.
+  void set_busy(bool busy);
+
+  /// @brief      Show an error in the response area.
+  void report_error(const QString & message);
+
+  /// @brief      Find the directory that holds the sensor user-interface tables.
+  QString find_user_interfaces_dir(const QString & relative_file, QStringList * tried) const;
+
+  /// @brief      Load a JSON table file; reports failures in the response area.
+  bool load_json(const QString & path, const char * array_key, QJsonObject * object);
+
   // File paths
-  const QString current_directory = QDir::currentPath();
   QString param_json_file_path;
   QString command_json_file_path;
   QString status_json_file_path;
@@ -147,13 +175,17 @@ private:
 
   // ROS2 components
   rclcpp::Node::SharedPtr client_node;
+  rclcpp::executors::SingleThreadedExecutor executor_;
+  QTimer * spin_timer_{nullptr};
+  std::function<void()> cancel_request_;
+  std::chrono::steady_clock::time_point deadline_{};
   rclcpp::Client<umrr_ros2_msgs::srv::SetMode>::SharedPtr mode_client;
   rclcpp::Client<umrr_ros2_msgs::srv::SendCommand>::SharedPtr command_client;
   rclcpp::Client<umrr_ros2_msgs::srv::GetStatus>::SharedPtr status_client;
   rclcpp::Client<umrr_ros2_msgs::srv::GetMode>::SharedPtr get_param_client;
 
   // Constants
-  static constexpr auto SERVICE_AVAILABILITY_TIMEOUT = std::chrono::seconds(2);
+  static constexpr auto REQUEST_TIMEOUT = std::chrono::seconds(10);
 };
 }  // namespace smart_rviz_plugin
 

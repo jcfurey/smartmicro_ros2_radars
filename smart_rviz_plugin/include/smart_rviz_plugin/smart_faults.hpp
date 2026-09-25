@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef SMART_RVIZ_PLUGIN__SMART_FAULTS_HPP_
 #define SMART_RVIZ_PLUGIN__SMART_FAULTS_HPP_
 
@@ -64,6 +65,7 @@ private:
 
   /// ROS
   rclcpp::Node::SharedPtr node_;
+  rclcpp::executors::SingleThreadedExecutor executor_;
   rclcpp::Subscription<umrr_ros2_msgs::msg::PortFaultReportsMsg>::SharedPtr subscription_;
 
   std::string selected_topic_;

@@ -3,36 +3,33 @@
 <package format="3">
   <name>smart_rviz_plugin</name>
   <version>4.0.0</version>
-  <description>TargetList Recorder</description>
+  <description>RViz panels for smartmicro radars: recorder, command configurator, firmware download, status, fault reports and UMRR-96 configuration.</description>
   <maintainer email="shahrukh.raja@smartmicro.de">shahrukh</maintainer>
-  <license>Apache 2.0 License</license>
+  <license>Apache-2.0</license>
 
-  <buildtool_depend>ament_cmake_auto</buildtool_depend>
-  
-  <build_depend condition="$ROS_DISTRO == 'foxy' or $ROS_DISTRO == 'humble' or $ROS_DISTRO == 'iron' or $ROS_DISTRO == 'jazzy' or $ROS_DISTRO == 'kilted'">qtbase5-dev</build_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend condition="$ROS_DISTRO == 'humble' or $ROS_DISTRO == 'iron' or $ROS_DISTRO == 'jazzy' or $ROS_DISTRO == 'kilted'">qtbase5-dev</build_depend>
   <build_depend condition="$ROS_DISTRO == 'lyrical' or $ROS_DISTRO == 'rolling'">qt6-base-dev</build_depend>
 
+  <depend>ament_index_cpp</depend>
   <depend>pluginlib</depend>
-  <depend>rclcpp</depend>
   <depend>rcl_interfaces</depend>
-  <depend>umrr_ros2_msgs</depend>
-  <depend>resource_retriever</depend>
+  <depend>rclcpp</depend>
   <depend>rviz_common</depend>
-  <depend>rviz_default_plugins</depend>
-  <depend>rviz_ogre_vendor</depend>
-  <depend>rviz_rendering</depend>
+  <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
-  <depend>visualization_msgs</depend>
-  <depend>cv_bridge</depend>
-  <depend>libopencv-dev</depend>
-  
-  <exec_depend>xacro</exec_depend>
+  <depend>umrr_ros2_msgs</depend>
+
+  <!-- Host application for the panels. -->
   <exec_depend>rviz2</exec_depend>
-  
-  <test_depend>ament_lint_common</test_depend>
-  <test_depend>ament_lint_auto</test_depend>
+
+  <test_depend>ament_cmake_flake8</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_pep257</test_depend>
   <test_depend>ament_cmake_test</test_depend>
-  
+  <test_depend>ament_cmake_xmllint</test_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>

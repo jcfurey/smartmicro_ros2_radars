@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
 #include "smart_rviz_plugin/smart_faults.hpp"
 
 #include <QHeaderView>
 #include <QSizePolicy>
+
+#include "panel_util.hpp"
 
 namespace smart_rviz_plugin
 {
@@ -14,13 +17,17 @@ SmartFaultReports::SmartFaultReports(QWidget * parent)
 
 void SmartFaultReports::initialize()
 {
-  node_ = rclcpp::Node::make_shared("smart_fault_reports_gui_node");
+  node_ = std::make_shared<rclcpp::Node>(
+    panel_util::unique_node_name("smart_fault_reports_gui_node"),
+    rclcpp::NodeOptions().use_global_arguments(false));
+  executor_.add_node(node_);
 
   layout_ = new QVBoxLayout();
   layout_->setContentsMargins(4, 4, 4, 4);
   layout_->setSpacing(4);
 
   topic_dropdown_ = new QComboBox();
+  topic_dropdown_->setObjectName("topic");
   topic_dropdown_->addItem("Select a Fault Report Topic");
 
   header_table_ = new QTableWidget();
@@ -85,7 +92,8 @@ void SmartFaultReports::refresh_topic_list()
 
   std::vector<std::string> fault_topics;
   for (const auto & t : all_topics) {
-    if (t.first.find("port_faultreport_") != std::string::npos) {
+    // Count only topics with a publisher: our own subscription keeps a topic in the graph.
+    if (t.first.find("port_faultreport_") != std::string::npos && node_->count_publishers(t.first) > 0) {
       fault_topics.push_back(t.first);
     }
   }
@@ -107,13 +115,19 @@ void SmartFaultReports::refresh_topic_list()
     topic_dropdown_->addItem(QString::fromStdString(name));
   }
 
+  int idx = -1;
   if (!prev_selection.empty()) {
-    int idx = topic_dropdown_->findText(QString::fromStdString(prev_selection));
+    idx = topic_dropdown_->findText(QString::fromStdString(prev_selection));
     if (idx >= 0) {
       topic_dropdown_->setCurrentIndex(idx);
     }
   }
   topic_dropdown_->blockSignals(false);
+  if (!prev_selection.empty() && idx < 0) {
+    // The selected topic vanished: drop its subscription and clear the tables,
+    // so the UI never shows "Select..." while stale data keeps updating.
+    on_topic_selected(0);
+  }
 }
 
 void SmartFaultReports::on_topic_selected(int /*index*/)
@@ -191,6 +205,7 @@ void SmartFaultReports::fault_report_callback(
   set_cell(13, QString::number(fh.faults_time_line));
 
   const auto & reports = msg->reports;
+  reports_table_->setUpdatesEnabled(false);
   reports_table_->setRowCount(static_cast<int>(reports.size()));
 
   for (int row = 0; row < static_cast<int>(reports.size()); ++row) {
@@ -205,12 +220,13 @@ void SmartFaultReports::fault_report_callback(
     reports_table_->setItem(row, 7, new QTableWidgetItem(QString::number(r.criticality)));
     reports_table_->setItem(row, 8, new QTableWidgetItem(QString::number(r.occurence_count)));
   }
+  reports_table_->setUpdatesEnabled(true);
 }
 
 void SmartFaultReports::check_data()
 {
   if (rclcpp::ok()) {
-    rclcpp::spin_some(node_);
+    executor_.spin_some(std::chrono::milliseconds(2));
   }
 }
 

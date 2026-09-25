@@ -77,18 +77,41 @@ separate RGB **Radar fan image** display included in the saved RViz configuratio
 
 ### Smart Recorder
 - Captures target/object data and exports CSV.
+- The topic list refreshes every second, so topics that appear after RViz starts
+  (for example with `umrr96_live.launch.py`) are offered. Only the selected
+  topic is subscribed.
+- **Recording limit** (default 1,000,000 rows, saved in the RViz config) bounds
+  memory: recording stops at the limit and offers Save/Discard.
 
 ### Smart Command Configurator
 - Sends commands and mode/config related service calls.
+- Sensor IDs and integer values accept decimal or `0x` hexadecimal; values are
+  checked against the selected type before sending, and parse errors are shown
+  in the response area. Command values are sent as float32 unchanged.
+- Requests are asynchronous with a 10 s deadline; a missing reply never blocks RViz.
+- The per-sensor instruction tables come from the Smart Access SDK
+  (`smart_extract.sh` unpacks it into `umrr_ros2_driver/smartmicro`). The build
+  installs them to `share/smart_rviz_plugin/user_interfaces`; rebuild the
+  plugin after extracting the SDK. `SMART_USER_INTERFACES_DIR` overrides the
+  location. A missing table is reported in the panel with the paths searched.
 
 ### Smart Firmware Download
 - Sends firmware download request to selected sensor.
+- The request is asynchronous (6 min deadline); the panel stays responsive and
+  can be closed while a download is pending.
 
 ### Smart Status
-- Displays live target/object header status topics.
+- Displays live target/object header status topics (refreshed every second,
+  subscribed only when selected).
 
 ### Smart Fault Reports
-- Displays live fault report topics per sensor.
+- Displays live fault report topics per sensor. When the selected topic
+  disappears the panel unsubscribes and clears its tables.
+
+### Custom CAN sender
+`custom_can_sender.py` is a stand-alone Tk tool (needs `python3-can` and
+`python3-tk`) that sends one CAN frame, or one per second with **Loop**, on a
+SocketCAN interface. IDs above `0x7FF` are sent as 29-bit extended frames.
 
 ## Troubleshooting
 

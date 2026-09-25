@@ -1,14 +1,70 @@
+// SPDX-License-Identifier: Apache-2.0
 #include "smart_rviz_plugin/smart_services.hpp"
 
+#include <QJsonParseError>
+#include <QProcessEnvironment>
+#if __has_include(<ament_index_cpp/get_package_share_path.hpp>)
+#include <ament_index_cpp/get_package_share_path.hpp>
+#define SMART_SHARE_DIR(pkg) ament_index_cpp::get_package_share_path(pkg).string()
+#else
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#define SMART_SHARE_DIR(pkg) ament_index_cpp::get_package_share_directory(pkg)
+#endif
+#include <array>
 #include <chrono>
-#include <cstdlib>
 #include <memory>
+#include <string>
+
+#include "panel_util.hpp"
 
 namespace smart_rviz_plugin
 {
+namespace
+{
+struct SensorInterface
+{
+  const char * label;
+  const char * directory;
+  const char * param;
+  const char * command;
+  const char * status;
+};
+
+// Index 0 of the combo box is the "Choose Sensor Type" placeholder.
+const std::array<SensorInterface, 6> sensor_interfaces = {{
+  {"UMRR9F MSE", "UserInterfaceUmrr9f_t169_mseV1.0.0",
+    "params/auto_interface_0dim.param", "command/auto_interface.command",
+    "status/auto_interface.status"},
+  {"UMRR9F", "UserInterfaceUmrr9f_t169_automotiveV2.4.1",
+    "params/auto_interface_0dim.param", "command/auto_interface.command",
+    "status/auto_interface.status"},
+  {"UMRR9D", "UserInterfaceUmrr9d_t152_automotiveV1.4.1",
+    "params/auto_interface_0dim.param", "command/auto_interface.command",
+    "status/auto_interface.status"},
+  {"UMRRA4", "UserInterfaceUmrra4_automotiveV1.2.1",
+    "params/auto_interface_0dim.param", "command/auto_interface.command",
+    "status/auto_interface.status"},
+  {"UMRRA4 MSE", "UserInterfaceUmrra4_mseV1.0.0",
+    "params/auto_interface_0dim.param", "command/auto_interface.command",
+    "status/auto_interface.status"},
+  {"UMRRA1", "user_interface_umrra1_t166_b_automotive_v2_0_0",
+    "params/auto_interface_rrm.param", "command/auto_interface_rrm.command",
+    "status/auto_interface_rrm.status"},
+}};
+
+QString html_escape(const QString & text) {return text.toHtmlEscaped();}
+}  // namespace
+
 SmartRadarService::SmartRadarService(QWidget * parent) : rviz_common::Panel(parent)
 {
   initialize();
+}
+
+SmartRadarService::~SmartRadarService()
+{
+  if (spin_timer_) {spin_timer_->stop();}
+  cancel_pending();
+  executor_.remove_node(client_node);
 }
 
 void SmartRadarService::initialize()
@@ -22,73 +78,154 @@ void SmartRadarService::initialize()
   create_widgets();
   setup_layout();
   setup_connections();
+
+  spin_timer_ = new QTimer(this);
+  connect(spin_timer_, &QTimer::timeout, this, &SmartRadarService::tick);
+  spin_timer_->start(50);
 }
 
 void SmartRadarService::setup_ros_clients()
 {
-  client_node = rclcpp::Node::make_shared("smart_service_gui");
+  client_node = std::make_shared<rclcpp::Node>(
+    panel_util::unique_node_name("smart_service_gui"),
+    rclcpp::NodeOptions().use_global_arguments(false));
   mode_client = client_node->create_client<umrr_ros2_msgs::srv::SetMode>("smart_radar/set_radar_mode");
   command_client = client_node->create_client<umrr_ros2_msgs::srv::SendCommand>("smart_radar/send_command");
   status_client = client_node->create_client<umrr_ros2_msgs::srv::GetStatus>("/smart_radar/get_radar_status");
   get_param_client = client_node->create_client<umrr_ros2_msgs::srv::GetMode>("smart_radar/get_radar_mode");
+  executor_.add_node(client_node);
+}
 
-  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Client node created!");
+void SmartRadarService::tick()
+{
+  if (!rclcpp::ok()) {return;}
+  executor_.spin_some(std::chrono::milliseconds(2));
+  if (cancel_request_ && std::chrono::steady_clock::now() > deadline_) {
+    cancel_pending();
+    report_error("Service request timed out; the sensor state is unknown. Check before retrying.");
+  }
+}
+
+void SmartRadarService::cancel_pending()
+{
+  if (cancel_request_) {
+    cancel_request_();
+    cancel_request_ = nullptr;
+  }
+  set_busy(false);
+}
+
+void SmartRadarService::set_busy(bool busy)
+{
+  for (auto * button : {send_param_button, send_command_button, send_status_button}) {
+    if (button) {button->setEnabled(!busy);}
+  }
+}
+
+void SmartRadarService::report_error(const QString & message)
+{
+  RCLCPP_ERROR(client_node->get_logger(), "%s", message.toStdString().c_str());
+  response_text_edit->append("<font color=\"red\">" + html_escape(message) + "</font>");
+}
+
+template<typename ServiceT>
+void SmartRadarService::send_request(
+  const typename rclcpp::Client<ServiceT>::SharedPtr & client,
+  typename ServiceT::Request::SharedPtr request, const QString & service_name)
+{
+  if (cancel_request_) {
+    report_error("A request is still pending; wait for its reply.");
+    return;
+  }
+  if (!client->service_is_ready()) {
+    report_error(service_name + " service not available. Is the radar node running?");
+    return;
+  }
+  // The reply is delivered by executor_ inside tick(), i.e. on the GUI thread.
+  const auto id = client->async_send_request(request,
+    [this](typename rclcpp::Client<ServiceT>::SharedFuture future) {
+      cancel_request_ = nullptr;
+      set_busy(false);
+      try {
+        response_text_edit->append(html_escape(QString::fromStdString(future.get()->res)));
+      } catch (const std::exception & error) {
+        report_error(QString("Service call failed: ") + error.what());
+      }
+    }).request_id;
+  cancel_request_ = [client, id] {client->remove_pending_request(id);};
+  deadline_ = std::chrono::steady_clock::now() +
+    panel_util::request_timeout(this, REQUEST_TIMEOUT);
+  set_busy(true);
 }
 
 void SmartRadarService::create_widgets()
 {
   // Parameter tab widget
   param_name_line_edit = new QLineEdit(this);
+  param_name_line_edit->setObjectName("param_name");
   param_name_line_edit->setPlaceholderText("Enter parameter name");
 
   param_value_line_edit = new QLineEdit(this);
+  param_value_line_edit->setObjectName("param_value");
   param_value_line_edit->setPlaceholderText("Enter value");
 
   param_sensor_id = new QLineEdit(this);
-  param_sensor_id->setPlaceholderText("Enter sensor ID");
+  param_sensor_id->setObjectName("param_sensor_id");
+  param_sensor_id->setPlaceholderText("Sensor ID (decimal or 0x hex)");
 
   param_section_name = new QLineEdit(this);
   param_section_name->setPlaceholderText("Enter param section name");
 
   param_action_combo = new QComboBox(this);
+  param_action_combo->setObjectName("param_action");
   param_action_combo->addItem("Write Parameter");
   param_action_combo->addItem("Read Parameter");
   
   param_value_type = new QComboBox(this);
+  param_value_type->setObjectName("param_value_type");
   param_value_type->addItem("float32, (0)");
   param_value_type->addItem("uint32, (1)");
   param_value_type->addItem("uint16, (2)");
   param_value_type->addItem("uint8, (3)");
 
   send_param_button = new QPushButton("Send Parameter", this);
+  send_param_button->setObjectName("send_param");
   param_table_widget = new QTableWidget(this);
+  param_table_widget->setObjectName("param_table");
   param_table_widget->setSelectionBehavior(QAbstractItemView::SelectRows);
   param_table_widget->setSelectionMode(QAbstractItemView::SingleSelection);
 
   // Command tab widgets
   command_name_line_edit = new QLineEdit(this);
+  command_name_line_edit->setObjectName("command_name");
   command_name_line_edit->setPlaceholderText("Enter command name");
 
   command_value_line_edit = new QLineEdit(this);
-  command_value_line_edit->setPlaceholderText("Enter command value");
+  command_value_line_edit->setObjectName("command_value");
+  command_value_line_edit->setPlaceholderText("Enter command value (number)");
   
   command_sensor_id = new QLineEdit(this);
-  command_sensor_id->setPlaceholderText("Enter sensor ID");
+  command_sensor_id->setObjectName("command_sensor_id");
+  command_sensor_id->setPlaceholderText("Sensor ID (decimal or 0x hex)");
 
   command_section_name = new QLineEdit(this);
-  command_section_name->setPlaceholderText("Enter command sectionn name");
+  command_section_name->setPlaceholderText("Enter command section name");
   
   send_command_button = new QPushButton("Send Command", this);
+  send_command_button->setObjectName("send_command");
   command_table_widget = new QTableWidget(this);
+  command_table_widget->setObjectName("command_table");
   command_table_widget->setSelectionBehavior(QAbstractItemView::SelectRows);
   command_table_widget->setSelectionMode(QAbstractItemView::SingleSelection);
 
   // Status tab widget
   status_name_line_edit = new QLineEdit(this);
+  status_name_line_edit->setObjectName("status_name");
   status_name_line_edit->setPlaceholderText("Enter status name");
   
   status_sensor_id = new QLineEdit(this);
-  status_sensor_id->setPlaceholderText("Enter sensor ID");
+  status_sensor_id->setObjectName("status_sensor_id");
+  status_sensor_id->setPlaceholderText("Sensor ID (decimal or 0x hex)");
 
   status_section_name = new QLineEdit(this);
   status_section_name->setPlaceholderText("Enter status section name");
@@ -100,7 +237,9 @@ void SmartRadarService::create_widgets()
   status_value_type->addItem("int32, (3)");
 
   send_status_button = new QPushButton("Get Status", this);
+  send_status_button->setObjectName("send_status");
   status_table_widget = new QTableWidget(this);
+  status_table_widget->setObjectName("status_table");
   status_table_widget->setSelectionBehavior(QAbstractItemView::SelectRows);
   status_table_widget->setSelectionMode(QAbstractItemView::SingleSelection);
   
@@ -112,9 +251,11 @@ void SmartRadarService::create_widgets()
   
   // Add dropdown menu for file selection
   file_selector_combo_box = new QComboBox(this);
+  file_selector_combo_box->setObjectName("sensor_type");
   populate_file_menu();
   
   response_text_edit = new QTextEdit(this);
+  response_text_edit->setObjectName("response");
   response_text_edit->setReadOnly(true);
   response_text_edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   response_text_edit->setFixedHeight(100);
@@ -207,12 +348,9 @@ void SmartRadarService::populate_file_menu()
   // Add file names to the dropdown menu
   file_selector_combo_box->clear();
   file_selector_combo_box->addItem("Choose Sensor Type");
-  file_selector_combo_box->addItem("UMRR9F MSE");
-  file_selector_combo_box->addItem("UMRR9F");
-  file_selector_combo_box->addItem("UMRR9D");
-  file_selector_combo_box->addItem("UMRRA4");
-  file_selector_combo_box->addItem("UMRRA4 MSE");
-  file_selector_combo_box->addItem("UMRRA1");
+  for (const auto & sensor : sensor_interfaces) {
+    file_selector_combo_box->addItem(sensor.label);
+  }
 }
 
 void SmartRadarService::on_param_selection()
@@ -273,419 +411,223 @@ void SmartRadarService::on_status_selection()
   }
 }
 
+QString SmartRadarService::find_user_interfaces_dir(
+  const QString & relative_file, QStringList * tried) const
+{
+  QStringList roots;
+  const auto env = QProcessEnvironment::systemEnvironment().value("SMART_USER_INTERFACES_DIR");
+  if (!env.isEmpty()) {roots << env;}
+  try {
+    roots << QString::fromStdString(SMART_SHARE_DIR("smart_rviz_plugin")) + "/user_interfaces";
+  } catch (const std::exception &) {
+    // Not installed through ament; fall back to the legacy source-tree layout below.
+  }
+  roots << QDir::currentPath() + "/src/smartmicro_ros2_radars/umrr_ros2_driver/smartmicro/user_interfaces";
+  for (const auto & root : roots) {
+    tried->append(root);
+    if (QFile::exists(root + "/" + relative_file)) {return root;}
+  }
+  return {};
+}
+
 void SmartRadarService::on_file_selected(int index)
 {
-  // Update file paths based on selected file
-  if (index == 0) {
-    // Clear param tab
-    param_table_widget->setRowCount(0);
-    param_name_line_edit->clear();
-    param_value_line_edit->clear();
-    param_sensor_id->clear();
-    param_section_name->clear();
-
-    // Clear command tab
-    command_table_widget->setRowCount(0);
-    command_name_line_edit->clear();
-    command_value_line_edit->clear();
-    command_sensor_id->clear();
-    command_section_name->clear();
-
-    // Clear status tab
-    status_table_widget->setRowCount(0);
-    status_name_line_edit->clear();
-    status_sensor_id->clear();
-    status_section_name->clear();
-
-    return;
-  } 
-  
-  QString base_path = current_directory +
-    "/src/smartmicro_ros2_radars/umrr_ros2_driver/smartmicro/user_interfaces/";
-  
-  switch (index) {
-    case 1:
-      param_json_file_path = base_path +
-        "UserInterfaceUmrr9f_t169_mseV1.0.0/instructions/params/auto_interface_0dim.param";
-      command_json_file_path = base_path +
-        "UserInterfaceUmrr9f_t169_mseV1.0.0/instructions/command/auto_interface.command";
-      status_json_file_path = base_path +
-        "UserInterfaceUmrr9f_t169_mseV1.0.0/instructions/status/auto_interface.status";
-      break;
-    case 2:
-      param_json_file_path = base_path +
-        "UserInterfaceUmrr9f_t169_automotiveV2.4.1/instructions/params/auto_interface_0dim.param";
-      command_json_file_path = base_path +
-        "UserInterfaceUmrr9f_t169_automotiveV2.4.1/instructions/command/auto_interface.command";
-      status_json_file_path = base_path +
-        "UserInterfaceUmrr9f_t169_automotiveV2.4.1/instructions/status/auto_interface.status";
-      break;
-    case 3:
-      param_json_file_path = base_path +
-        "UserInterfaceUmrr9d_t152_automotiveV1.4.1/instructions/params/auto_interface_0dim.param";
-      command_json_file_path = base_path +
-        "UserInterfaceUmrr9d_t152_automotiveV1.4.1/instructions/command/auto_interface.command";
-      status_json_file_path = base_path +
-        "UserInterfaceUmrr9d_t152_automotiveV1.4.1/instructions/status/auto_interface.status";
-      break;
-    case 4:
-      param_json_file_path = base_path +
-        "UserInterfaceUmrra4_automotiveV1.2.1/instructions/params/auto_interface_0dim.param";
-      command_json_file_path = base_path +
-        "UserInterfaceUmrra4_automotiveV1.2.1/instructions/command/auto_interface.command";
-      status_json_file_path = base_path +
-        "UserInterfaceUmrra4_automotiveV1.2.1/instructions/status/auto_interface.status";
-      break;
-    case 5:
-      param_json_file_path = base_path +
-        "UserInterfaceUmrra4_mseV1.0.0/instructions/params/auto_interface_0dim.param";
-      command_json_file_path = base_path +
-        "UserInterfaceUmrra4_mseV1.0.0/instructions/command/auto_interface.command";
-      status_json_file_path = base_path +
-        "UserInterfaceUmrra4_mseV1.0.0/instructions/status/auto_interface.status";
-      break;
-    case 6:
-      param_json_file_path = base_path +
-        "user_interface_umrra1_t166_b_automotive_v2_0_0/instructions/params/auto_interface_rrm.param";
-      command_json_file_path = base_path +
-        "user_interface_umrra1_t166_b_automotive_v2_0_0/instructions/command/auto_interface_rrm.command";
-      status_json_file_path = base_path +
-        "user_interface_umrra1_t166_b_automotive_v2_0_0/instructions/status/auto_interface_rrm.status";
-      break;
+  // Clear all tabs; a failed load must not leave another sensor's table visible.
+  for (auto * table : {param_table_widget, command_table_widget, status_table_widget}) {
+    table->setRowCount(0);
   }
+  if (index <= 0 || index > static_cast<int>(sensor_interfaces.size())) {
+    for (auto * edit : {param_name_line_edit, param_value_line_edit, param_sensor_id,
+        param_section_name, command_name_line_edit, command_value_line_edit, command_sensor_id,
+        command_section_name, status_name_line_edit, status_sensor_id, status_section_name})
+    {
+      edit->clear();
+    }
+    return;
+  }
+
+  const auto & sensor = sensor_interfaces[static_cast<size_t>(index - 1)];
+  const QString directory = QString(sensor.directory) + "/instructions/";
+  QStringList tried;
+  const QString base_path = find_user_interfaces_dir(directory + sensor.param, &tried);
+  if (base_path.isEmpty()) {
+    report_error(QString("Instruction tables for %1 not found. Searched: %2. Run smart_extract.sh "
+      "and rebuild smart_rviz_plugin, or set SMART_USER_INTERFACES_DIR.")
+      .arg(sensor.label, tried.join(", ")));
+    return;
+  }
+  param_json_file_path = base_path + "/" + directory + sensor.param;
+  command_json_file_path = base_path + "/" + directory + sensor.command;
+  status_json_file_path = base_path + "/" + directory + sensor.status;
 
   read_param_json_data();
   read_command_json_data();
   read_status_json_data();
 }
 
+bool SmartRadarService::load_json(const QString & path, const char * array_key, QJsonObject * object)
+{
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    report_error("Cannot open " + path + ": " + file.errorString());
+    return false;
+  }
+  QJsonParseError error;
+  const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+  if (error.error != QJsonParseError::NoError || !document.isObject() ||
+    !document.object().value(array_key).isArray())
+  {
+    report_error("Cannot parse " + path + ": " +
+      (error.error != QJsonParseError::NoError ? error.errorString() :
+      QString("missing \"%1\" array").arg(array_key)));
+    return false;
+  }
+  *object = document.object();
+  return true;
+}
+
+namespace
+{
+void fill_table(
+  QTableWidget * table, const QJsonObject & json, const char * array_key,
+  const QStringList & headers, const QStringList & fields)
+{
+  const QString section = json["name"].toString();
+  const QJsonArray rows = json[array_key].toArray();
+  table->setUpdatesEnabled(false);
+  table->setColumnCount(headers.size());
+  table->setHorizontalHeaderLabels(headers);
+  table->setRowCount(rows.size());
+  for (int i = 0; i < rows.size(); ++i) {
+    const QJsonObject row = rows[i].toObject();
+    table->setItem(i, 0, new QTableWidgetItem(section));
+    for (int column = 0; column < fields.size(); ++column) {
+      table->setItem(i, column + 1, new QTableWidgetItem(row[fields[column]].toString()));
+    }
+  }
+  table->setUpdatesEnabled(true);
+}
+}  // namespace
+
 void SmartRadarService::read_command_json_data()
 {
-  QFile command_json_file(command_json_file_path);
-  if (!command_json_file.open(QIODevice::ReadOnly)) {
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Parse Failed!");
-    return;
-  }
-
-  QByteArray json_data = command_json_file.readAll();
-  QJsonDocument doc(QJsonDocument::fromJson(json_data));
-  QJsonObject json_object = doc.object();
-
-  // Extract gloabl section name
-  QString global_section_name = json_object["name"].toString();
-
-  // Extract the "commands" array
-  QJsonArray commands_array = json_object["commands"].toArray();
-
-  // Set up table headers
-  QStringList command_header_labels = {"Section", "Name", "Argument", "Comment"};
-  command_table_widget->setColumnCount(4);
-  command_table_widget->setHorizontalHeaderLabels(command_header_labels);
-
-  // Populate the table with command data
-  command_table_widget->setRowCount(commands_array.size());
-  for (int i = 0; i < commands_array.size(); ++i) {
-    QJsonObject command_object = commands_array[i].toObject();
-    QString name = command_object["name"].toString();
-    QString argument = command_object["argument"].toString();
-    QString comment = command_object["comment"].toString();
-
-    QTableWidgetItem * section_item = new QTableWidgetItem(global_section_name);
-    QTableWidgetItem * name_item = new QTableWidgetItem(name);
-    QTableWidgetItem * argument_item = new QTableWidgetItem(argument);
-    QTableWidgetItem * comment_item = new QTableWidgetItem(comment);
-
-    command_table_widget->setItem(i, 0, section_item);
-    command_table_widget->setItem(i, 1, name_item);
-    command_table_widget->setItem(i, 2, argument_item);
-    command_table_widget->setItem(i, 3, comment_item);
+  QJsonObject json;
+  if (load_json(command_json_file_path, "commands", &json)) {
+    fill_table(command_table_widget, json, "commands",
+      {"Section", "Name", "Argument", "Comment"}, {"name", "argument", "comment"});
   }
 }
 
 void SmartRadarService::read_param_json_data()
 {
-  QFile param_json_file(param_json_file_path);
-  if (!param_json_file.open(QIODevice::ReadOnly)) {
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Parse Failed!");
-    return;
-  }
-
-  QByteArray json_data = param_json_file.readAll();
-  QJsonDocument doc(QJsonDocument::fromJson(json_data));
-  QJsonObject json_object = doc.object();
-
-  // Extract gloabl section name
-  QString global_section_name = json_object["name"].toString();
-
-  // Extract the "parameters" array
-  QJsonArray params_array = json_object["parameters"].toArray();
-
-  // Set up table headers
-  QStringList param_header_labels = {"Section", "Name", "Comment", "Type"};
-  param_table_widget->setColumnCount(4);
-  param_table_widget->setHorizontalHeaderLabels(param_header_labels);
-
-  // Populate the table with parameter data
-  param_table_widget->setRowCount(params_array.size());
-  for (int i = 0; i < params_array.size(); ++i) {
-    QJsonObject param_object = params_array[i].toObject();
-    QString name = param_object["name"].toString();
-    QString comment = param_object["comment"].toString();
-    QString type = param_object["type"].toString();
-
-    QTableWidgetItem * section_item = new QTableWidgetItem(global_section_name);
-    QTableWidgetItem * name_item = new QTableWidgetItem(name);
-    QTableWidgetItem * comment_item = new QTableWidgetItem(comment);
-    QTableWidgetItem * type_item = new QTableWidgetItem(type);
-
-    param_table_widget->setItem(i, 0, section_item);
-    param_table_widget->setItem(i, 1, name_item);
-    param_table_widget->setItem(i, 2, comment_item);
-    param_table_widget->setItem(i, 3, type_item);
+  QJsonObject json;
+  if (load_json(param_json_file_path, "parameters", &json)) {
+    fill_table(param_table_widget, json, "parameters",
+      {"Section", "Name", "Comment", "Type"}, {"name", "comment", "type"});
   }
 }
 
 void SmartRadarService::read_status_json_data()
 {
-  QFile status_json_file(status_json_file_path);
-  if (!status_json_file.open(QIODevice::ReadOnly)) {
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Parse Failed!");
-    return;
-  }
-
-  QByteArray json_data = status_json_file.readAll();
-  QJsonDocument doc(QJsonDocument::fromJson(json_data));
-  QJsonObject json_object = doc.object();
-
-  // Extract gloabl section name
-  QString global_section_name = json_object["name"].toString();
-
-  // Extract the "status" array
-  QJsonArray status_array = json_object["status"].toArray();
-
-  // Set up table headers
-  QStringList status_header_labels = {"Section", "Name", "Comment", "Type"};
-  status_table_widget->setColumnCount(4);
-  status_table_widget->setHorizontalHeaderLabels(status_header_labels);
-
-  // Populate the table with status data
-  status_table_widget->setRowCount(status_array.size());
-  for (int i = 0; i < status_array.size(); ++i) {
-    QJsonObject status_object = status_array[i].toObject();
-    QString name = status_object["name"].toString();
-    QString comment = status_object["comment"].toString();
-    QString type = status_object["type"].toString();
-
-    QTableWidgetItem * section_item = new QTableWidgetItem(global_section_name);
-    QTableWidgetItem * name_item = new QTableWidgetItem(name);
-    QTableWidgetItem * comment_item = new QTableWidgetItem(comment);
-    QTableWidgetItem * type_item = new QTableWidgetItem(type);
-
-    status_table_widget->setItem(i, 0, section_item);
-    status_table_widget->setItem(i, 1, name_item);
-    status_table_widget->setItem(i, 2, comment_item);
-    status_table_widget->setItem(i, 3, type_item);
+  QJsonObject json;
+  if (load_json(status_json_file_path, "status", &json)) {
+    fill_table(status_table_widget, json, "status",
+      {"Section", "Name", "Comment", "Type"}, {"name", "comment", "type"});
   }
 }
- 
+
 void SmartRadarService::on_send_param()
 {
   // Validate common inputs
-  if (param_name_line_edit->text().isEmpty() || param_sensor_id->text().isEmpty()) {
-    response_text_edit->append("<font color=\"red\">Error: Parameter name and sensor ID fields must be filled!</font>");
+  if (param_name_line_edit->text().trimmed().isEmpty()) {
+    report_error("Parameter name must be filled.");
     return;
   }
+  const auto sensor_id = panel_util::parse_uint(param_sensor_id->text());
+  if (!sensor_id) {
+    report_error("Sensor ID must be an unsigned decimal or 0x-prefixed hexadecimal number.");
+    return;
+  }
+  const int type = param_value_type->currentIndex();  // 0 float32, 1 u32, 2 u16, 3 u8
 
   if (param_action_combo->currentIndex() == 0) {
-    // Writing param 
-    if (param_value_line_edit->text().isEmpty()) {
-      response_text_edit->append("<font color=\"red\">Error: Value must be provided for write!</font>");
-      return;
+    // Writing param: validate against the selected type and send a canonical decimal string.
+    QString value;
+    if (type == 0) {
+      const auto parsed = panel_util::parse_float(param_value_line_edit->text());
+      if (parsed) {value = QString::number(*parsed, 'g', 9);}
+    } else {
+      static constexpr std::array<uint32_t, 4> limits = {0, 0xFFFFFFFFu, 0xFFFFu, 0xFFu};
+      const auto parsed = panel_util::parse_uint(param_value_line_edit->text(),
+        limits[static_cast<size_t>(type)]);
+      if (parsed) {value = QString::number(*parsed);}
     }
-    if (!mode_client->wait_for_service(SERVICE_AVAILABILITY_TIMEOUT)) {
-      response_text_edit->append("<font color=\"red\">SetMode service not available!</font>");
+    if (value.isEmpty()) {
+      report_error("Value \"" + param_value_line_edit->text() + "\" is not a valid " +
+        param_value_type->currentText().section(',', 0, 0) + ".");
       return;
     }
     auto request = std::make_shared<umrr_ros2_msgs::srv::SetMode::Request>();
     request->section_name = param_section_name->text().toStdString();
-    request->params.push_back(param_name_line_edit->text().toStdString());
-    request->sensor_id = std::stoi(param_sensor_id->text().toStdString());
-    request->value_types.push_back(param_value_type->currentIndex());
-    request->values.push_back(param_value_line_edit->text().toStdString());
-    auto result = mode_client->async_send_request(request);
-    auto status = rclcpp::spin_until_future_complete(client_node, result);
-    switch (status) {
-      case rclcpp::FutureReturnCode::SUCCESS:
-        {
-          auto response = result.get();
-          QString response_msg = QString::fromStdString(response->res);
-          response_text_edit->append(response_msg);
-        }
-        break;
-
-      case rclcpp::FutureReturnCode::TIMEOUT:
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service timed out!");
-        response_text_edit->append("<font color=\"red\">Service timed out!</font>");
-        break;
-
-      case rclcpp::FutureReturnCode::INTERRUPTED:
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call was interrupted!");
-        response_text_edit->append("<font color=\"red\">Service call was interrupted!</font>");
-        break;
-
-      default:
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call failed due to unknown reason!");
-        response_text_edit->append("<font color=\"red\">Service call failed due to unknown reason!</font>");
-        break;
-    }
-  }
-  else {
-    // Reading param
-    if (!get_param_client->wait_for_service(SERVICE_AVAILABILITY_TIMEOUT)) {
-      response_text_edit->append("<font color=\"red\">GetMode service not available!</font>");
-      return;
-    }
+    request->params.push_back(param_name_line_edit->text().trimmed().toStdString());
+    request->sensor_id = *sensor_id;
+    request->value_types.push_back(static_cast<uint8_t>(type));
+    request->values.push_back(value.toStdString());
+    send_request<umrr_ros2_msgs::srv::SetMode>(mode_client, request, "SetMode");
+  } else {
     auto request = std::make_shared<umrr_ros2_msgs::srv::GetMode::Request>();
     request->section_name = param_section_name->text().toStdString();
-    request->params.push_back(param_name_line_edit->text().toStdString());
-    request->sensor_id = std::stoi(param_sensor_id->text().toStdString());
-    request->param_types.push_back(param_value_type->currentIndex());
-    auto result = get_param_client->async_send_request(request);
-    auto status = rclcpp::spin_until_future_complete(client_node, result);
-    switch (status) {
-      case rclcpp::FutureReturnCode::SUCCESS:
-        {
-          auto response = result.get();
-          QString response_msg = QString::fromStdString(response->res);
-          response_text_edit->append(response_msg);
-        }
-        break;
-
-      case rclcpp::FutureReturnCode::TIMEOUT:
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service timed out!");
-        response_text_edit->append("<font color=\"red\">Service timed out!</font>");
-        break;
-
-      case rclcpp::FutureReturnCode::INTERRUPTED:
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call was interrupted!");
-        response_text_edit->append("<font color=\"red\">Service call was interrupted!</font>");
-        break;
-
-      default:
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call failed due to unknown reason!");
-        response_text_edit->append("<font color=\"red\">Service call failed due to unknown reason!</font>");
-        break;
-    }
+    request->params.push_back(param_name_line_edit->text().trimmed().toStdString());
+    request->sensor_id = *sensor_id;
+    request->param_types.push_back(static_cast<uint8_t>(type));
+    send_request<umrr_ros2_msgs::srv::GetMode>(get_param_client, request, "GetMode");
   }
 }
 
 void SmartRadarService::on_send_command()
 {
-  // Validate inputs
-  if (command_name_line_edit->text().isEmpty() || command_value_line_edit->text().isEmpty() || command_sensor_id->text().isEmpty()) {
-    response_text_edit->append("<font color=\"red\">Error: All command fields must be filled. Add dummy value of command if not specified!</font>");
+  if (command_name_line_edit->text().trimmed().isEmpty()) {
+    report_error("Command name must be filled.");
     return;
   }
-
-  if (!command_client) {
-    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to create command client");
+  const auto sensor_id = panel_util::parse_uint(command_sensor_id->text());
+  if (!sensor_id) {
+    report_error("Sensor ID must be an unsigned decimal or 0x-prefixed hexadecimal number.");
     return;
   }
-
-  if(!command_client->wait_for_service(SERVICE_AVAILABILITY_TIMEOUT)) {
-    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service not available!");
-    response_text_edit->append("<font color=\"red\">Service not available! Is the radar node running?</font>");
+  // SendCommand.value is float32; fractional values are sent unchanged.
+  const auto value = panel_util::parse_float(command_value_line_edit->text());
+  if (!value) {
+    report_error("Command value must be a finite number (enter 0 if the command takes none).");
     return;
   }
 
   auto request = std::make_shared<umrr_ros2_msgs::srv::SendCommand::Request>();
   request->section_name = command_section_name->text().toStdString();
-  request->command = command_name_line_edit->text().toStdString();
-  request->value = std::stoi(command_value_line_edit->text().toUtf8().constData());
-  request->sensor_id = std::stoi(command_sensor_id->text().toUtf8().constData());
-
-  auto result = command_client->async_send_request(request);
-  auto status = rclcpp::spin_until_future_complete(client_node, result); 
-
-  switch (status) {
-    case rclcpp::FutureReturnCode::SUCCESS:
-      {
-        auto response = result.get();
-        QString response_msg = QString::fromStdString(response->res);
-        response_text_edit->append(response_msg);
-      }
-      break;
-
-    case rclcpp::FutureReturnCode::TIMEOUT:
-      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service timed out!");
-      response_text_edit->append("<font color=\"red\">Service timed out!</font>");
-      break;
-      
-    case rclcpp::FutureReturnCode::INTERRUPTED:
-      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call was interrupted!");
-      response_text_edit->append("<font color=\"red\">Service call was interrupted!</font>");
-      break;
-      
-    default:
-      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call failed due to unknown reason!");
-      response_text_edit->append("<font color=\"red\">Service call failed due to unknown reason!</font>");
-      break;
-  }
+  request->command = command_name_line_edit->text().trimmed().toStdString();
+  request->value = *value;
+  request->sensor_id = *sensor_id;
+  send_request<umrr_ros2_msgs::srv::SendCommand>(command_client, request, "SendCommand");
 }
 
 void SmartRadarService::on_get_status()
 {
-  // Validate inputs
-  if (status_name_line_edit->text().isEmpty() || status_sensor_id->text().isEmpty()) {
-    response_text_edit->append("<font color=\"red\">Error: Status name and sensor ID must be filled!</font>");
+  if (status_name_line_edit->text().trimmed().isEmpty()) {
+    report_error("Status name must be filled.");
     return;
   }
-  
-  if (!status_client) {
-    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to create status_client");
-    return;
-  }
-
-  if(!status_client->wait_for_service(SERVICE_AVAILABILITY_TIMEOUT)) {
-    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service not available!");
-    response_text_edit->append("<font color=\"red\">Service not available! Is the radar node running?</font>");
+  const auto sensor_id = panel_util::parse_uint(status_sensor_id->text());
+  if (!sensor_id) {
+    report_error("Sensor ID must be an unsigned decimal or 0x-prefixed hexadecimal number.");
     return;
   }
 
   auto request = std::make_shared<umrr_ros2_msgs::srv::GetStatus::Request>();
-
   request->section_name = status_section_name->text().toStdString();
-  request->statuses.push_back(status_name_line_edit->text().toStdString());
-  request->sensor_id = std::stoi(status_sensor_id->text().toUtf8().constData());
-  request->status_types.push_back(status_value_type->currentIndex());
-  
-  auto result = status_client->async_send_request(request);
-  auto status = rclcpp::spin_until_future_complete(client_node, result); 
-  
-  switch (status) {
-    case rclcpp::FutureReturnCode::SUCCESS:
-      {
-        auto response = result.get();
-        QString response_msg = QString::fromStdString(response->res);
-        response_text_edit->append(response_msg);
-      }
-      break;
-
-    case rclcpp::FutureReturnCode::TIMEOUT:
-      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service timed out!");
-      response_text_edit->append("<font color=\"red\">Service timed out!</font>");
-      break;
-      
-    case rclcpp::FutureReturnCode::INTERRUPTED:
-      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call was interrupted!");
-      response_text_edit->append("<font color=\"red\">Service call was interrupted!</font>");
-      break;
-      
-    default:
-      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call failed due to unknown reason!");
-      response_text_edit->append("<font color=\"red\">Service call failed due to unknown reason!</font>");
-      break;
-  }
+  request->statuses.push_back(status_name_line_edit->text().trimmed().toStdString());
+  request->sensor_id = *sensor_id;
+  request->status_types.push_back(static_cast<uint8_t>(status_value_type->currentIndex()));
+  send_request<umrr_ros2_msgs::srv::GetStatus>(status_client, request, "GetStatus");
 }
 
 }  // namespace smart_rviz_plugin

@@ -1,68 +1,44 @@
+// SPDX-License-Identifier: Apache-2.0
 #include "smart_rviz_plugin/smart_status.hpp"
 
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
+#include <QSignalBlocker>
+
+#include "panel_util.hpp"
 
 namespace smart_rviz_plugin
 {
 SmartRadarStatus::SmartRadarStatus(QWidget * parent) : rviz_common::Panel(parent) { initialize(); }
 
+namespace
+{
+const char * const kSelect = "Select a Topic";
+const std::string kPortTarget = "umrr_ros2_msgs/msg/PortTargetHeader";
+const std::string kCanTarget = "umrr_ros2_msgs/msg/CanTargetHeader";
+const std::string kPortObject = "umrr_ros2_msgs/msg/PortObjectHeader";
+const std::string kCanObject = "umrr_ros2_msgs/msg/CanObjectHeader";
+}  // namespace
+
 void SmartRadarStatus::initialize()
 {
-  node_ = rclcpp::Node::make_shared("smart_radar_status_gui_node");
+  node_ = std::make_shared<rclcpp::Node>(
+    panel_util::unique_node_name("smart_radar_status_gui_node"),
+    rclcpp::NodeOptions().use_global_arguments(false));
+  executor_.add_node(node_);
 
-  // Status setup
   gui_layout_ = new QVBoxLayout();
   topic_dropdown_ = new QComboBox();
-  topic_dropdown_->addItem("Select a Topic");
-
-  // Retrieve available topics
-  auto topic_names_and_types = node_->get_topic_names_and_types();
-
-  // Create subscribers for selected topics
-  for (const auto & topic : topic_names_and_types) {
-    if (topic.first.find("port_targetheader") != std::string::npos) {
-      port_header_target_subscribers_[topic.first] =
-        node_->create_subscription<umrr_ros2_msgs::msg::PortTargetHeader>(
-          topic.first, 10,
-          [this, topic](const umrr_ros2_msgs::msg::PortTargetHeader::SharedPtr msg) {
-            port_targetheader_callback(msg, topic.first);
-          });
-
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    } else if (topic.first.find("can_targetheader") != std::string::npos) {
-      can_header_target_subscribers_[topic.first] =
-        node_->create_subscription<umrr_ros2_msgs::msg::CanTargetHeader>(
-          topic.first, 10,
-          [this, topic](const umrr_ros2_msgs::msg::CanTargetHeader::SharedPtr msg) {
-            can_targetheader_callback(msg, topic.first);
-          });
-
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    } else if (topic.first.find("port_objectheader") != std::string::npos) {
-      port_header_object_subscribers_[topic.first] =
-        node_->create_subscription<umrr_ros2_msgs::msg::PortObjectHeader>(
-          topic.first, 10,
-          [this, topic](const umrr_ros2_msgs::msg::PortObjectHeader::SharedPtr msg) {
-            port_objectheader_callback(msg, topic.first);
-          });
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    } else if (topic.first.find("can_objectheader") != std::string::npos) {
-      can_header_object_subscribers_[topic.first] =
-        node_->create_subscription<umrr_ros2_msgs::msg::CanObjectHeader>(
-          topic.first, 10,
-          [this, topic](const umrr_ros2_msgs::msg::CanObjectHeader::SharedPtr msg) {
-            can_objectheader_callback(msg, topic.first);
-          });
-      topic_dropdown_->addItem(QString::fromStdString(topic.first));
-    }
-  }
+  topic_dropdown_->setObjectName("topic");
+  topic_dropdown_->addItem(kSelect);
 
   connect(topic_dropdown_, SIGNAL(currentIndexChanged(int)), this, SLOT(update_table()));
 
   table_data_ = new QTableWidget();
+  table_data_->setObjectName("header_table");
   table_data_->setRowCount(17);
   table_data_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   table_data_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -77,9 +53,48 @@ void SmartRadarStatus::initialize()
   connect(timer_, SIGNAL(timeout()), this, SLOT(check_data()));
   timer_->start(50);
 
-  setLayout(gui_layout_);
+  // The graph is usually still empty when RViz starts with the driver: refresh periodically.
+  topic_refresh_timer_ = new QTimer(this);
+  connect(topic_refresh_timer_, SIGNAL(timeout()), this, SLOT(refresh_topic_list()));
+  topic_refresh_timer_->start(1000);
+  refresh_topic_list();
 
-  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Status Plugin Created!");
+  setLayout(gui_layout_);
+}
+
+void SmartRadarStatus::refresh_topic_list()
+{
+  if (!rclcpp::ok()) {return;}
+  std::map<std::string, std::string> topics;
+  for (const auto & [name, types] : node_->get_topic_names_and_types()) {
+    // Count only topics with a publisher: our own subscription keeps a topic in the graph.
+    if (node_->count_publishers(name) == 0) {continue;}
+    for (const auto & type : types) {
+      if (type == kPortTarget || type == kCanTarget || type == kPortObject || type == kCanObject) {
+        topics[name] = type;
+      }
+    }
+  }
+  if (topics == topic_types_) {return;}
+  topic_types_ = topics;
+
+  const std::string previous = selected_topic_;
+  int index = 0;
+  {
+    const QSignalBlocker blocker(topic_dropdown_);
+    topic_dropdown_->clear();
+    topic_dropdown_->addItem(kSelect);
+    for (const auto & entry : topic_types_) {
+      topic_dropdown_->addItem(QString::fromStdString(entry.first));
+    }
+    if (!previous.empty()) {
+      index = std::max(0, topic_dropdown_->findText(QString::fromStdString(previous)));
+      topic_dropdown_->setCurrentIndex(index);
+    }
+  }
+  if (!previous.empty() && index == 0) {
+    update_table();  // Selected topic vanished: unsubscribe and clear.
+  }
 }
 
 void SmartRadarStatus::port_targetheader_callback(
@@ -197,23 +212,57 @@ void SmartRadarStatus::can_objectheader_callback(
 void SmartRadarStatus::update_table()
 {
   table_data_->setColumnCount(0);
-  selected_topic_ = topic_dropdown_->currentText().toStdString();
-  if (selected_topic_.find("port_targetheader") != std::string::npos) {
+  const auto choice = topic_dropdown_->currentText().toStdString();
+  const auto found = topic_types_.find(choice);
+  if (found == topic_types_.end()) {
+    selected_topic_.clear();
+    selected_type_.clear();
+    subscription_.reset();
+    return;
+  }
+  if (choice != selected_topic_ || !subscription_) {
+    selected_topic_ = choice;
+    selected_type_ = found->second;
+    subscription_.reset();
+    const auto topic = selected_topic_;
+    if (selected_type_ == kPortTarget) {
+      subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::PortTargetHeader>(
+        topic, 10, [this, topic](const umrr_ros2_msgs::msg::PortTargetHeader::SharedPtr msg) {
+          port_targetheader_callback(msg, topic);
+        });
+    } else if (selected_type_ == kCanTarget) {
+      subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::CanTargetHeader>(
+        topic, 10, [this, topic](const umrr_ros2_msgs::msg::CanTargetHeader::SharedPtr msg) {
+          can_targetheader_callback(msg, topic);
+        });
+    } else if (selected_type_ == kPortObject) {
+      subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::PortObjectHeader>(
+        topic, 10, [this, topic](const umrr_ros2_msgs::msg::PortObjectHeader::SharedPtr msg) {
+          port_objectheader_callback(msg, topic);
+        });
+    } else {
+      subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::CanObjectHeader>(
+        topic, 10, [this, topic](const umrr_ros2_msgs::msg::CanObjectHeader::SharedPtr msg) {
+          can_objectheader_callback(msg, topic);
+        });
+    }
+  }
+  if (selected_type_ == kPortTarget) {
     table_data_->setVerticalHeaderLabels(
       {"CycleDuration [s]", "NumOfTargets", "AcquisitionTxAntIdx", "AcquisitionSweepIdx",
        "AcquisitionCfIdx", "AcqTimeStamp [s]", "AcqTimeStampfrac [NTP]", "PRF", "UmambiguousSpeed",
        "PortIdentifier", "PortVersionMajor", "PortVersionMinor", "PortSize", "BodyEndianness",
        "PortIndex", "HeaderVersionMajor", "HeaderVersionMinor"});
-  } else if (selected_topic_.find("can_targetheader") != std::string::npos) {
+  } else if (selected_type_ == kCanTarget) {
     table_data_->setVerticalHeaderLabels(
       {"CycleDuration [s]", "NumOfTargets", "CycleCount", "AcquisitionSetup", "AcqTimeStamp [s]",
        "AcqTimeStampfrac [NTP]", "", "", "", "", "", "", "", "", "", "", ""});
-  } else if (selected_topic_.find("can_objectheader") != std::string::npos) {
+  } else if (selected_type_ == kCanObject) {
     table_data_->setColumnCount(0);
     table_data_->setVerticalHeaderLabels(
       {"CycleDuration [s]", "NumOfObjects", "CycleCount", "Speed [km/h]", "SpeedQuality",
        "YawRate [rad/s]", "YawRateQuality", "DynamicSource", "", "", "", "", "", "", "", "", ""});
-  } else if (selected_topic_.find("port_objectheader") != std::string::npos) {
+  } else if (selected_type_ == kPortObject) {
     table_data_->setColumnCount(0);
     table_data_->setVerticalHeaderLabels(
       {"CycleDuration [s]", "NumOfObjects", "AcqTimeStamp [s]", "AcqTimeStampfrac [NTP]",
@@ -226,7 +275,7 @@ void SmartRadarStatus::check_data()
 {
   if (rclcpp::ok())  // Check if ROS2 is still running
   {
-    rclcpp::spin_some(node_);
+    executor_.spin_some(std::chrono::milliseconds(2));
   }
 }
 
