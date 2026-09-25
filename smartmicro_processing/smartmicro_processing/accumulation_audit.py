@@ -13,7 +13,7 @@ import numpy as np
 from .accumulation import AccumulationConfig, TemporalEvidence
 from .audit import summary
 from .cloud import GateConfig, measurements, select_measurements
-from .doppler import FitConfig, fit_velocity
+from .doppler import fit_velocity, FitConfig
 
 
 def audit(bag, topic, windows, voxel_size):
@@ -24,12 +24,13 @@ def audit(bag, topic, windows, voxel_size):
     reader = rosbag2_py.SequentialReader()
     reader.open(rosbag2_py.StorageOptions(uri=str(bag), storage_id=''),
                 rosbag2_py.ConverterOptions('', ''))
-    if {t.name: t.type for t in reader.get_all_topics_and_types()}.get(topic) != 'sensor_msgs/msg/PointCloud2':
+    types = {t.name: t.type for t in reader.get_all_topics_and_types()}
+    if types.get(topic) != 'sensor_msgs/msg/PointCloud2':
         raise ValueError(f'No PointCloud2 topic {topic}')
     reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
     evidence = [TemporalEvidence(AccumulationConfig(window_seconds=w, voxel_size=voxel_size))
                 for w in windows]
-    distributions = [dict(accumulated=[], confirmed=[], gain=[]) for _ in windows]
+    distributions = [{'accumulated': [], 'confirmed': [], 'gain': []} for _ in windows]
     fit_config, gate_config = FitConfig(), GateConfig()
     counts, frames = Counter(), Counter()
     instantaneous, points = [], []
@@ -72,27 +73,32 @@ def audit(bag, topic, windows, voxel_size):
     trials = []
     for history, dist in zip(evidence, distributions):
         expired = history.snapshot(last + round(history.config.window_seconds * 1e9))
-        trials.append(dict(config=asdict(history.config),
-                           accumulated_voxels=describe(dist['accumulated']),
-                           confirmed_voxels=describe(dist['confirmed']),
-                           accumulated_to_instantaneous_voxel_ratio=describe(dist['gain']),
-                           capacity_drops=history.capacity_drops,
-                           empty_after_last_scan_plus_window=not expired))
+        trials.append({'config': asdict(history.config),
+                       'accumulated_voxels': describe(dist['accumulated']),
+                       'confirmed_voxels': describe(dist['confirmed']),
+                       'accumulated_to_instantaneous_voxel_ratio': describe(dist['gain']),
+                       'capacity_drops': history.capacity_drops,
+                       'empty_after_last_scan_plus_window': not expired})
     sources = []
     for path in sorted(bag.rglob('*')) if bag.is_dir() else [bag]:
         if path.is_file() and path.suffix in ('.mcap', '.db3', '.yaml'):
             with path.open('rb') as stream:
-                sources.append(dict(file=str(path), sha256=hashlib.file_digest(stream, 'sha256').hexdigest()))
-    return dict(generated_at=datetime.now(timezone.utc).isoformat(),
-                mode='stationary_preview', sensor_motion_compensated=False,
-                stationary_assumption_verified_from_recording=False,
-                independent_reference_available=False, sources=sources, input_topic=topic,
-                frames=dict(frames), counts=dict(counts), duration_seconds=(last-first)*1e-9,
-                fit_config=asdict(fit_config), gate_config=asdict(gate_config),
-                instantaneous_inlier_points=describe(points), instantaneous_voxels=describe(instantaneous),
-                windows=trials, interpretation='Sensor-frame comparison under a stationary-sensor '
-                'assumption. Counts include noisy cell-boundary crossings and repeated evidence; '
-                'they do not establish independent surface coverage, physical resolution or mapping accuracy.')
+                sources.append({'file': str(path), 'sha256': hashlib.file_digest(
+                    stream, 'sha256').hexdigest()})
+    return {'generated_at': datetime.now(timezone.utc).isoformat(),
+            'mode': 'stationary_preview', 'sensor_motion_compensated': False,
+            'stationary_assumption_verified_from_recording': False,
+            'independent_reference_available': False, 'sources': sources, 'input_topic': topic,
+            'frames': dict(frames), 'counts': dict(counts),
+            'duration_seconds': (last - first) * 1e-9,
+            'fit_config': asdict(fit_config), 'gate_config': asdict(gate_config),
+            'instantaneous_inlier_points': describe(points),
+            'instantaneous_voxels': describe(instantaneous),
+            'windows': trials,
+            'interpretation': 'Sensor-frame comparison under a stationary-sensor assumption. '
+                              'Counts include noisy cell-boundary crossings and repeated '
+                              'evidence; they do not establish independent surface coverage, '
+                              'physical resolution or mapping accuracy.'}
 
 
 def main():
@@ -111,8 +117,8 @@ def main():
     with args.output.open('x') as stream:
         json.dump(result, stream, indent=2, allow_nan=False)
         stream.write('\n')
-    print(json.dumps(dict(scans=result['frames'], instantaneous=result['instantaneous_voxels'],
-                          windows=[dict(seconds=w['config']['window_seconds'],
-                                        mean_voxels=w['accumulated_voxels']['mean'],
-                                        mean_confirmed=w['confirmed_voxels']['mean'])
-                                   for w in result['windows']])))
+    print(json.dumps({'scans': result['frames'], 'instantaneous': result['instantaneous_voxels'],
+                      'windows': [{'seconds': w['config']['window_seconds'],
+                                   'mean_voxels': w['accumulated_voxels']['mean'],
+                                   'mean_confirmed': w['confirmed_voxels']['mean']}
+                                  for w in result['windows']]}))

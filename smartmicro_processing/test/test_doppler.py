@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from smartmicro_processing.doppler import FitConfig, fit_velocity
+from smartmicro_processing.doppler import fit_velocity, FitConfig
 
 
 def scene():
@@ -67,7 +67,8 @@ def test_no_majority_consensus():
     assert result.reason == 'insufficient_consensus'
 
 
-@pytest.mark.parametrize('failure', ['sparse', 'nan', 'zero_range', 'shape', 'speed', 'covariance'])
+@pytest.mark.parametrize('failure', ['sparse', 'nan', 'zero_range', 'shape', 'speed',
+                                     'covariance'])
 def test_invalid_measurements_and_implausible_fit(failure):
     xyz, speed, _ = scene()
     config = FitConfig()
@@ -86,9 +87,28 @@ def test_invalid_measurements_and_implausible_fit(failure):
     assert not fit_velocity(xyz, speed, config).valid
 
 
-@pytest.mark.parametrize('options', [dict(doppler_sign=0), dict(min_inlier_fraction=.5),
-                                    dict(noise_floor=float('nan')), dict(min_inliers=3),
-                                    dict(ransac_trials=0), dict(max_condition=1)])
+@pytest.mark.parametrize('options', [{'doppler_sign': 0}, {'min_inlier_fraction': .5},
+                                     {'noise_floor': float('nan')}, {'min_inliers': 3},
+                                     {'ransac_trials': 0}, {'max_condition': 1}])
 def test_invalid_config(options):
     with pytest.raises(ValueError):
         FitConfig(**options)
+
+
+def test_covariance_uses_weighted_residual_variance_at_returned_velocity():
+    xyz, speed, _ = scene()
+    # Residuals beyond the 0.1 m/s Huber knee get weights < 1 but stay inliers.
+    speed += np.random.default_rng(7).uniform(-.12, .12, len(speed))
+    config = FitConfig()
+    result = fit_velocity(xyz, speed, config)
+    assert result.valid and result.inliers.all()
+    residual = speed + xyz @ result.velocity
+    weights = np.clip(config.residual_threshold * .5 / np.abs(residual), .05, 1)
+    assert weights.min() < 1  # The weighted and unweighted variances differ here.
+    sigma2 = np.sum(weights * residual ** 2) / (len(residual) - 3)
+    assert sigma2 > config.noise_floor ** 2
+    information = xyz.T @ (weights[:, None] * xyz)
+    expected = sigma2 * np.linalg.inv(information) + np.eye(3) * config.velocity_std_floor ** 2
+    np.testing.assert_allclose(result.covariance, expected, rtol=1e-9, atol=1e-15)
+    unweighted = np.sum(residual ** 2) / (len(residual) - 3)
+    assert sigma2 < unweighted

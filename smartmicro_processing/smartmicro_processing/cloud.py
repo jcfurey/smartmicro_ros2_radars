@@ -48,8 +48,8 @@ def measurements(cloud):
                 for offset, dtype in zip(offsets, formats)]
     if any(a & b for i, a in enumerate(occupied) for b in occupied[i + 1:]):
         raise ValueError('Required measurement fields overlap')
-    dtype = np.dtype(dict(names=REQUIRED, formats=formats, offsets=offsets,
-                          itemsize=cloud.point_step))
+    dtype = np.dtype({'names': REQUIRED, 'formats': formats, 'offsets': offsets,
+                      'itemsize': cloud.point_step})
     if cloud.width == 0:
         return np.empty((0, len(REQUIRED)), dtype=float)
     points = np.ndarray((cloud.height, cloud.width), dtype=dtype, buffer=cloud.data,
@@ -63,31 +63,42 @@ def select_measurements(values, config=GateConfig()):
     in_range = np.isfinite(ranges) & (ranges >= config.min_range) & (ranges <= config.max_range)
     enough_snr = values[:, 4] >= config.min_snr_db
     mask = finite & in_range & enough_snr
-    stats = dict(input=len(values), accepted=int(mask.sum()),
-                 rejected_nonfinite=int((~finite).sum()),
-                 rejected_range=int((finite & ~in_range).sum()),
-                 rejected_snr=int((finite & in_range & ~enough_snr).sum()))
+    stats = {'input': len(values), 'accepted': int(mask.sum()),
+             'rejected_nonfinite': int((~finite).sum()),
+             'rejected_range': int((finite & ~in_range).sum()),
+             'rejected_snr': int((finite & in_range & ~enough_snr).sum())}
     return np.flatnonzero(mask), stats
 
 
 def subset_cloud(cloud, indices):
-    """Indices refer to row-major input points; padding/unknown fields survive."""
+    """
+    Gather whole point records; indices refer to row-major input points.
+
+    Padding bytes inside a record and unknown fields survive unchanged; row
+    padding between input rows is dropped because the output is one packed row.
+    """
     indices = np.asarray(indices, dtype=np.int64)
     if indices.ndim != 1 or np.any(indices < 0) or np.any(indices >= cloud.width * cloud.height):
         raise ValueError('Invalid point indices')
-    data = bytes(cloud.data)
-    selected = bytearray()
-    for index in indices:
-        start = int(index // cloud.width * cloud.row_step + index % cloud.width * cloud.point_step)
-        selected.extend(data[start:start + cloud.point_step])
+    if len(indices):
+        try:
+            source = np.frombuffer(cloud.data, dtype=np.uint8)
+        except TypeError:  # A plain list of byte values.
+            source = np.frombuffer(bytes(cloud.data), dtype=np.uint8)
+        starts = indices // cloud.width * cloud.row_step + indices % cloud.width * cloud.point_step
+        if int(starts.max()) + cloud.point_step > len(source):
+            raise ValueError('Point data shorter than its layout')
+        data = source[starts[:, None] + np.arange(cloud.point_step)].tobytes()
+    else:
+        data = b''
     return PointCloud2(header=deepcopy(cloud.header), height=1, width=len(indices),
                        fields=deepcopy(cloud.fields), is_bigendian=cloud.is_bigendian,
                        point_step=cloud.point_step, row_step=len(indices) * cloud.point_step,
-                       data=bytes(selected), is_dense=False)
+                       data=data, is_dense=False)
 
 
 def empty_cloud(header):
     return PointCloud2(header=deepcopy(header), height=1, width=0,
-                       fields=[PointField(name=name, offset=4*i, datatype=PointField.FLOAT32, count=1)
-                               for i, name in enumerate(REQUIRED)],
+                       fields=[PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32,
+                                          count=1) for i, name in enumerate(REQUIRED)],
                        point_step=20, row_step=0, data=b'', is_dense=False)

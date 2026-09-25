@@ -25,10 +25,16 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 ros2 launch smartmicro_processing umrr96_processing.launch.py
 ```
 
-The default input is `/smart_radar/port_targets_0` with frame `umrr96`. Launch
-arguments `input_topic`, `expected_frame_id`, `params_file` and `use_sim_time`
-support other sources and bag replay. Configuration is validated and read-only
-after startup. Copy [the YAML](config/umrr96_processing.yaml) to compare settings
+The default input is the relative name `smart_radar/port_targets_0`
+(`/smart_radar/port_targets_0` without a namespace) with frame `umrr96`. Launch
+arguments `namespace`, `input_topic`, `expected_frame_id`, `params_file` and
+`use_sim_time` support other sources, several radars and bag replay; the launch
+file remaps the relative input name to `input_topic`, and the `input_topic`
+parameter still works in existing parameter files. The YAML is keyed
+`/**/umrr96_processing`, so it applies in any namespace. Configuration is
+validated and read-only after startup; every parameter carries a description
+and range (`ros2 param describe`), and floating-point parameters accept integer
+values such as `max_range: 120`. Copy [the YAML](config/umrr96_processing.yaml) to compare settings
 in separate runs. Run one publisher for these output names at a time.
 
 | Output under `/umrr96_processing/` | Meaning |
@@ -67,8 +73,9 @@ velocity, and no integration to a position or orientation estimate.
 The 0.20 m/s residual threshold, 0.05 m/s Doppler noise floor and 0.10 m/s
 velocity floor are experimental settings, not manufacturer accuracy claims.
 Linear covariance uses the weighted bearing geometry and the larger of the
-residual variance and noise floor, plus the velocity-floor variance on all
-three axes. It has **not** been calibrated for angular errors, timing, multipath,
+weighted residual variance, `Σ wᵢrᵢ² / (n − 3)` with the Huber weights evaluated
+at the returned velocity, and the noise floor, plus the velocity-floor variance
+on all three axes. It has **not** been calibrated for angular errors, timing, multipath,
 correlated detections or model-selection bias. Angular velocity is unobserved:
 its values are zero placeholders with variance `1e6`. A dominant moving object
 or coherent multipath can satisfy the model and produce a wrong accepted fit.
@@ -77,7 +84,12 @@ Small residuals and apparent consensus cannot establish truth.
 Freshness checks reject unexpected frames, malformed layouts, repeated/backward
 stamps, stamps older than 0.5 s and stamps over 0.05 s in the future. A wall-clock
 watchdog clears the four clouds and reports stale input after 0.5 s without data,
-including when simulation time pauses. Invalid estimates publish **no twist**;
+including when simulation time pauses. Clouds are cleared once, on the transition
+from published data, with the last accepted input stamp rather than a newer
+`now()`, so a downstream monotonic-stamp check still accepts the next scan.
+Rejections are logged as throttled warnings. `/diagnostics` is published
+immediately on a state change and otherwise at most once per
+`diagnostics_period` (1 s). Invalid estimates publish **no twist**;
 downstream consumers must enforce their own timestamp timeout and must not reuse
 the last twist indefinitely. A backward ROS clock jump clears the timestamp
 epoch so bag replay can recover. No zero-velocity replacement or pose/TF is

@@ -40,16 +40,17 @@ STATUSES = dict.fromkeys((
     'product_serial', 'product_gen', 'product_mod_high', 'product_mod_low', 'product_rev',
     'systime_low_dword', 'systime_high_dword'), 0)
 STATUSES.update(dict.fromkeys((
-    'sw_generation', 'sw_version_major', 'sw_version_minor', 'sw_version_patch', 'customer_id'), 1))
+    'sw_generation', 'sw_version_major', 'sw_version_minor', 'sw_version_patch',
+    'customer_id'), 1))
 PRF_NAMES = ('prf_selector_manual', 'prf_manual_value_idx')
 
 
 def distribution(values):
     finite = [float(v) for v in values if math.isfinite(v)]
-    return dict(count=len(values), finite=len(finite),
-                min=min(finite) if finite else None, max=max(finite) if finite else None,
-                mean=float(np.mean(finite)) if finite else None,
-                median=float(np.median(finite)) if finite else None)
+    return {'count': len(values), 'finite': len(finite),
+            'min': min(finite) if finite else None, 'max': max(finite) if finite else None,
+            'mean': float(np.mean(finite)) if finite else None,
+            'median': float(np.median(finite)) if finite else None}
 
 
 class Measurements:
@@ -102,25 +103,27 @@ class Measurements:
 
     def result(self, seconds):
         intervals = np.diff(self.timestamps) / 1e6
-        return dict(duration_seconds=seconds, frames=len(self.counts),
-                    observed_hz=(len(self.arrivals) - 1) / (self.arrivals[-1] - self.arrivals[0])
-                    if len(self.arrivals) > 1 else 0,
-                    detections_per_frame=distribution(self.counts),
-                    detections_under_5m_per_frame=distribution(self.near),
-                    range_m=distribution(self.ranges), snr_db=distribution(self.snr),
-                    radial_speed_mps=distribution(self.speed),
-                    device_interval_seconds=distribution(intervals),
-                    device_timestamp_nonincreasing=sum(int(v <= 0) for v in intervals),
-                    sensor_cycle_seconds=distribution(self.cycles),
-                    acquisition_setup_counts=dict(self.acquisition),
-                    quality={n: distribution(v) for n, v in self.quality.items()},
-                    flags_counts=dict(self.flags), fields=self.layout,
-                    raw_quality_frames=self.raw_quality_frames,
-                    raw_pfa=distribution(self.raw_pfa), raw_flags_counts=dict(self.raw_flags),
-                    raw_quality_semantics='unverified')
+        return {'duration_seconds': seconds, 'frames': len(self.counts),
+                'observed_hz': (len(self.arrivals) - 1) / (self.arrivals[-1] - self.arrivals[0])
+                if len(self.arrivals) > 1 else 0,
+                'detections_per_frame': distribution(self.counts),
+                'detections_under_5m_per_frame': distribution(self.near),
+                'range_m': distribution(self.ranges), 'snr_db': distribution(self.snr),
+                'radial_speed_mps': distribution(self.speed),
+                'device_interval_seconds': distribution(intervals),
+                'device_timestamp_nonincreasing': sum(int(v <= 0) for v in intervals),
+                'sensor_cycle_seconds': distribution(self.cycles),
+                'acquisition_setup_counts': dict(self.acquisition),
+                'quality': {n: distribution(v) for n, v in self.quality.items()},
+                'flags_counts': dict(self.flags), 'fields': self.layout,
+                'raw_quality_frames': self.raw_quality_frames,
+                'raw_pfa': distribution(self.raw_pfa), 'raw_flags_counts': dict(self.raw_flags),
+                'raw_quality_semantics': 'unverified'}
 
 
 class Control:
+    """Read/write radar parameters through the driver's mode services."""
+
     def __init__(self, node, sensor, prefix):
         self.node, self.sensor = node, sensor
         self.getter = node.create_client(GetMode, prefix + '/get_radar_mode')
@@ -153,14 +156,14 @@ class Control:
         values = {}
         for offset in range(0, len(names), 10):
             batch = names[offset:offset + 10]
-            common = dict(sensor_id=self.sensor,
-                          section_name='auto_interface' if status else 'auto_interface_0dim')
+            common = {'sensor_id': self.sensor,
+                      'section_name': 'auto_interface' if status else 'auto_interface_0dim'}
             if status:
                 request = GetStatus.Request(**common, statuses=batch,
                                             status_types=[definitions[n] for n in batch])
             else:
                 request = GetMode.Request(**common, params=batch,
-                                         param_types=[definitions[n] for n in batch])
+                                          param_types=[definitions[n] for n in batch])
             values.update(self.call(self.status if status else self.getter, request, batch))
         return values
 
@@ -233,16 +236,19 @@ def main():
     parser.add_argument('--topic-prefix', default='/smart_radar')
     parser.add_argument('--seconds', type=float, default=10)
     parser.add_argument('--scene', choices=('stationary', 'moving', 'unknown'), default='unknown')
-    parser.add_argument('--prf-trials', action='store_true', help='Change volatile PRF settings and restore them')
-    parser.add_argument('--output', type=Path, required=True, help='New JSON report; will not overwrite an existing file')
+    parser.add_argument('--prf-trials', action='store_true',
+                        help='Change volatile PRF settings and restore them')
+    parser.add_argument('--output', type=Path, required=True,
+                        help='New JSON report; will not overwrite an existing file')
     args = parser.parse_args()
     if not math.isfinite(args.seconds) or not 1 <= args.seconds <= 120:
         parser.error('--seconds must be within 1..120')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('x') as stream:
         stream.write('{}\n')
-    report = dict(started_at=datetime.now(timezone.utc).isoformat(), sensor_id=args.sensor_id,
-                  scene=args.scene, prf_trials=args.prf_trials, windows=[], restoration='not_needed')
+    report = {'started_at': datetime.now(timezone.utc).isoformat(), 'sensor_id': args.sensor_id,
+              'scene': args.scene, 'prf_trials': args.prf_trials, 'windows': [],
+              'restoration': 'not_needed'}
 
     def save():
         temporary = args.output.with_suffix(args.output.suffix + '.tmp')
@@ -254,10 +260,13 @@ def main():
     node = rclpy.create_node('umrr96_measure')
     measurements = Measurements()
     prefix = args.topic_prefix.rstrip('/')
-    node.create_subscription(PointCloud2, prefix + '/port_targets_0', measurements.cloud, qos_profile_sensor_data)
-    node.create_subscription(PortTargetHeader, prefix + '/port_targetheader_0', measurements.header, qos_profile_sensor_data)
-    node.create_subscription(RadarTiming, prefix + '/timing_0', measurements.timing, qos_profile_sensor_data)
-    node.create_subscription(Umrr96RawQuality, prefix + '/umrr96_raw_quality_0', measurements.raw_quality, qos_profile_sensor_data)
+    for message_type, suffix, callback in (
+            (PointCloud2, '/port_targets_0', measurements.cloud),
+            (PortTargetHeader, '/port_targetheader_0', measurements.header),
+            (RadarTiming, '/timing_0', measurements.timing),
+            (Umrr96RawQuality, '/umrr96_raw_quality_0', measurements.raw_quality)):
+        node.create_subscription(message_type, prefix + suffix, callback,
+                                 qos_profile_sensor_data)
     control = Control(node, args.sensor_id, args.control_prefix.rstrip('/'))
 
     def interrupt(signum, frame):
@@ -280,7 +289,8 @@ def main():
         while time.monotonic() - start < args.seconds:
             rclpy.spin_once(node, timeout_sec=.05)
         result = measurements.result(time.monotonic() - start)
-        print(json.dumps({k: result[k] for k in ('frames', 'observed_hz', 'detections_per_frame')}), flush=True)
+        summary = ('frames', 'observed_hz', 'detections_per_frame')
+        print(json.dumps({k: result[k] for k in summary}), flush=True)
         return result
 
     try:

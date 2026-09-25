@@ -5,9 +5,8 @@ import struct
 import numpy as np
 import pytest
 from sensor_msgs.msg import PointCloud2, PointField
-from std_msgs.msg import Header
-
 from smartmicro_processing.cloud import measurements, select_measurements, subset_cloud
+from std_msgs.msg import Header
 
 
 def cloud_fixture(big_endian=False):
@@ -52,7 +51,8 @@ def test_rejection_counts_and_no_zero_doppler_gate():
     values[2, 4] = 2
     indices, stats = select_measurements(values)
     assert indices.tolist() == [3]
-    assert stats == dict(input=4, accepted=1, rejected_nonfinite=1, rejected_range=1, rejected_snr=1)
+    assert stats == {'input': 4, 'accepted': 1, 'rejected_nonfinite': 1, 'rejected_range': 1,
+                     'rejected_snr': 1}
 
 
 @pytest.mark.parametrize('failure', ['missing', 'truncated', 'overlap', 'type', 'row_step'])

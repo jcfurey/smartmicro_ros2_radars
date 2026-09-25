@@ -1,4 +1,5 @@
-# Applied only to the node using this parameter file; supports custom node_name.
+# Applied only to the node using this parameter file, in any namespace;
+# supports custom node_name. Integer values are accepted for floating-point settings.
 /**:
   ros__parameters:
     window_seconds: 0.5
@@ -11,6 +12,11 @@
     max_input_age: 0.5
     future_tolerance: 0.05
     stale_timeout: 0.5
+    # A pose change between consecutive transformed scans clears history when it
+    # exceeds step + max_platform_speed * dt (and likewise for rotation).
     max_pose_translation_step: 1.0
     max_pose_rotation_step: 0.5
+    max_platform_speed: 15.0
+    max_platform_angular_speed: 2.0
     publish_hz: 10.0
+    diagnostics_period: 1.0  # Unchanged /diagnostics at most this often; changes publish at once.

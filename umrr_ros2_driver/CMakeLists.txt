@@ -238,6 +238,7 @@ if(BUILD_TESTING)
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_umrr96_measure test/test_umrr96_measure.py
         TIMEOUT 30 ENV ${offline_environment})
+    ament_add_pytest_test(test_umrr96_python_lint test/test_umrr96_python_lint.py TIMEOUT 120)
     ament_add_pytest_test(test_readback test/readback_smoke.py
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py
@@ -286,11 +287,13 @@ if(BUILD_TESTING)
 
 endif()
 
+# Python modules (views node, detection filter, fan image) are an importable
+# package; the installed executable names are unchanged.
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(umrr_ros2_driver_py)
 install(PROGRAMS scripts/umrr96_views.py DESTINATION lib/${PROJECT_NAME}
     RENAME umrr96_views)
 install(PROGRAMS scripts/umrr96_measure.py DESTINATION lib/${PROJECT_NAME}
     RENAME umrr96_measure)
-install(FILES scripts/umrr96_fan_image.py scripts/umrr96_filter.py
-    DESTINATION lib/${PROJECT_NAME})
 
 ament_auto_package(INSTALL_TO_SHARE config launch param)

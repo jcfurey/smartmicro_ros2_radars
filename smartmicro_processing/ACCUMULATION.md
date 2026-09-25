@@ -14,7 +14,8 @@ ros2 launch smartmicro_processing umrr96_accumulation.launch.py \
   fixed_frame:=odom
 ```
 
-The default input is `/umrr96_processing/doppler_inliers`; start the Doppler node
+The default input is the relative name `umrr96_processing/doppler_inliers`
+(`/umrr96_processing/doppler_inliers` without a namespace); start the Doppler node
 first if it is not already running. The accumulator transforms **each scan at
 that scan's exact header timestamp**. It waits briefly for delayed TF, with bounded
 pending memory and no blocking wait inside a callback. Missing/extrapolated TF
@@ -53,8 +54,12 @@ Output names are deliberately separate:
 | Stationary preview | `/umrr96_accumulation/stationary_preview/accumulated_targets` | `/umrr96_accumulation/stationary_preview/confirmed_targets` | Input sensor frame, default `umrr96` |
 
 Both outputs use sensor-data QoS (Best Effort). `node_name` can distinguish
-concurrent comparisons; `input_topic`, `expected_frame_id`, `fixed_frame`,
-`params_file` and `use_sim_time` are launch arguments. The supplied RViz view is
+concurrent comparisons; `namespace`, `input_topic`, `expected_frame_id`,
+`fixed_frame`, `params_file` and `use_sim_time` are launch arguments. The launch
+file remaps the node's relative input name to `input_topic`; with
+`namespace:=robot1` the default input and all outputs move under `/robot1/`.
+The `input_topic` parameter still works for existing parameter files. Floating-
+point parameters also accept integer values (`publish_hz:=5`). The supplied RViz view is
 for stationary preview and opens with `rviz:=true` in that mode. Configure a
 PointCloud2 display in the actual fixed frame when testing pose compensation.
 
@@ -72,10 +77,16 @@ The derived cloud schema is:
 | --- | --- |
 | `x`, `y`, `z` | Newest representative's transformed coordinates, float32 metres in the output frame |
 | `source_radial_speed`, `source_snr` | Original scalar measurements in the source sensor convention, float64; not a world-frame velocity or calibrated confidence |
-| `age_seconds` | Output header stamp minus representative's source stamp, floored at zero within the allowed future tolerance |
+| `age_seconds` | ROS time when the cloud was built minus the representative's source stamp, floored at zero within the allowed future tolerance |
 | `span_seconds` | Time between oldest and newest supporting scans still retained in this cell |
 | `support_scans` | Number of supporting scans currently retained |
-| `source_stamp_sec`, `source_stamp_nanosec`, `source_point_index` | Identify the representative in the input topic's original scan, before finite-point selection |
+| `source_stamp_sec`, `source_stamp_nanosec`, `source_point_index` | Identify the representative in the accumulation *input* cloud with that stamp: the row-major index into `doppler_inliers` (or the configured input), before finite-point selection |
+
+`source_point_index` is **not** an index into the driver's `port_targets_0`.
+The inlier cloud is a subset of the driver scan with its points renumbered, so
+joining back to a raw detection needs the inlier cloud with the same stamp:
+its point records keep the driver's original bytes, including any per-target
+fields, and the same stamp as the driver scan.
 
 XYZ uses float32 for compatibility with
 [RViz's XYZ point-cloud transformer](https://github.com/ros2/rviz/blob/rolling/rviz_default_plugins/src/rviz_default_plugins/displays/pointcloud/transformers/xyz_pc_transformer.cpp).
@@ -96,11 +107,21 @@ memory, computation and output age on the intended scene.
 
 Every output cycle expires observations by ROS timestamp. A steady-clock watchdog
 also clears all evidence and pending input after 0.5 s without an accepted scan,
-including when `/clock` stops. Empty inlier scans cannot renew old observations.
-Backward ROS-clock jumps clear history, pending input and the TF cache. A per-scan
-pose step over 1 m or 0.5 rad clears accumulated history before storing the new
-scan. These configurable step limits are discontinuity heuristics, not calibrated
-motion bounds; smaller coordinate resets and bad poses can evade them. TF carries
+including when `/clock` stops. Empty inlier scans cannot renew old observations:
+clouds with no points (upstream clears or scans without inliers) are counted as
+`empty_inputs` and otherwise ignored. They neither refresh the watchdog, so
+upstream staleness still clears history, nor advance the stamp used for the
+repeated/backward check.
+Backward ROS-clock jumps clear history, pending input and the TF cache. A pose change
+between consecutive transformed scans clears accumulated history before storing
+the new scan when it exceeds `max_pose_translation_step + max_platform_speed·dt`
+(1 m + 15 m/s·dt by default) or `max_pose_rotation_step +
+max_platform_angular_speed·dt` (0.5 rad + 2 rad/s·dt), where `dt` is the time
+between the two scans. Scaling with `dt` keeps ordinary fast motion and dropped
+scans from wiping the evidence on every scan; each reset is logged (throttled)
+and counted in `pose_resets`. These configurable limits are discontinuity
+heuristics, not calibrated motion bounds; smaller coordinate resets and bad
+poses can evade them. TF carries
 no pose covariance or reset identifier. The pose owner should request an explicit
 history reset on relocalization, calibration or coordinate-system changes:
 
@@ -112,10 +133,52 @@ The service also clears pending input and cached poses. `/diagnostics` reports
 `/umrr96_accumulation/evidence`: mode, compensation status, pending/processed
 scans, rejection reasons, retained observations, cell/support counts and resets.
 An OK state means scans were transformed and accumulated; `calibrated=False`
-remains explicit. Empty cells convey **unknown**, and these counts are not
+remains explicit. Diagnostics are published immediately when the state changes
+and otherwise at most once per `diagnostics_period` (1 s). Clouds with data are
+published at `publish_hz`; an empty cloud is sent once when evidence runs out and
+then about once per second. Nothing is built for an output without subscribers.
+
+The output header stamp is the stamp of the **newest scan contributing** to the
+cloud (the last processed scan for an empty cloud), not the publish time. TF at
+that stamp already existed when the scan was transformed, so consumers such as
+Nav2 do not wait on, or fail at, a future TF lookup. Empty cells convey **unknown**, and these counts are not
 occupancy probabilities. No free-space ray clearing or Nav2 costmap modification
 is implemented. A future Nav2 layer must own explicit evidence expiry in its
 costs; publishing an empty cloud alone does not erase already marked costmap cells.
+
+## Feeding a Nav2 costmap
+
+[`config/nav2_obstacle_layer.example.yaml`](config/nav2_obstacle_layer.example.yaml)
+is a starting point for an `ObstacleLayer` observation source:
+
+```yaml
+radar_layer:
+  plugin: "nav2_costmap_2d::ObstacleLayer"
+  observation_sources: radar_confirmed
+  radar_confirmed:
+    topic: /umrr96_accumulation/confirmed_targets
+    data_type: "PointCloud2"
+    sensor_frame: umrr96        # the cloud is in odom; raytrace from the sensor
+    marking: true
+    clearing: false             # sparse radar returns cannot justify free space
+    min_obstacle_height: 0.10   # in the costmap's global frame
+    max_obstacle_height: 2.0
+    observation_persistence: 0.0  # the accumulator already bounds history
+```
+
+Set `sensor_frame`: the pose-compensated cloud is in `odom`, and without it Nav2
+would treat the odom origin as the sensor origin for range checks. Keep
+`clearing: false`, because empty radar cells are unknown rather than free.
+Choose the height limits for the robot; they also remove ground and overhead
+multipath returns.
+
+Prefer feeding the **sensor-frame** `/umrr96_processing/doppler_inliers` cloud
+with `observation_persistence` (for example 0.5 s) instead when the costmap
+should be the only place evidence is held and transformed: Nav2 then looks up
+TF for each scan at its own stamp, there is no second time window to tune, and
+a moving platform needs no `fixed_frame`. The accumulator's advantages are the
+voxel de-duplication and the `min_support_scans` confirmation, which remove
+single-scan returns before they mark the costmap.
 
 Run the tests with the package's documented `colcon test` command. They include
 known translated/rotated landmark geometry, same-scan duplicate suppression,
