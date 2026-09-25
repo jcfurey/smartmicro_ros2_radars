@@ -43,6 +43,8 @@ def main():
             '-p', 'host_ip:=127.0.0.1', '-p', 'sensor_ip:=127.0.0.1',
             '-p', f'host_port:={host_port}', '-p', f'sensor_port:={sensor_port}',
             '-p', 'timeout_ms:=250',
+            # The counters below assume no startup write; see test_startup_can_output.
+            '-p', 'startup_can_target_output:=-1',
         ]
         with tempfile.TemporaryFile(mode='w+') as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
@@ -73,7 +75,7 @@ def main():
                 assert describe.wait_for_service(timeout_sec=5)
                 future = describe.call_async(DescribeParameters.Request(names=[
                     'sensor_id', 'host_port', 'sensor_port', 'host_ip', 'sensor_ip',
-                    'interface_name', 'timeout_ms']))
+                    'interface_name', 'timeout_ms', 'startup_can_target_output']))
                 rclpy.spin_until_future_complete(node, future, timeout_sec=4)
                 assert future.done() and all(d.read_only for d in future.result().descriptors)
                 parameter_setter = node.create_client(
@@ -197,11 +199,58 @@ def test_invalid_startup_parameters():
         'lib/umrr_ros2_driver/smartmicro_radar_readback_node')
     before = set(Path(tempfile.gettempdir()).glob('smartmicro-readback-*'))
     for parameter in ('sensor_id:=-1', 'sensor_id:=4294967296', 'host_port:=0',
-                      'sensor_port:=65536', 'timeout_ms:=4001'):
+                      'sensor_port:=65536', 'timeout_ms:=4001',
+                      'startup_can_target_output:=2', 'startup_can_target_output:=-2'):
         result = subprocess.run([str(executable), '--ros-args', '-p', 'sensor_id:=230739',
                                  '-p', parameter], capture_output=True, text=True, timeout=8)
         assert result.returncode == 1, result.stdout + result.stderr
     assert set(Path(tempfile.gettempdir()).glob('smartmicro-readback-*')) == before
+
+
+def test_startup_can_output():
+    """By default the node writes CAN target output off at startup and retries."""
+    executable = Path(get_package_prefix('umrr_ros2_driver')) / (
+        'lib/umrr_ros2_driver/smartmicro_radar_readback_node')
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+        peer.bind(('127.0.0.1', 0))
+        sensor_port = peer.getsockname()[1]
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as available:
+            available.bind(('127.0.0.1', 0))
+            host_port = available.getsockname()[1]
+        process = subprocess.Popen([
+            str(executable), '--ros-args', '-r', '__node:=umrr96_readback_startup',
+            '-p', 'sensor_id:=230739', '-p', 'interface_name:=lo',
+            '-p', 'host_ip:=127.0.0.1', '-p', 'sensor_ip:=127.0.0.1',
+            '-p', f'host_port:={host_port}', '-p', f'sensor_port:={sensor_port}',
+            '-p', 'timeout_ms:=250'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        rclpy.init()
+        node = rclpy.create_node('umrr96_readback_startup_client')
+        states = []
+        node.create_subscription(DiagnosticArray, '/diagnostics', lambda m: states.extend(
+            {v.key: v.value for v in s.values}.get('startup_can_target_output')
+            for s in m.status if 'umrr96_readback_startup' in s.name), 10)
+        try:
+            # The first attempt is sent about 1 s after startup, without any client call.
+            peer.settimeout(5)
+            packet, _ = peer.recvfrom(65535)
+            assert packet, 'No startup CAN write reached the silent peer'
+            deadline = time.monotonic() + 6
+            while time.monotonic() < deadline and not any(
+                    (state or '').startswith('retrying: Timed out') for state in states):
+                rclpy.spin_once(node, timeout_sec=.1)
+            assert any((state or '').startswith('retrying: Timed out') for state in states), states
+        finally:
+            node.destroy_node()
+            rclpy.shutdown()
+            process.send_signal(signal.SIGINT)
+            try:
+                output, _ = process.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate()
+                raise AssertionError('Readback node did not stop')
+        assert process.returncode == 0, output
+        assert 'retrying every 5 s' in output, output
 
 
 def test_component_registered():

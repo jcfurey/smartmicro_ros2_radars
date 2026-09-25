@@ -133,6 +133,13 @@ public:
     }
     sensor_id_ = static_cast<uint32_t>(sensor_id);
     timeout_ = std::chrono::milliseconds(timeout_ms);
+    // The sensor restores its stored CAN target-list setting at every power-up; with
+    // CAN serialization on, the Ethernet target stream of this UMRR-96 drops from
+    // 18.2 to 8.3 Hz. 0 (default) switches it off, 1 on, -1 leaves it unchanged.
+    startup_can_output_ = startup_parameter(*this, "startup_can_target_output", 0, -1, 1);
+    if (startup_can_output_ < -1 || startup_can_output_ > 1) {
+      throw std::invalid_argument("startup_can_target_output must be -1, 0 or 1");
+    }
 
     config_.write("smart_access_config.json", {
         {"name", "UMRR-96 readback"}, {"version", "1.0.0"},
@@ -205,12 +212,59 @@ public:
         stat.add("last_response_age_seconds", responses_ ?
           std::chrono::duration<double>(std::chrono::steady_clock::now() - last_response_).count() :
           -1.0);
+        stat.add("startup_can_target_output", startup_can_state_);
       });
+    if (startup_can_output_ >= 0) {
+      startup_can_state_ = "pending";
+      startup_timer_ = create_wall_timer(
+        std::chrono::seconds(1), [this]() {apply_startup_can_output();});
+    }
     RCLCPP_INFO(get_logger(), "Readback ready for sensor %u on %s:%s", sensor_id_,
       host_ip.c_str(), std::to_string(host_port).c_str());
   }
 
 private:
+  // Volatile write (no EEPROM save) verified by a separate read. Retried every 5 s
+  // until confirmed, because the sensor may still be booting. Startup only: a later
+  // change through the panel or the service is never overridden, and a sensor power
+  // cycle while this node runs restores the stored value until the node restarts.
+  void apply_startup_can_output()
+  {
+    static const std::string kName = "output_control_target_list_can";
+    static const std::string kSection = "auto_interface_0dim";
+    ++startup_can_attempts_;
+    SetMode::Request request;
+    request.sensor_id = sensor_id_;
+    request.section_name = kSection;
+    request.params = {kName};
+    request.values = {std::to_string(startup_can_output_)};
+    request.value_types = {SetMode::Request::TYPE_UINT8};
+    auto result = write(request);
+    if (result.value("success", false)) {
+      result = read(sensor_id_, kSection, {kName}, {GetMode::Request::TYPE_UINT8}, false);
+    }
+    const bool confirmed = result.value("success", false) && result.contains("values") &&
+      result["values"].contains(kName) &&
+      result["values"][kName].value("value", int64_t{-1}) == startup_can_output_;
+    if (confirmed) {
+      startup_timer_->cancel();
+      startup_can_state_ = startup_can_output_ ? "on (confirmed)" : "off (confirmed)";
+      RCLCPP_INFO(get_logger(), "CAN target output %s (read back after %u attempt%s)",
+        startup_can_output_ ? "on" : "off", startup_can_attempts_,
+        startup_can_attempts_ == 1 ? "" : "s");
+      return;
+    }
+    const auto error = result.value("error", std::string("readback did not match"));
+    startup_can_state_ = "retrying: " + error;
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 30000,
+      "Could not set CAN target output at startup (%s); retrying every 5 s", error.c_str());
+    if (startup_can_attempts_ == 1) {
+      startup_timer_->cancel();
+      startup_timer_ = create_wall_timer(
+        std::chrono::seconds(5), [this]() {apply_startup_can_output();});
+    }
+  }
+
   Json write(const SetMode::Request & request)
   {
     try {
@@ -372,6 +426,11 @@ private:
   }
 
   static constexpr int64_t kMaxTimeoutMs = 4000;
+  int64_t startup_can_output_{-1};
+  unsigned startup_can_attempts_{};
+  std::string startup_can_state_{"unchanged"};
+  rclcpp::TimerBase::SharedPtr startup_timer_;
+  rclcpp::Clock steady_clock_{RCL_STEADY_TIME};  // Log throttling independent of sim time.
   RuntimeConfig config_{"smartmicro-readback"};
   uint64_t exchanges_{}, invalid_requests_{}, failed_requests_{}, timeouts_{};
   uint64_t responses_{}, sensor_rejections_{};

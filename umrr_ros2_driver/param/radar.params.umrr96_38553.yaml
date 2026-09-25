@@ -44,6 +44,10 @@
     sensor_ip: 192.168.11.11
     sensor_port: 55555
     timeout_ms: 2000
+    # Volatile, applied and read back at startup: the sensor restores CAN target
+    # output on at every power-up, which drops the Ethernet stream from 18.2 to
+    # 8.3 Hz. 0 off (default), 1 on, -1 leave the sensor unchanged.
+    startup_can_target_output: 0
 
 /**/umrr96_views:
   ros__parameters:

@@ -416,6 +416,22 @@ cleanly. After the subsequent power cycle, readback showed the same settings
 except CAN target output was back on. Stopping ROS nodes does not reset temporary
 sensor settings, but power cycling can restore the sensor's saved settings.
 
+**CAN target output defaults to off.** About 1 s after startup the readback node
+writes `output_control_target_list_can` = `startup_can_target_output` (default 0)
+as a volatile setting (no EEPROM save) and confirms it with a separate read. It
+retries every 5 s until the sensor answers and reports the result as
+`startup_can_target_output` in the *Control requests* diagnostic. With CAN output
+on, this sensor's Ethernet target stream runs at 8.33 Hz instead of 18.18 Hz
+(2026-09-25). The value is applied at startup only: panel or service changes
+made later are not overridden, and a sensor power cycle while the node runs
+restores the saved setting until the readback node restarts. Set 1 to switch
+CAN output on, or -1 to leave the sensor unchanged.
+
+On 2026-09-25, after a long uptime with CAN output on, the sensor dropped 15%
+of pings (spikes to 31 ms) and 11 of 13 control requests timed out, while
+targets kept streaming. A power cycle restored 0% loss, 0.4 ms round trips and
+immediate replies.
+
 ## Read parameters and status
 
 With `umrr96_live.launch.py` running, read up to ten entries per request:
