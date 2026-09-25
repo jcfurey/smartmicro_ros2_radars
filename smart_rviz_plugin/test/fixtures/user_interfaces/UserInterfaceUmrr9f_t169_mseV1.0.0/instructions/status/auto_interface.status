@@ -1,0 +1,2 @@
+{"name": "auto_interface", "status": [
+  {"name": "sw_version_major", "comment": "major", "type": "u16"}]}

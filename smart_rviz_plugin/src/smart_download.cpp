@@ -1,8 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
 #include "smart_rviz_plugin/smart_download.hpp"
 
 #include <chrono>
-#include <utility>
+#include <memory>
+#include <string>
 #include <pluginlib/class_list_macros.hpp>
+
+#include "panel_util.hpp"
 
 namespace smart_rviz_plugin
 {
@@ -16,13 +20,11 @@ SmartDownloadService::SmartDownloadService(QWidget * parent)
 
 SmartDownloadService::~SmartDownloadService()
 {
-  stop_requested_.store(true);
-  if (executor_) {
-    executor_->cancel();
+  spin_timer_->stop();
+  if (pending_) {
+    download_client_->remove_pending_request(pending_id_);
   }
-  if (ros_thread_.joinable()) {
-    ros_thread_.join();
-  }
+  executor_.remove_node(download_node_);
 }
 
 void SmartDownloadService::initialize_ros()
@@ -31,31 +33,30 @@ void SmartDownloadService::initialize_ros()
     rclcpp::init(0, nullptr);
   }
 
-  download_node_ = rclcpp::Node::make_shared("smart_download_gui");
-  download_client_ = download_node_->create_client<umrr_ros2_msgs::srv::FirmwareDownload>(
+  download_node_ = std::make_shared<rclcpp::Node>(
+    panel_util::unique_node_name("smart_download_gui"),
+    rclcpp::NodeOptions().use_global_arguments(false));
+  download_client_ = download_node_->create_client<FirmwareDownload>(
     "smart_radar/firmware_download");
+  executor_.add_node(download_node_);
 
-  executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
-  executor_->add_node(download_node_);
-
-  ros_thread_ = std::thread([this]() {
-    // cancel() can run before the worker starts spinning. A stop flag and a
-    // bounded wait also let that ordering exit, instead of hanging in join().
-    while (rclcpp::ok() && !stop_requested_.load()) {
-      executor_->spin_once(std::chrono::milliseconds(100));
-    }
-  });
-
-  RCLCPP_INFO(download_node_->get_logger(), "SmartDownloadService node initialized.");
+  spin_timer_ = new QTimer(this);
+  connect(spin_timer_, &QTimer::timeout, this, &SmartDownloadService::tick);
+  spin_timer_->start(50);
 }
 
 void SmartDownloadService::setup_ui()
 {
   file_path_input_ = new QLineEdit(this);
+  file_path_input_->setObjectName("firmware_path");
   sensor_id_input_ = new QLineEdit(this);
+  sensor_id_input_->setObjectName("sensor_id");
+  sensor_id_input_->setPlaceholderText("Sensor ID (decimal or 0x hex)");
   start_download_button_ = new QPushButton("Start Download", this);
+  start_download_button_->setObjectName("start_download");
   browse_button_ = new QPushButton("Browse", this);
   response_text_edit_ = new QTextEdit(this);
+  response_text_edit_->setObjectName("response");
   response_text_edit_->setReadOnly(true);
   response_text_edit_->setFixedHeight(120);
 
@@ -74,67 +75,74 @@ void SmartDownloadService::setup_ui()
   layout->addWidget(response_text_edit_);
   setLayout(layout);
 
-  // Connect signals and slots
   connect(start_download_button_, &QPushButton::clicked, this, &SmartDownloadService::download_firmware);
   connect(browse_button_, &QPushButton::clicked, this, &SmartDownloadService::browse_file);
 }
 
+void SmartDownloadService::report_error(const QString & message)
+{
+  RCLCPP_ERROR(download_node_->get_logger(), "%s", message.toStdString().c_str());
+  response_text_edit_->append("<font color='red'>Error: " + message.toHtmlEscaped() + "</font>");
+}
+
+void SmartDownloadService::tick()
+{
+  if (!rclcpp::ok()) {return;}
+  executor_.spin_some(std::chrono::milliseconds(2));
+  if (pending_ && std::chrono::steady_clock::now() > deadline_) {
+    download_client_->remove_pending_request(pending_id_);
+    finish_request();
+    report_error("No reply from the firmware download service; the sensor state is unknown.");
+  }
+}
+
+void SmartDownloadService::finish_request()
+{
+  pending_ = false;
+  start_download_button_->setEnabled(true);
+  start_download_button_->setText("Start Download");
+}
+
 void SmartDownloadService::download_firmware()
 {
-  if (!download_client_) {
-    RCLCPP_ERROR(download_node_->get_logger(), "Download client not created.");
-    return;
-  }
-
-  QString file_path = file_path_input_->text().trimmed();
-  QString sensor_id_str = sensor_id_input_->text().trimmed();
-
+  if (pending_) {return;}
+  const QString file_path = file_path_input_->text().trimmed();
   if (file_path.isEmpty()) {
-    QMessageBox::warning(this, "Warning", "Please select a firmware file.", QMessageBox::Ok);
+    report_error("Please select a firmware file.");
     return;
   }
-  if (sensor_id_str.isEmpty() || !sensor_id_str.toInt()) {
-    QMessageBox::warning(this, "Warning", "Please enter a valid numeric sensor ID.", QMessageBox::Ok);
+  const auto sensor_id = panel_util::parse_uint(sensor_id_input_->text());
+  if (!sensor_id) {
+    report_error("Sensor ID must be an unsigned decimal or 0x-prefixed hexadecimal number.");
+    return;
+  }
+  if (!download_client_->service_is_ready()) {
+    report_error("Firmware download service not available. Is the radar node running?");
     return;
   }
 
-  int sensor_id = sensor_id_str.toInt();
+  auto request = std::make_shared<FirmwareDownload::Request>();
+  request->file_path = file_path.toStdString();
+  request->sensor_id = *sensor_id;
+
+  // Delivered by executor_ in tick() on the GUI thread; removed on timeout/destruction.
+  pending_id_ = download_client_->async_send_request(request,
+    [this](rclcpp::Client<FirmwareDownload>::SharedFuture future) {
+      finish_request();
+      try {
+        const std::string response = future.get()->res;
+        response_text_edit_->append("Response: " + QString::fromStdString(response).toHtmlEscaped());
+        RCLCPP_INFO(download_node_->get_logger(), "Firmware download response: %s", response.c_str());
+      } catch (const std::exception & error) {
+        const std::string message = error.what();
+        report_error(QString::fromStdString(message));
+      }
+    }).request_id;
+  pending_ = true;
+  deadline_ = std::chrono::steady_clock::now() +
+    panel_util::request_timeout(this, REQUEST_TIMEOUT);
   start_download_button_->setEnabled(false);
   start_download_button_->setText("Downloading...");
-
-  auto request = std::make_shared<umrr_ros2_msgs::srv::FirmwareDownload::Request>();
-  request->file_path = file_path.toStdString();
-  request->sensor_id = sensor_id;
-
-  if (!download_client_->wait_for_service(std::chrono::seconds(2))) {
-    QMessageBox::critical(this, "Error", "Firmware download service not available.");
-    start_download_button_->setEnabled(true);
-    start_download_button_->setText("Start Download");
-    return;
-  }
-
-  auto future = download_client_->async_send_request(request);
-
-  // Async callback, do non block rviz
-  std::thread([this, future = std::move(future)]() mutable {
-    try {
-      auto result = future.get();
-      QString response_msg = QString::fromStdString(result->res);
-      QMetaObject::invokeMethod(this, [this, response_msg]() {
-        response_text_edit_->append("Response: " + response_msg);
-        start_download_button_->setEnabled(true);
-        start_download_button_->setText("Start Download");
-      });
-      RCLCPP_INFO(download_node_->get_logger(), "Firmware download service sent. Response: %s", result->res.c_str());
-    } catch (const std::exception & e) {
-      QMetaObject::invokeMethod(this, [this, e]() {
-        response_text_edit_->append(QString("<font color='red'>Error: %1</font>").arg(e.what()));
-        start_download_button_->setEnabled(true);
-        start_download_button_->setText("Start Download");
-      });
-      RCLCPP_ERROR(download_node_->get_logger(), "Firmware download service failed: %s", e.what());
-    }
-  }).detach();
 }
 
 void SmartDownloadService::browse_file()

@@ -1,8 +1,13 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+cd "$(dirname "$0")"
 
 smart_pack=SmartAccessAutomotive_3_13_0.tar.gz
 URL_smartbinaries=https://www.smartmicro.com/fileadmin/media/Downloads/Automotive_Radar/Software/${smart_pack}
+# sha256 of ${smart_pack} as published (checked 2026-09-24). Override with
+# SMART_ACCESS_SHA256 only after verifying a re-published archive yourself.
+SMART_ACCESS_SHA256=${SMART_ACCESS_SHA256:-fcddb3a8234e9b8963cae00f4ed6398c3375e91d1000e8310aa20a7f9cd79447}
 
 cat << EOF
 
@@ -27,28 +32,37 @@ EOF
 echo
 echo -n "Do you accept the agreement you just read? (yes/no)"
 echo ""
-read REPLY
+REPLY=""
+read -r REPLY || true
 echo ""
 case "$REPLY" in
     yes)
     echo "You have accepted the agreement."
     ;;
     *)
-    echo "Agreement not accepted."
-    exit
+    echo "Agreement not accepted." >&2
+    exit 1
 esac
 echo
 
-function getSmartaccessBinaries {
-    wget -c $URL_smartbinaries
-    echo "extracting smart access"
-    tar xfz $smart_pack --strip-components=1 -C umrr_ros2_driver/smartmicro/
-}
-
+download_dir=$(mktemp -d)
 function cleanup {
-    rm -rf $smart_pack
+    rm -rf "$download_dir"
+}
+trap cleanup EXIT
+
+function getSmartaccessBinaries {
+    # Always download afresh into a private directory: a resumed (-c) or stale
+    # file from an earlier attempt could otherwise be extracted.
+    wget -O "$download_dir/$smart_pack" "$URL_smartbinaries"
+    echo "verifying ${smart_pack}"
+    if ! echo "${SMART_ACCESS_SHA256}  $download_dir/$smart_pack" | sha256sum -c -; then
+        echo "Checksum mismatch for ${smart_pack}; refusing to extract." >&2
+        exit 1
+    fi
+    echo "extracting smart access"
+    tar xfz "$download_dir/$smart_pack" --strip-components=1 -C umrr_ros2_driver/smartmicro/
 }
 
 getSmartaccessBinaries
 python3 tools/patch_smart_access.py umrr_ros2_driver/smartmicro
-cleanup

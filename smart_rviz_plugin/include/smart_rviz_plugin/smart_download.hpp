@@ -1,21 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef SMART_RVIZ_PLUGIN__SMART_DOWNLOAD_HPP_
 #define SMART_RVIZ_PLUGIN__SMART_DOWNLOAD_HPP_
 
-#include <atomic>
-#include <thread>
-
-#include <QDebug>
 #include <QFileDialog>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QHBoxLayout>
-#include <QThread>
 
+#include <chrono>
+#include <cstdint>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/panel.hpp>
 
@@ -31,6 +29,9 @@ namespace smart_rviz_plugin
 /// class and includes functionalities for browsing firmware files, initiating the
 /// download process, and displaying responses from the download service.
 ///
+/// The request is asynchronous: the reply is delivered by the panel's own executor,
+/// spun from a QTimer on the GUI thread, so no worker thread outlives the panel.
+///
 class SmartDownloadService : public rviz_common::Panel
 {
   Q_OBJECT
@@ -40,52 +41,45 @@ public:
   ~SmartDownloadService() override;
 
 private slots:
-  ///
-  /// @brief      Slot function to handle firmware download action.
-  ///
-  /// This function is triggered when the download button is pressed. It sends
-  /// a request to the firmware download service with the specified file path
-  /// and sensor ID.
-  ///
+  /// @brief      Send the firmware download request to the selected sensor.
   void download_firmware();
-  
-  ///
-  /// @brief      Slot function to handle file browsing action.
-  ///
-  /// This function is triggered when the browse button is pressed. It opens a
-  /// file dialog to allow the user to select a firmware file, and sets the file
-  /// path input field with the selected file.
-  ///
+
+  /// @brief      Open a file dialog to select a firmware file.
   void browse_file();
 
 private:
-  ///
-  /// @brief      Initializes the ROS2 clients.
-  ///
-  /// This function initializes the ROS2 node and
-  /// client for the firmware download service
-  ///
+  /// @brief      Initializes the ROS2 node, client and executor.
   void initialize_ros();
 
-  ///
-  /// @brief      Initializes the panel's components.
-  ///
-  /// This function sets up the GUI elements and connects the signals and
-  /// slots.
-  ///
+  /// @brief      Initializes the panel's widgets and connections.
   void setup_ui();
 
-  rclcpp::Node::SharedPtr download_node_;
-  rclcpp::Client<umrr_ros2_msgs::srv::FirmwareDownload>::SharedPtr download_client_;
-  std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> executor_;
-  std::atomic<bool> stop_requested_{false};
-  std::thread ros_thread_;
+  /// @brief      Spin the executor and expire an overdue request.
+  void tick();
 
-  QLineEdit * file_path_input_;
-  QLineEdit * sensor_id_input_;
-  QPushButton * start_download_button_;
-  QPushButton * browse_button_;
-  QTextEdit * response_text_edit_;
+  /// @brief      Forget the pending request (a late reply is dropped) and re-enable the UI.
+  void finish_request();
+
+  void report_error(const QString & message);
+
+  using FirmwareDownload = umrr_ros2_msgs::srv::FirmwareDownload;
+
+  rclcpp::Node::SharedPtr download_node_;
+  rclcpp::Client<FirmwareDownload>::SharedPtr download_client_;
+  rclcpp::executors::SingleThreadedExecutor executor_;
+  QTimer * spin_timer_{nullptr};
+  bool pending_{false};
+  int64_t pending_id_{};
+  std::chrono::steady_clock::time_point deadline_{};
+
+  QLineEdit * file_path_input_{nullptr};
+  QLineEdit * sensor_id_input_{nullptr};
+  QPushButton * start_download_button_{nullptr};
+  QPushButton * browse_button_{nullptr};
+  QTextEdit * response_text_edit_{nullptr};
+
+  /// Flashing may take minutes (the driver waits up to 5 min for the transfer).
+  static constexpr auto REQUEST_TIMEOUT = std::chrono::minutes(6);
 };
 
 }  // namespace smart_rviz_plugin

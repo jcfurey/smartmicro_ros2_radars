@@ -1,0 +1,4 @@
+{"name": "auto_interface_0dim", "parameters": [
+  {"name": "frequency_sweep_idx", "comment": "sweep", "type": "u8"},
+  {"name": "center_frequency_idx", "comment": "centre frequency", "type": "u8"},
+  {"name": "tv_min_speed", "comment": "velocity gate", "type": "f32"}]}

@@ -1,36 +1,47 @@
-# ROS 2 distro (default = foxy)
-ARG ROS_DISTRO=foxy
+# Build/test image for the smartmicro ROS 2 workspace.
+#   docker build --build-arg ROS_DISTRO=jazzy --build-arg USER_UID=$(id -u) -t umrr-ros:jazzy .
+# The source tree is bind-mounted at /code at run time (see docker-compose.yml);
+# USER_UID should match the owner of that checkout so builds can write to it.
+ARG ROS_DISTRO=jazzy
 FROM ros:${ROS_DISTRO}
+ARG ROS_DISTRO
+ARG USERNAME=builder
+ARG USER_UID=1000
 
-# Fix repo keys ONLY for Foxy (snapshots issue). 
-RUN if [ "$ROS_DISTRO" = "foxy" ]; then \
-      rm -f /etc/apt/sources.list.d/ros2-snapshots.list || true && \
-      apt-get update && apt-get install -y curl gnupg2 lsb-release && \
-      curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-          -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-          http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
-          | tee /etc/apt/sources.list.d/ros2.list > /dev/null ; \
-    fi
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Common dependencies
-RUN apt-get update && apt-get install -y \
-    iputils-ping \
-    python3 \
-    python3-dev \
-    python3-pip \
-    wget \
-    git \
-    ca-certificates \
-    && update-ca-certificates \
+# Keep images small: never pull recommended packages (also applies to rosdep's apt calls).
+RUN echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/99-no-recommends \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        iputils-ping \
+        python3-pip \
+        wget \
     && rm -rf /var/lib/apt/lists/*
 
-# ROS-specific dependencies
-RUN apt-get update && apt-get install -y \
-    ros-${ROS_DISTRO}-point-cloud-msg-wrapper \
-    ros-${ROS_DISTRO}-rviz2 \
-    ros-${ROS_DISTRO}-rviz-common \
-    ros-${ROS_DISTRO}-rviz-default-plugins \
-    ros-${ROS_DISTRO}-rviz-rendering
+# Install every workspace dependency declared in the package manifests.
+COPY umrr_ros2_msgs/package.xml /tmp/deps/umrr_ros2_msgs/package.xml
+COPY umrr_ros2_driver/package.xml /tmp/deps/umrr_ros2_driver/package.xml
+COPY smart_rviz_plugin/package.xml /tmp/deps/smart_rviz_plugin/package.xml
+COPY smartmicro_description/package.xml /tmp/deps/smartmicro_description/package.xml
+COPY smartmicro_processing/package.xml /tmp/deps/smartmicro_processing/package.xml
+RUN apt-get update \
+    && rosdep update --rosdistro "${ROS_DISTRO}" \
+    && rosdep install --from-paths /tmp/deps --ignore-src -y --rosdistro "${ROS_DISTRO}" \
+    && rm -rf /var/lib/apt/lists/* /tmp/deps
 
+# Unprivileged build user with the host checkout's UID (reuse the image's existing
+# user for that UID, e.g. "ubuntu" on Noble-based images).
+RUN if getent passwd "${USER_UID}" >/dev/null; then \
+        usermod -l "${USERNAME}" -d "/home/${USERNAME}" -m "$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
+    else \
+        useradd -m -u "${USER_UID}" -s /bin/bash "${USERNAME}"; \
+    fi \
+    && mkdir -p /code \
+    && chown "${USER_UID}" /code
+
+USER ${USERNAME}
 WORKDIR /code

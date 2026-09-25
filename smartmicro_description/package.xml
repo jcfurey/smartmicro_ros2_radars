@@ -12,7 +12,11 @@
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>xacro</exec_depend>
+  <test_depend>ament_cmake_flake8</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_pep257</test_depend>
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ament_cmake_xmllint</test_depend>
   <test_depend>rclpy</test_depend>
   <test_depend>ros2launch</test_depend>
   <test_depend>rmw_cyclonedds_cpp</test_depend>

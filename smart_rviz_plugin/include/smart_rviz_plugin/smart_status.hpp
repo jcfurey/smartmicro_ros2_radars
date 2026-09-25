@@ -1,33 +1,20 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef SMART_RVIZ_PLUGIN__SMART_STATUS_HPP_
 #define SMART_RVIZ_PLUGIN__SMART_STATUS_HPP_
 
-#if __has_include(<cv_bridge/cv_bridge.hpp>)
-#include <cv_bridge/cv_bridge.hpp>
-#else
-#include <cv_bridge/cv_bridge.h>
-#endif
-
 #include <QComboBox>
-#include <QDebug>
-#include <QDockWidget>
-#include <QFile>
-#include <QFileDialog>
 #include <QHeaderView>
 #include <QPushButton>
 #include <QSplitter>
 #include <QTableWidget>
-#include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp/subscription.hpp>
 #include <rviz_common/panel.hpp>
-#include <sensor_msgs/msg/compressed_image.hpp>
-#include <sensor_msgs/msg/image.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <map>
+#include <string>
 #include <vector>
 
-#include "std_msgs/msg/string.hpp"
 #include "umrr_ros2_msgs/msg/can_object_header.hpp"
 #include "umrr_ros2_msgs/msg/can_target_header.hpp"
 #include "umrr_ros2_msgs/msg/port_object_header.hpp"
@@ -66,6 +53,11 @@ private slots:
   ///
   void check_data();
 
+  ///
+  /// @brief      Slot function to refresh the list of available header topics.
+  ///
+  void refresh_topic_list();
+
 private:
   ///
   /// @brief      Initializes the panel's components and ROS2 client.
@@ -100,32 +92,22 @@ private:
   void can_objectheader_callback(
     const umrr_ros2_msgs::msg::CanObjectHeader::SharedPtr msg, const std::string topic_name);
 
-  QTableWidget * table_data_;
-  QTableWidget * table_data_2_;
-  QTableWidget * table_timestamps_;
-  QSplitter * splitter_;
-  QComboBox * topic_dropdown_;
-  QVBoxLayout * gui_layout_;
-  QPushButton * start_button_;
-  QPushButton * stop_button_;
-  QPushButton * save_button_;
-  QTimer * timer_;
+  QTableWidget * table_data_{nullptr};
+  QSplitter * splitter_{nullptr};
+  QComboBox * topic_dropdown_{nullptr};
+  QVBoxLayout * gui_layout_{nullptr};
+  QTimer * timer_{nullptr};
+  QTimer * topic_refresh_timer_{nullptr};
   rclcpp::Node::SharedPtr node_;
+  rclcpp::executors::SingleThreadedExecutor executor_;
   std::string selected_topic_;
-  std::unordered_map<
-    std::string, rclcpp::Subscription<umrr_ros2_msgs::msg::PortTargetHeader>::SharedPtr>
-    port_header_target_subscribers_{};
-  std::unordered_map<
-    std::string, rclcpp::Subscription<umrr_ros2_msgs::msg::CanTargetHeader>::SharedPtr>
-    can_header_target_subscribers_{};
-  std::unordered_map<
-    std::string, rclcpp::Subscription<umrr_ros2_msgs::msg::PortObjectHeader>::SharedPtr>
-    port_header_object_subscribers_{};
-  std::unordered_map<
-    std::string, rclcpp::Subscription<umrr_ros2_msgs::msg::CanObjectHeader>::SharedPtr>
-    can_header_object_subscribers_{};
+  std::string selected_type_;
+  /// Header topics currently in the graph: name -> message type.
+  std::map<std::string, std::string> topic_types_;
+  /// Only the selected topic is subscribed.
+  rclcpp::SubscriptionBase::SharedPtr subscription_;
 };
 
 }  // namespace smart_rviz_plugin
 
-#endif  // SMART_RVIZ_PLUGIN__SMART_RECORDER_HPP_
+#endif  // SMART_RVIZ_PLUGIN__SMART_STATUS_HPP_

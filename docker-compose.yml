@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: "3"
 services:
     build_simulator: 
-        image: umrr-ros:${ROS_DISTRO:-foxy}
+        image: umrr-ros:${ROS_DISTRO:-jazzy}
         volumes:
             - .:/code
         entrypoint: ["/code/simulator/simulation/build_simulator.sh"]
@@ -23,7 +22,7 @@ services:
         depends_on:
             build_simulator:
                 condition: service_completed_successfully
-        image: umrr-ros:${ROS_DISTRO:-foxy}
+        image: umrr-ros:${ROS_DISTRO:-jazzy}
         volumes:
             - .:/code
         environment:
@@ -38,7 +37,7 @@ services:
         depends_on:
             build_simulator:
                 condition: service_completed_successfully
-        image: umrr-ros:${ROS_DISTRO:-foxy}
+        image: umrr-ros:${ROS_DISTRO:-jazzy}
         volumes:
             - .:/code
         environment:
@@ -53,7 +52,7 @@ services:
         depends_on:
             build_simulator:
                 condition: service_completed_successfully
-        image: umrr-ros:${ROS_DISTRO:-foxy}
+        image: umrr-ros:${ROS_DISTRO:-jazzy}
         volumes:
             - .:/code
         environment:
@@ -68,7 +67,7 @@ services:
         depends_on:
             build_simulator:
                 condition: service_completed_successfully
-        image: umrr-ros:${ROS_DISTRO:-foxy}
+        image: umrr-ros:${ROS_DISTRO:-jazzy}
         volumes:
             - .:/code
         environment:
@@ -80,7 +79,7 @@ services:
             device_network:
                 ipv4_address: 172.22.10.104
     ros_node:
-        image: umrr-ros:${ROS_DISTRO:-foxy}
+        image: umrr-ros:${ROS_DISTRO:-jazzy}
         depends_on:
             - "sensor_0"
             - "sensor_1"

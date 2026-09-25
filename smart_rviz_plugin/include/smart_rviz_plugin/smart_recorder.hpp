@@ -1,19 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef SMART_RVIZ_PLUGIN__SMART_RECORDER_HPP_
 #define SMART_RVIZ_PLUGIN__SMART_RECORDER_HPP_
 
-#if __has_include(<cv_bridge/cv_bridge.hpp>)
-#include <cv_bridge/cv_bridge.hpp>
-#else
-#include <cv_bridge/cv_bridge.h>
-#endif
-
 #include <QComboBox>
-#include <QDebug>
-#include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
 #include <QHeaderView>
+#include <QLabel>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QTableWidget>
 #include <QTextStream>
@@ -21,19 +16,16 @@
 #include <QVBoxLayout>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/panel.hpp>
-#include <sensor_msgs/msg/compressed_image.hpp>
-#include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <cstddef>
+#include <map>
 #include <string>
 #include <vector>
-
-#include "std_msgs/msg/string.hpp"
 
 namespace smart_rviz_plugin
 {
 struct TargetData
 {
-  std::string topic_name;
   float range;
   float power;
   float azimuth_deg;
@@ -57,7 +49,6 @@ struct TargetData
 
 struct ObjectData
 {
-  std::string topic_name;
   float x_pos;
   float y_pos;
   float z_pos;
@@ -94,7 +85,13 @@ public:
   ///
   /// @param      parent  The parent widget. Defaults to nullptr.
   ///
-  SmartRadarRecorder(QWidget * parent = nullptr);
+  explicit SmartRadarRecorder(QWidget * parent = nullptr);
+
+  void load(const rviz_common::Config & config) override;
+  void save(rviz_common::Config config) const override;
+
+  /// Default cap on recorded rows (targets/objects), about 70 MB of samples.
+  static constexpr std::size_t DEFAULT_MAX_RECORDED_ROWS = 1000000;
 
 private slots:
   ///
@@ -121,6 +118,11 @@ private slots:
   /// @brief      Slot function to update the table based on the topic selected.
   ///
   void update_table();
+
+  ///
+  /// @brief      Slot function to refresh the list of available cloud topics.
+  ///
+  void refresh_topic_list();
 
 private:
   ///
@@ -157,15 +159,10 @@ private:
     const sensor_msgs::msg::PointCloud2::SharedPtr msg, const std::string topic_name);
 
   ///
-  /// @brief      Subscribe to the raw image topic.
-  ///
-  void image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
-
-  ///
   /// @brief      Function to handle the data recording for target topics.
   ///
-  void update_target_recorded_data(
-    const std::string & topic_name, float range, float power, float azimuth_deg,
+  bool update_target_recorded_data(
+    float range, float power, float azimuth_deg,
     float elevation_deg, float rcs, float noise, float snr, float radial_speed,
     float azimuth_angle, float elevation_angle, float variance_range, float variance_speed,
     float variance_azimuth_angle, float variance_elevation_angle, float false_alarm_probability,
@@ -174,8 +171,8 @@ private:
   ///
   /// @brief      Function to handle the data recording for objects topics.
   ///
-  void update_object_recorded_data(
-    const std::string & topic_name, float x_pos, float y_pos, float z_pos, float speed_abs,
+  bool update_object_recorded_data(
+    float x_pos, float y_pos, float z_pos, float speed_abs,
     float heading, float length, float mileage, float quality, float acceleration,
     int16_t object_id, uint16_t idle_cycles, uint16_t spline_idx, uint8_t object_class,
     uint16_t status, uint32_t timestamp_sec, uint32_t timestamp_nanosec);
@@ -183,37 +180,40 @@ private:
   void clear_recorded_data();
   void return_to_ready_state();
 
-  QTableWidget * table_data_;
-  QTableWidget * table_data_2_;
-  QTableWidget * table_timestamps_;
-  QWidget * widget_1;
-  QWidget * widget_2;
-  QSplitter * splitter_;
-  QSplitter * horiz_splitter_;
-  QComboBox * topic_dropdown_;
-  QComboBox * topic_dropdown_2_;
-  QVBoxLayout * gui_layout_;
-  QVBoxLayout * vert_layout_1;
-  QVBoxLayout * vert_layout_2;
-  QPushButton * start_button_;
-  QPushButton * stop_button_;
-  QPushButton * save_button_;
-  QString selectedTopic;
-  QTimer * timer_;
-  rclcpp::Node::SharedPtr node_;
-  std::unordered_map<std::string, rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr>
-    subscribers_{};
-  std::unordered_map<std::string, rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr>
-    object_subscribers_{};
+  /// Stop recording without a modal prompt and offer save/discard.
+  void finish_recording(const QString & reason);
 
-  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_;
+  /// True while the recording is below the row cap; stops the recording at the cap.
+  bool has_capacity();
+
+  /// (Re-)subscribe to the selected topic only.
+  void subscribe_selected();
+
+  QTableWidget * table_data_{nullptr};
+  QTableWidget * table_timestamps_{nullptr};
+  QSplitter * splitter_{nullptr};
+  QSplitter * horiz_splitter_{nullptr};
+  QComboBox * topic_dropdown_{nullptr};
+  QVBoxLayout * gui_layout_{nullptr};
+  QPushButton * start_button_{nullptr};
+  QPushButton * stop_button_{nullptr};
+  QPushButton * save_button_{nullptr};
+  QSpinBox * max_rows_{nullptr};
+  QLabel * status_{nullptr};
+  QTimer * timer_{nullptr};
+  QTimer * topic_refresh_timer_{nullptr};
+  rclcpp::Node::SharedPtr node_;
+  rclcpp::executors::SingleThreadedExecutor executor_;
+  /// Radar cloud topics currently offered in the dropdown.
+  std::vector<std::string> topics_;
+  /// Only the selected topic is subscribed.
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
 
   std::vector<TargetData> target_recorded_data;
   std::vector<ObjectData> object_recorded_data;
   std::string selected_topic_;
+  std::string subscribed_topic_;
   std::string recording_topic_;
-  std::string selected_topic_2_;
   bool recording_active_{false};
   bool pending_save_{false};
 };
