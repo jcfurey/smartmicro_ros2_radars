@@ -25,6 +25,15 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 ros2 launch smartmicro_processing umrr96_processing.launch.py
 ```
 
+To start the driver (with readback, views and the sensor URDF), this node and
+the tracking RViz view in one go — closing RViz stops everything:
+
+```bash
+ros2 launch smartmicro_processing umrr96_tracking.launch.py
+# rviz:=false for headless; publish_description:=false if a robot URDF owns the TF;
+# driver_params:=... / processing_params:=... for other hosts or tuning.
+```
+
 The default input is the relative name `smart_radar/port_targets_0`
 (`/smart_radar/port_targets_0` without a namespace) with frame `umrr96`. Launch
 arguments `namespace`, `input_topic`, `expected_frame_id`, `params_file` and

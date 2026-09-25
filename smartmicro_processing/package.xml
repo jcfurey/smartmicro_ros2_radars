@@ -15,6 +15,7 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>umrr_ros2_driver</exec_depend>
   <exec_depend>sensor_msgs_py</exec_depend>
   <exec_depend>tf2_ros_py</exec_depend>
   <exec_depend>rviz2</exec_depend>
