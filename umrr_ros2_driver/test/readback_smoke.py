@@ -163,7 +163,9 @@ def main():
                 assert matched and matched[-1].level == DiagnosticStatus.WARN, diagnostics
                 values = {v.key: v.value for v in matched[-1].values}
                 assert int(values['invalid_requests']) == 25, values
-                assert int(values['failed_requests']) == 5, values
+                # A timeout is counted once, as a timeout, not also as a failure.
+                assert int(values['failed_requests']) == 0, values
+                assert values['sensor_id'] == '230739', values
             finally:
                 node.destroy_node()
                 rclpy.shutdown()
@@ -192,11 +194,19 @@ def test_invalid_startup_parameters():
         'lib/umrr_ros2_driver/smartmicro_radar_readback_node')
     before = set(Path(tempfile.gettempdir()).glob('smartmicro-readback-*'))
     for parameter in ('sensor_id:=-1', 'sensor_id:=4294967296', 'host_port:=0',
-                      'sensor_port:=65536', 'timeout_ms:=30001'):
+                      'sensor_port:=65536', 'timeout_ms:=4001'):
         result = subprocess.run([str(executable), '--ros-args', '-p', 'sensor_id:=230739',
                                  '-p', parameter], capture_output=True, text=True, timeout=8)
         assert result.returncode == 1, result.stdout + result.stderr
     assert set(Path(tempfile.gettempdir()).glob('smartmicro-readback-*')) == before
+
+
+def test_component_registered():
+    """The readback node is available to component containers."""
+    from ament_index_python.packages import get_resource
+    content, _ = get_resource('rclcpp_components', 'umrr_ros2_driver')
+    assert 'smartmicro::drivers::radar::ReadbackNode' in content, content
+    assert 'smartmicro::drivers::radar::SmartmicroRadarNode' in content, content
 
 
 if __name__ == '__main__':

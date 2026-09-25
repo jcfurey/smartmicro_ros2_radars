@@ -179,13 +179,23 @@ rclcpp_components_register_node(smartmicro_radar_node
     EXECUTABLE smartmicro_radar_node_exe
 )
 
-ament_auto_add_executable(smartmicro_radar_readback_node
+# UMRR-96 control/readback node: a composable component plus a standalone
+# executable with the historical name. The generated rclcpp_components main is
+# not used for the executable because it aborts on constructor exceptions,
+# leaking the private SDK configuration directory and the exit status.
+ament_auto_add_library(smartmicro_radar_readback_component SHARED
     src/smartmicro_radar_readback_node.cpp)
-target_include_directories(smartmicro_radar_readback_node PRIVATE smartmicro/include)
-target_compile_definitions(smartmicro_radar_readback_node PRIVATE
+target_include_directories(smartmicro_radar_readback_component PRIVATE smartmicro/include)
+target_compile_definitions(smartmicro_radar_readback_component PRIVATE
     SMARTMICRO_SDK_LIBRARY_PATH="${CMAKE_INSTALL_PREFIX}/lib")
-target_link_libraries(smartmicro_radar_readback_node
+target_link_libraries(smartmicro_radar_readback_component
     smart_access com_lib osal nlohmann_json::nlohmann_json)
+rclcpp_components_register_nodes(smartmicro_radar_readback_component
+    "smartmicro::drivers::radar::ReadbackNode")
+
+ament_auto_add_executable(smartmicro_radar_readback_node
+    src/smartmicro_radar_readback_main.cpp)
+target_link_libraries(smartmicro_radar_readback_node smartmicro_radar_readback_component)
 
 if(BUILD_TESTING)
     option(SMARTMICRO_NETWORK_TESTS "Enable legacy Docker/network integration tests" OFF)

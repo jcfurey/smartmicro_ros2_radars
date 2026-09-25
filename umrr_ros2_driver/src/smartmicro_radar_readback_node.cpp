@@ -3,6 +3,8 @@
 #include <CommunicationServicesIface.h>
 #include <nlohmann/json.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_components/register_node_macro.hpp>
+#include <umrr_ros2_driver/readback_node.hpp>
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <umrr_ros2_driver/runtime_config.hpp>
 #include <umrr_ros2_driver/startup_parameter.hpp>
@@ -88,6 +90,13 @@ Json read_value(
   return result;
 }
 
+// A sensor reply that did not arrive in time; counted separately from failures.
+class ReplyTimeout : public std::runtime_error
+{
+public:
+  using std::runtime_error::runtime_error;
+};
+
 struct PendingResponse
 {
   std::mutex mutex;
@@ -96,21 +105,29 @@ struct PendingResponse
   Json result;
 };
 
+}  // namespace
+
+namespace smartmicro::drivers::radar
+{
+// Composable, but the SDK is a process-wide singleton: load it only into a
+// container that does not also hold the data node or another readback node.
 class ReadbackNode : public rclcpp::Node
 {
 public:
-  ReadbackNode()
-  : Node("smart_radar_readback")
+  explicit ReadbackNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+  : Node("smart_radar_readback", options)
   {
     const auto sensor_id = startup_parameter(*this, "sensor_id", 0, 1, UINT32_MAX);
     const auto host_port = startup_parameter(*this, "host_port", 55556, 1, 65535);
     const auto sensor_port = startup_parameter(*this, "sensor_port", 55555, 1, 65535);
-    const auto timeout_ms = startup_parameter(*this, "timeout_ms", 2000, 1, 30000);
+    // Bounded below the 5 s deadline of the RViz UMRR-96 panels, so a sensor
+    // timeout is reported to the panel instead of the panel giving up first.
+    const auto timeout_ms = startup_parameter(*this, "timeout_ms", 2000, 1, kMaxTimeoutMs);
     const auto interface = startup_parameter(*this, "interface_name", "enp68s0f0");
     const auto host_ip = startup_parameter(*this, "host_ip", "192.168.11.17");
     const auto sensor_ip = startup_parameter(*this, "sensor_ip", "192.168.11.11");
     if (sensor_id <= 0 || sensor_id > UINT32_MAX || host_port <= 0 || host_port > 65535 ||
-      sensor_port <= 0 || sensor_port > 65535 || timeout_ms <= 0 || timeout_ms > 30000)
+      sensor_port <= 0 || sensor_port > 65535 || timeout_ms <= 0 || timeout_ms > kMaxTimeoutMs)
     {
       throw std::invalid_argument("Invalid sensor_id, UDP port, or timeout_ms");
     }
@@ -224,6 +241,10 @@ private:
       ++invalid_requests_;
       return {{"sensor_id", request.sensor_id}, {"section", request.section_name},
         {"success", false}, {"error", error.what()}};
+    } catch (const ReplyTimeout & error) {
+      last_error_ = error.what();  // Counted once, in timeouts_.
+      return {{"sensor_id", request.sensor_id}, {"section", request.section_name},
+        {"success", false}, {"error", error.what()}};
     } catch (const std::exception & error) {
       ++failed_requests_;
       last_error_ = error.what();
@@ -283,6 +304,10 @@ private:
       ++invalid_requests_;
       return {{"sensor_id", sensor_id}, {"section", section},
         {"success", false}, {"error", error.what()}};
+    } catch (const ReplyTimeout & error) {
+      last_error_ = error.what();  // Counted once, in timeouts_.
+      return {{"sensor_id", sensor_id}, {"section", section},
+        {"success", false}, {"error", error.what()}};
     } catch (const std::exception & error) {
       ++failed_requests_;
       last_error_ = error.what();
@@ -332,7 +357,7 @@ private:
     std::unique_lock<std::mutex> lock(pending->mutex);
     if (!pending->ready.wait_for(lock, timeout_, [&pending] {return pending->received;})) {
       ++timeouts_;
-      throw std::runtime_error("Timed out waiting for the sensor reply");
+      throw ReplyTimeout("Timed out waiting for the sensor reply");
     }
     ++responses_;
     last_response_ = std::chrono::steady_clock::now();
@@ -344,6 +369,7 @@ private:
     return pending->result;
   }
 
+  static constexpr int64_t kMaxTimeoutMs = 4000;
   RuntimeConfig config_{"smartmicro-readback"};
   uint64_t exchanges_{}, invalid_requests_{}, failed_requests_{}, timeouts_{};
   uint64_t responses_{}, sensor_rejections_{};
@@ -357,18 +383,11 @@ private:
   rclcpp::Service<GetStatus>::SharedPtr status_service_;
   rclcpp::Service<SetMode>::SharedPtr set_service_;
 };
-}  // namespace
 
-int main(int argc, char ** argv)
+std::shared_ptr<rclcpp::Node> make_readback_node(const rclcpp::NodeOptions & options)
 {
-  rclcpp::init(argc, argv);
-  int result = 0;
-  try {
-    rclcpp::spin(std::make_shared<ReadbackNode>());
-  } catch (const std::exception & error) {
-    RCLCPP_ERROR(rclcpp::get_logger("smart_radar_readback"), "%s", error.what());
-    result = 1;
-  }
-  rclcpp::shutdown();
-  return result;
+  return std::make_shared<ReadbackNode>(options);
 }
+}  // namespace smartmicro::drivers::radar
+
+RCLCPP_COMPONENTS_REGISTER_NODE(smartmicro::drivers::radar::ReadbackNode)
