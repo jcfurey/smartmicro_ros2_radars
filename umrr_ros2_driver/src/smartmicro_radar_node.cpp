@@ -6225,6 +6225,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
   config[kDataSerialTypeJsonTag] = master_data_serial_type;
   config[kInstSerialTypeJsonTag] = master_inst_serial_type;
   config["config_path"] = runtime_config_.path.string();
+  config["shared_lib_path"] =
+    runtime_config_.sdk_library_path(config["shared_lib_path"].get<std::string>());
   runtime_config_.write("smart_access_config.json", config);
 
   auto hw_inventory = nlohmann::json::parse(std::ifstream{kHwInventoryFilePath});

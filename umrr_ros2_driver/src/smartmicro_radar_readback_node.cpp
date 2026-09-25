@@ -137,7 +137,7 @@ public:
     config_.write("smart_access_config.json", {
       {"name", "UMRR-96 readback"}, {"version", "1.0.0"},
       {"client_id", 0xc0000001u}, {"role", "master"}, {"alive", false},
-      {"shared_lib_path", SMARTMICRO_SDK_LIBRARY_PATH},
+      {"shared_lib_path", config_.sdk_library_path(SMARTMICRO_SDK_LIBRARY_PATH)},
       {"config_path", config_.path.string()}, {"download_path", ""},
       {"user_interface_name", "base"}, {"user_interface_major_v", 1},
       {"user_interface_minor_v", 0}, {"user_interface_patch_v", 2},

@@ -44,6 +44,26 @@ public:
     stream.flush();
   }
 
+  // The vendor SDK overflows a fixed-size buffer (glibc aborts the process with
+  // "buffer overflow detected") when shared_lib_path has 160 or more characters.
+  static constexpr size_t kMaxSdkLibraryPathLength = 159;
+
+  // Returns a short alias of the SDK library directory inside the private
+  // directory, so deep workspace or install prefixes do not reach the limit.
+  std::string sdk_library_path(const std::filesystem::path & library_directory) const
+  {
+    const auto alias = path / "sdk-lib";
+    std::filesystem::create_directory_symlink(library_directory, alias);
+    const auto result = alias.string();
+    if (result.size() > kMaxSdkLibraryPathLength) {
+      throw std::runtime_error(
+              "SDK library path '" + result + "' exceeds " +
+              std::to_string(kMaxSdkLibraryPathLength) +
+              " characters; use a shorter TMPDIR");
+    }
+    return result;
+  }
+
   void activate() const
   {
     const auto filename = (path / "smart_access_config.json").string();

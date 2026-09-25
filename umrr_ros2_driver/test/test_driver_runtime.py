@@ -115,8 +115,10 @@ def test_driver_runtime():
             assert {json.loads((p / 'hw_inventory.json').read_text())['hwItems'][0]['port']
                     for p in dirs} == {port_a, port_b}
             for path in dirs:
-                assert json.loads((path / 'smart_access_config.json').read_text())[
-                    'config_path'] == str(path)
+                sdk_config = json.loads((path / 'smart_access_config.json').read_text())
+                assert sdk_config['config_path'] == str(path)
+                assert sdk_config['shared_lib_path'] == str(path / 'sdk-lib')
+                assert (path / 'sdk-lib' / 'libsmart_access.so').exists()
             assert all(p.read_bytes() == value for p, value in originals.items())
 
             descriptions = node.create_client(
@@ -159,7 +161,10 @@ def test_driver_runtime():
             for filename in ('com_lib_config.json', 'hw_inventory.json', 'routing_table.json'):
                 data = json.loads((repo / 'simulator/config_umrr96' / filename).read_text())
                 if filename == 'com_lib_config.json':
-                    data.update(shared_lib_path=str(prefix / 'lib'), config_path=str(sim),
+                    # The SDK aborts on library paths of 160+ characters; use a short alias.
+                    sdk_alias = run / 'sdk-lib'
+                    sdk_alias.symlink_to(prefix / 'lib' / 'umrr_ros2_driver')
+                    data.update(shared_lib_path=str(sdk_alias), config_path=str(sim),
                                 user_interface_patch_v=2)
                 elif filename == 'hw_inventory.json':
                     data['hwItems'][0].update(iface_name='lo', ip_address='127.0.0.1',

@@ -35,6 +35,23 @@ TEST(RuntimeConfig, IndependentDirectoriesAndExceptionCleanup)
   EXPECT_FALSE(std::filesystem::exists(first));
 }
 
+TEST(RuntimeConfig, ShortSdkLibraryAliasIsRemovedWithoutTarget)
+{
+  RuntimeConfig target_owner("smartmicro-test-target");
+  const auto target = target_owner.path / std::string(200, 'x');
+  std::filesystem::create_directory(target);
+  std::ofstream(target / "libsmart_access.so") << "stub";
+  std::filesystem::path alias;
+  {
+    RuntimeConfig config("smartmicro-test");
+    alias = config.sdk_library_path(target);
+    EXPECT_LE(alias.string().size(), RuntimeConfig::kMaxSdkLibraryPathLength);
+    EXPECT_TRUE(std::filesystem::exists(alias / "libsmart_access.so"));
+  }
+  EXPECT_FALSE(std::filesystem::exists(alias));
+  EXPECT_TRUE(std::filesystem::exists(target / "libsmart_access.so"));
+}
+
 TEST(StreamHealth, SilenceRecoveryAndCounterReset)
 {
   StreamHealth health;
