@@ -24,6 +24,19 @@ Topic and service names are relative and keep their historical form, with a
 | `smart_radar/umrr96_raw_quality_N` | `Umrr96RawQuality` (UMRR-96 Ethernet) |
 | `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command`, `set_ip_address`, `firmware_download` | services |
 
+### Optional `radar_msgs/RadarScan`
+
+When the package is built with [radar_msgs](https://index.ros.org/p/radar_msgs/)
+available (`apt install ros-lyrical-radar-msgs`; CMake option
+`SMARTMICRO_WITH_RADAR_MSGS`, default ON, detects it) and the startup parameter
+`publish_radar_scan: true` is set, every target cloud is also published as
+`radar_msgs/RadarScan` on `smart_radar/radar_scan_N`: same header and detection
+order, `range` [m], `azimuth`/`elevation` [rad], `doppler_velocity` = the SDK
+radial speed [m/s] without sign conversion (see `radial_speed` below) and
+`amplitude` = power [dB]. The scan is only built while it has subscribers.
+Setting the parameter on a build without radar_msgs fails at startup. radar_msgs
+is not a declared package dependency, so rosdep does not install it.
+
 To run several radars or place one under a robot namespace, set the node
 namespace instead of renaming topics: `ros2 run ... --ros-args -r __ns:=/front`
 or the `namespace` launch argument. Everything then appears under

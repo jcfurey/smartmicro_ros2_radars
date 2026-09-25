@@ -1205,6 +1205,11 @@ private:
   void port_publishers(const detail::SensorConfig & sensor, size_t sensor_idx);
 
   ///
+  /// @brief      Publishes a target cloud as radar_msgs/RadarScan when enabled.
+  ///
+  void publish_radar_scan(size_t sensor_idx, const sensor_msgs::msg::PointCloud2 & cloud);
+
+  ///
   /// @brief      Creates publishers for sensors using CAN.
   ///
   /// @param[in]  sensor       The sensor configuration.
@@ -1462,6 +1467,10 @@ private:
   std::array<
     rclcpp::Publisher<umrr_ros2_msgs::msg::PortFaultReportsMsg>::SharedPtr, detail::kMaxSensorCount>
   m_publishers_fault_report_msg{};
+
+  // radar_msgs/RadarScan publishers (type-erased: radar_msgs is optional).
+  bool publish_radar_scan_{false};
+  std::array<rclcpp::PublisherBase::SharedPtr, detail::kMaxSensorCount> radar_scan_publishers_{};
 
   std::size_t m_number_of_sensors{};
   std::size_t m_number_of_adapters{};

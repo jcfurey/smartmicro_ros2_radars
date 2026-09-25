@@ -177,14 +177,32 @@ target_link_libraries(smartmicro_radar_node
 set_target_properties(smartmicro_radar_node PROPERTIES
   INSTALL_RPATH "$ORIGIN/${PROJECT_NAME}")
 
-rclcpp_components_register_node(smartmicro_radar_node
-  PLUGIN "smartmicro::drivers::radar::SmartmicroRadarNode"
-  EXECUTABLE smartmicro_radar_node_exe
-)
+# Optional standard radar_msgs/RadarScan output (parameter publish_radar_scan).
+option(SMARTMICRO_WITH_RADAR_MSGS "Build the optional radar_msgs/RadarScan output" ON)
+if(SMARTMICRO_WITH_RADAR_MSGS)
+  find_package(radar_msgs QUIET)
+endif()
+if(radar_msgs_FOUND)
+  message(STATUS "radar_msgs found: publish_radar_scan is available")
+  target_compile_definitions(smartmicro_radar_node PRIVATE UMRR_HAVE_RADAR_MSGS)
+  target_link_libraries(smartmicro_radar_node ${radar_msgs_TARGETS})
+else()
+  message(STATUS "radar_msgs not found: building without the RadarScan output")
+endif()
+
+# Registered as a component; the executable uses its own main (see below) so a
+# failed startup exits with status 1 and removes the private SDK config.
+rclcpp_components_register_nodes(smartmicro_radar_node
+  "smartmicro::drivers::radar::SmartmicroRadarNode")
+ament_auto_add_executable(smartmicro_radar_node_exe src/smartmicro_radar_node_main.cpp)
+target_link_libraries(smartmicro_radar_node_exe smartmicro_radar_node)
+target_include_directories(smartmicro_radar_node_exe PRIVATE ${smartmicro_ui_include_dirs})
+set_target_properties(smartmicro_radar_node_exe PROPERTIES
+  INSTALL_RPATH "$ORIGIN/..:$ORIGIN")
 
 # UMRR-96 control/readback node: a composable component plus a standalone
 # executable with the historical name. The generated rclcpp_components main is
-# not used for the executable because it aborts on constructor exceptions,
+# not used for either executable because it aborts on constructor exceptions,
 # leaking the private SDK configuration directory and the exit status.
 ament_auto_add_library(smartmicro_radar_readback_component SHARED
   src/smartmicro_radar_readback_node.cpp)

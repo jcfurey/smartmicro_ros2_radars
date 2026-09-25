@@ -19,6 +19,8 @@
   <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
   <depend>umrr_ros2_msgs</depend>
+  <!-- Optional, not declared: radar_msgs enables the RadarScan output when present
+       at build time (see doc/interfaces.md). -->
   <build_depend>nlohmann-json-dev</build_depend>
   <build_export_depend>nlohmann-json-dev</build_export_depend>
 

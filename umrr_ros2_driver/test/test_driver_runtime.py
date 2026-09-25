@@ -23,6 +23,11 @@ from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming, Umrr96RawQuality
 from umrr_ros2_msgs.srv import FirmwareDownload, SetMode
 import yaml
 
+try:  # Optional: the driver publishes RadarScan only when built with radar_msgs.
+    from radar_msgs.msg import RadarScan
+except ImportError:
+    RadarScan = None
+
 
 def unused_port():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -48,6 +53,9 @@ def test_driver_runtime():
     node.create_subscription(Umrr96RawQuality, topic + 'umrr96_raw_quality_0', quality.append, 10)
     node.create_subscription(DiagnosticArray, '/diagnostics',
                              lambda msg: statuses.extend(msg.status), 10)
+    scans = []
+    if RadarScan is not None:
+        node.create_subscription(RadarScan, topic + 'radar_scan_0', scans.append, 10)
 
     def wait(predicate, timeout=10):
         deadline = time.monotonic() + timeout
@@ -104,6 +112,7 @@ def test_driver_runtime():
             driver_processes = []
             for name, port in (('a', port_a), ('b', port_b)):
                 parameters['adapters']['adapter_0']['port'] = port
+                parameters['publish_radar_scan'] = RadarScan is not None and name == 'a'
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
@@ -222,6 +231,14 @@ def test_driver_runtime():
                         expected = struct.unpack('<f', struct.pack('<f', base + index))[0]
                         assert float(record[field]) == expected, (field, index, record[field])
                     assert int(record['peak_idx']) == index + 100
+            if RadarScan is not None:
+                wait(lambda: scans)
+                scan = scans[-1]
+                cloud = next((c for c in clouds if c.header == scan.header), None)
+                assert len(scan.returns) == 17
+                if cloud is not None:
+                    ranges = [float(r['range']) for r in point_cloud2.read_points(cloud)]
+                    assert [r.range for r in scan.returns] == ranges
             wait(lambda: any(
                 s.name == 'runtime_a: UDP adapter 0' and
                 {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
@@ -261,3 +278,27 @@ def test_driver_runtime():
                 log.close()
             node.destroy_node()
             rclpy.shutdown()
+
+
+def test_radar_scan_requires_radar_msgs():
+    """Without radar_msgs, enabling the RadarScan output fails at startup."""
+    if RadarScan is not None:
+        return
+    prefix = Path(get_package_prefix('umrr_ros2_driver'))
+    with tempfile.TemporaryDirectory(prefix='umrr-radar-scan-test-') as directory:
+        params = Path(directory) / 'params.yaml'
+        params.write_text(yaml.safe_dump({'/**': {'ros__parameters': {
+            'publish_radar_scan': True,
+            'adapters': {'adapter_0': {'hw_type': 'eth', 'hw_dev_id': 4,
+                                       'hw_iface_name': 'lo', 'port': unused_port()}},
+            'sensors': {'sensor_0': {
+                'link_type': 'eth', 'pub_type': 'target', 'model': 'umrr96_v1_2_2',
+                'dev_id': 4, 'id': 200, 'ip': '127.0.0.1', 'port': unused_port()}}}}}))
+        result = subprocess.run(
+            [str(prefix / 'lib/umrr_ros2_driver/smartmicro_radar_node_exe'),
+             '--ros-args', '--params-file', str(params)],
+            capture_output=True, text=True, timeout=20,
+            env=dict(os.environ, TMPDIR=directory))
+        assert result.returncode != 0
+        assert 'built without radar_msgs' in result.stdout + result.stderr
+        assert not list(Path(directory).glob('smartmicro-data-*'))

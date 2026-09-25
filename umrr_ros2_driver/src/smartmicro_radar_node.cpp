@@ -17,6 +17,10 @@
 
 #include <nlohmann/json.hpp>
 #include <umrr_ros2_driver/point_cloud_builder.hpp>
+#ifdef UMRR_HAVE_RADAR_MSGS
+#include <radar_msgs/msg/radar_scan.hpp>
+#endif
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <umrr_ros2_driver/sensor_models.hpp>
 #include <umrr_ros2_driver/service_parsing.hpp>
 #include <umrr_ros2_driver/udp_socket_health.hpp>
@@ -445,7 +449,47 @@ void SmartmicroRadarNode::setup_publishers()
     } else {
       can_publishers(sensor, i);
     }
+#ifdef UMRR_HAVE_RADAR_MSGS
+    if (publish_radar_scan_) {
+      radar_scan_publishers_[i] = create_publisher<radar_msgs::msg::RadarScan>(
+        "smart_radar/radar_scan_" + std::to_string(i), sensor.history_size);
+    }
+#endif
   }
+}
+
+void SmartmicroRadarNode::publish_radar_scan(
+  size_t sensor_idx, const sensor_msgs::msg::PointCloud2 & cloud)
+{
+#ifdef UMRR_HAVE_RADAR_MSGS
+  const auto publisher = std::static_pointer_cast<rclcpp::Publisher<radar_msgs::msg::RadarScan>>(
+    radar_scan_publishers_[sensor_idx]);
+  if (!publisher || publisher->get_subscription_count() == 0) {
+    return;
+  }
+  // Same detections, header and order as the target cloud. doppler_velocity is
+  // the SDK radial speed without sign conversion; amplitude is power [dB].
+  auto scan = std::make_unique<radar_msgs::msg::RadarScan>();
+  scan->header = cloud.header;
+  scan->returns.resize(cloud.width);
+  sensor_msgs::PointCloud2ConstIterator<float> range(cloud, "range");
+  sensor_msgs::PointCloud2ConstIterator<float> azimuth(cloud, "azimuth_angle");
+  sensor_msgs::PointCloud2ConstIterator<float> elevation(cloud, "elevation_angle");
+  sensor_msgs::PointCloud2ConstIterator<float> speed(cloud, "radial_speed");
+  sensor_msgs::PointCloud2ConstIterator<float> power(cloud, "power");
+  for (auto & detection : scan->returns) {
+    detection.range = *range;
+    detection.azimuth = *azimuth;
+    detection.elevation = *elevation;
+    detection.doppler_velocity = *speed;
+    detection.amplitude = *power;
+    ++range, ++azimuth, ++elevation, ++speed, ++power;
+  }
+  publisher->publish(std::move(scan));
+#else
+  (void)sensor_idx;
+  (void)cloud;
+#endif
 }
 
 void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, size_t sensor_idx)
@@ -2143,6 +2187,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v3_0_0(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -2327,6 +2373,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v2_1_0(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -2448,6 +2496,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v1_0_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -2572,6 +2622,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v2_0_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -2759,6 +2811,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_3_0(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -2882,6 +2936,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_1_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -3007,6 +3063,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_0_0(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3081,6 +3139,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr96(
   }
 
   if (publish_raw) {raw_quality_publishers_[sensor_idx]->publish(std::move(raw_quality_ptr));}
+  publish_radar_scan(sensor_idx, msg);
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3137,6 +3196,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr11(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -3196,6 +3257,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v1_1_1(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -3264,6 +3327,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_0_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3324,6 +3389,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_1_1(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -3389,6 +3456,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_2_1(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3453,6 +3522,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_4_1(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3516,6 +3587,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_0_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -3582,6 +3655,7 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_2_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+  publish_radar_scan(sensor_idx, msg);
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3706,6 +3780,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_0_3(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3769,6 +3845,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_2_2(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -3834,6 +3912,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_4_1(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -3897,6 +3977,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_5_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -3963,6 +4045,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_7_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -4089,6 +4173,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_0_1(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -4152,6 +4238,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_2_1(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -4214,6 +4302,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_4_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -4280,6 +4370,7 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_6_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+  publish_radar_scan(sensor_idx, msg);
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -4407,6 +4498,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v1_0_0(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -4471,6 +4564,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -4537,6 +4632,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_1(
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -4601,6 +4698,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v3_0_0(
         target->GetVarianceAzimuthAngle(), target->GetVarianceElevationAngle(),
         target->GetFalseAlarmProbability(), target->GetFlags(), target->GetPeakIdx()});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -4707,6 +4806,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v2_1_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -4812,6 +4913,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v1_0_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -4916,6 +5019,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_0_0(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -5023,6 +5128,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_1_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5128,6 +5235,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v1_3_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5180,6 +5289,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr96(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -5234,6 +5345,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr11(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5286,6 +5399,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_0_3(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -5340,6 +5455,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_2_2(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5393,6 +5510,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_4_1(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5445,6 +5564,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_5_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5495,6 +5616,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_1_1(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -5547,6 +5670,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_2_1(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5597,6 +5722,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v2_4_1(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -5649,6 +5776,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_0_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5699,6 +5828,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_0_1(
         kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -5751,6 +5882,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_2_1(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5802,6 +5935,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_4_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5847,6 +5982,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_v3_2_0(
         kRadarFloatSentinel, kRadarFloatSentinel, kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -5894,6 +6031,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9d_v1_7_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -5939,6 +6078,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_v1_6_0(
         kRadarFloatSentinel, kRadarFloatSentinel, kRadarFloatSentinel, kRadarFloatSentinel,
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
+
+  publish_radar_scan(sensor_idx, msg);
 
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
@@ -6034,6 +6175,8 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrra4_mse_v3_0_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
@@ -6128,12 +6271,25 @@ void SmartmicroRadarNode::CAN_targetlist_callback_umrr9f_mse_v2_0_0(
         kRadarFloatSentinel, kRadarFlagsSentinel, kRadarPeakIdxSentinel});
   }
 
+  publish_radar_scan(sensor_idx, msg);
+
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_target_header[sensor_idx]->publish(std::move(header_ptr));
 }
 
 void SmartmicroRadarNode::update_config_files_from_params()
 {
+  auto radar_scan_descriptor = startup_descriptor();
+  radar_scan_descriptor.description =
+    "Also publish target lists as radar_msgs/RadarScan on smart_radar/radar_scan_N "
+    "(requires a build with radar_msgs); restart to change.";
+  publish_radar_scan_ = declare_parameter("publish_radar_scan", false, radar_scan_descriptor);
+#ifndef UMRR_HAVE_RADAR_MSGS
+  if (publish_radar_scan_) {
+    throw std::invalid_argument(
+            "publish_radar_scan is true, but this driver was built without radar_msgs");
+  }
+#endif
   const auto master_inst_serial_type = startup_parameter(*this, kInstSerialTypeTag, std::string{});
   const auto master_data_serial_type = startup_parameter(*this, kDataSerialTypeTag, std::string{});
 
