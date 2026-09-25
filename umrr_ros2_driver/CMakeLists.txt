@@ -263,6 +263,29 @@ if(BUILD_TESTING)
     add_executable(radar_test_sender test/radar_test_sender.cpp)
     target_link_libraries(radar_test_sender ${smartmicro_core_targets})
 
+    # Field-mapping regression test for the templated stream codecs (M1): mocked
+    # SDK lists, generated from the SDK headers, run through every model's codecs.
+    set(stream_probe_cpp "${CMAKE_CURRENT_BINARY_DIR}/stream_mapping_probe.cpp")
+    set(stream_probe_codes "${CMAKE_CURRENT_BINARY_DIR}/stream_mapping_codes.json")
+    add_custom_command(
+      OUTPUT "${stream_probe_cpp}" "${stream_probe_codes}"
+      COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/stream_mapping/generate_probe.py"
+        "${SMARTMICRO_SDK_DIR}/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/umrr_ros2_driver/sensor_model_traits.hpp"
+        "${stream_probe_cpp}" "${stream_probe_codes}"
+      DEPENDS test/stream_mapping/generate_probe.py
+        include/umrr_ros2_driver/sensor_model_traits.hpp
+      COMMENT "Generating the stream mapping probe")
+    add_executable(stream_mapping_probe "${stream_probe_cpp}")
+    target_include_directories(stream_mapping_probe PRIVATE
+      include "${SMARTMICRO_SDK_DIR}/include")
+    target_link_libraries(stream_mapping_probe
+      ${umrr_ros2_msgs_TARGETS} ${sensor_msgs_TARGETS})
+    ament_add_pytest_test(test_stream_mapping test/test_stream_mapping.py TIMEOUT 60
+      ENV "SMARTMICRO_STREAM_PROBE=$<TARGET_FILE:stream_mapping_probe>"
+      "SMARTMICRO_STREAM_CODES=${stream_probe_codes}")
+
     set(SMARTMICRO_TEST_DOMAIN_ID 178 CACHE STRING "Isolated ROS domain for offline tests")
     set(offline_environment
         "ROS_DOMAIN_ID=${SMARTMICRO_TEST_DOMAIN_ID}"
@@ -308,8 +331,10 @@ if(BUILD_TESTING)
       test/compare_umrr96_settings.py
       test/radar_node_test.launch.py
       test/readback_smoke.py
+      test/stream_mapping/generate_probe.py
       test/test_driver_runtime.py
-      test/test_sdk_patch.py)
+      test/test_sdk_patch.py
+      test/test_stream_mapping.py)
 
     ament_cppcheck(${PROJECT_CPP_FILES})
     # Vendor headers are included with <>, which cpplint misclassifies as C system
