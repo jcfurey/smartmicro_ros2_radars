@@ -9,6 +9,7 @@ from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -19,6 +20,8 @@ def generate_launch_description():
     rviz = Node(
         package='rviz2', executable='rviz2', name='umrr96_tracking_rviz', output='log',
         arguments=['-d', LaunchConfiguration('rviz_config')],
+        parameters=[{'use_sim_time': ParameterValue(
+            LaunchConfiguration('use_sim_time'), value_type=bool)}],
         condition=IfCondition(LaunchConfiguration('rviz')))
     return LaunchDescription([
         # Distinct names: parent launch configurations are visible in included files,

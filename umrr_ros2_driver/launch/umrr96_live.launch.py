@@ -17,7 +17,7 @@ from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -30,12 +30,16 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     use_sim_time = {
         'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}
+    # Diagnostic status names carry the node's namespace only when one is set, so two
+    # radars do not report under the same "smart_radar: ..." names; unchanged otherwise.
+    diagnostic_names = {'diagnostic_updater.use_fqn': ParameterValue(
+        PythonExpression(["'true' if '", namespace, "' else 'false'"]), value_type=bool)}
     radar = Node(
         package='umrr_ros2_driver',
         executable='smartmicro_radar_node_exe',
         name='smart_radar',
         namespace=namespace,
-        parameters=[params_file, use_sim_time],
+        parameters=[params_file, use_sim_time, diagnostic_names],
         remappings=[
             ('smart_radar/set_radar_mode', 'smart_radar/data_receiver/set_radar_mode'),
             ('smart_radar/get_radar_mode', 'smart_radar/data_receiver/get_radar_mode'),
@@ -48,7 +52,7 @@ def generate_launch_description():
         executable='smartmicro_radar_readback_node',
         name='smart_radar_readback',
         namespace=namespace,
-        parameters=[params_file, use_sim_time],
+        parameters=[params_file, use_sim_time, diagnostic_names],
         output='log',
     )
     views = Node(
@@ -107,6 +111,11 @@ def generate_launch_description():
                         'when publishing the description',
         ),
         DeclareLaunchArgument(
+            'description_sensor_name', default_value='umrr96',
+            description='Prefix of the housing frames (<name>_link); give each radar its '
+                        'own, since TF frame names are not namespaced',
+        ),
+        DeclareLaunchArgument(
             'view',
             default_value='grid',
             choices=['grid', 'fan', 'live'],
@@ -127,9 +136,14 @@ def generate_launch_description():
                 FindPackageShare('smartmicro_description'),
                 'launch', 'umrr96_description.launch.py'])),
             condition=IfCondition(LaunchConfiguration('publish_description')),
+            # Explicit rviz:=false: launch arguments are shared with this unscoped include,
+            # so this file's rviz:=true would otherwise open a second, unmanaged RViz.
             launch_arguments={
                 'frame_id': LaunchConfiguration('description_frame_id'),
+                'sensor_name': LaunchConfiguration('description_sensor_name'),
                 'namespace': namespace,
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                'rviz': 'false',
             }.items(),
         ),
         radar,

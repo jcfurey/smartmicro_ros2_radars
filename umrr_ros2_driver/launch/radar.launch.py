@@ -19,7 +19,7 @@ import os
 from ament_index_python import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -38,7 +38,11 @@ def generate_launch_description():
         parameters=[
             LaunchConfiguration('params_file'),
             {'use_sim_time': ParameterValue(
-                LaunchConfiguration('use_sim_time'), value_type=bool)},
+                LaunchConfiguration('use_sim_time'), value_type=bool),
+             # Namespaced radars report distinct diagnostic names; unchanged otherwise.
+             'diagnostic_updater.use_fqn': ParameterValue(PythonExpression(
+                 ["'true' if '", LaunchConfiguration('namespace'), "' else 'false'"]),
+                 value_type=bool)},
         ],
     )
     return LaunchDescription([
