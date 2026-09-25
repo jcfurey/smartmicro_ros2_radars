@@ -79,6 +79,14 @@ velocity under `/umrr96_processing/`, with status in `/diagnostics`. Use the
 existing publisher if that node is already running. These outputs still need
 controlled-motion calibration before connection to a navigation estimator.
 
+For the user-confirmed stationary setup, the
+[temporal density preview](../smartmicro_processing/ACCUMULATION.md) is available
+with `ros2 launch smartmicro_processing umrr96_accumulation.launch.py mode:=stationary_preview rviz:=true`.
+Its preview clouds live under `/umrr96_accumulation/stationary_preview/` and
+include source age and scan support. Use the running instance if already enabled.
+The default `pose_compensated` mode needs real timestamped `odom -> umrr96` TF;
+the standalone sensor description alone cannot supply that pose chain.
+
 ### Timestamps, runtime configuration and diagnostics
 
 Clouds and their matching metadata now use the ROS clock when the SDK callback

@@ -1,0 +1,53 @@
+{
+  "started_at": "2026-09-25T00:03:27.953625+00:00",
+  "duration_seconds": 10,
+  "mode": "stationary_preview",
+  "user_confirmed_sensor_stationary": true,
+  "motion_compensated": false,
+  "calibrated": false,
+  "preview_snapshots": 100,
+  "input_frames": 182,
+  "input_points": {
+    "mean": 22.807692307692307,
+    "median": 23.0,
+    "p95": 24.0,
+    "max": 26.0
+  },
+  "input_voxels": {
+    "mean": 22.807692307692307,
+    "median": 23.0,
+    "p95": 24.0,
+    "max": 26.0
+  },
+  "accumulated_voxels": {
+    "mean": 50.66,
+    "median": 51.0,
+    "p95": 56.0,
+    "max": 59.0
+  },
+  "confirmed_voxels": {
+    "mean": 33.84,
+    "median": 34.0,
+    "p95": 38.0,
+    "max": 39.0
+  },
+  "provenance_checked_points": 5066,
+  "support_votes_checked": 20490,
+  "representative_values_unchanged": true,
+  "original_ages_verified": true,
+  "per_scan_voxel_support_verified": true,
+  "confirmed_partition_verified": true,
+  "missing_odometry": {
+    "output_frames": 102,
+    "all_empty": true,
+    "transformed_scans": 0,
+    "timeout_observed": true
+  },
+  "added_tf_publishers": [],
+  "rviz_subscribed": true,
+  "sensor_settings_written": false,
+  "existing_driver_restarted": false,
+  "independent_reference_available": false,
+  "session_file": "/tmp/umrr96-accumulation-live/session.json",
+  "success": true
+}

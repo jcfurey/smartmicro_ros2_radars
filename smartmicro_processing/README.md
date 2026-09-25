@@ -1,10 +1,14 @@
 # Experimental UMRR-96 processing
 
-This first processing iteration provides a detection adapter and robust **3D
-radar-origin translation velocity**. It builds independently of the proprietary
+This package provides a detection adapter, robust **3D radar-origin translation
+velocity** and [bounded temporal evidence](ACCUMULATION.md). It builds independently of the proprietary
 SDK and runs alongside the existing driver. It subscribes to raw targets and
 never sends sensor commands. The existing driver, raw/filtered topics, TF and
 state estimator retain their roles.
+
+The [accumulation guide](ACCUMULATION.md) covers timestamped pose compensation,
+the explicitly stationary live preview, per-cell support/age, expiry and RViz.
+The commands and velocity contract below describe the first Doppler iteration.
 
 Build and run from the workspace root:
 
@@ -131,8 +135,11 @@ its PID, log and overlay are recorded in
 inspection; the launch command above is for starting a new session. The original
 radar driver and sensor settings were not changed during this live check.
 
-The next experiments are controlled forward/reverse and lateral motion to verify
-Doppler and velocity, measured mounting/time calibration with IMU and geometric
-odometry, then pose-aware temporal evidence and calibrated radiometric weighting.
-This iteration does not increase native per-scan detections or establish mapping
-or navigation benefit. See the [investigation and validation plan](../docs/umrr96-navigation-investigation.md).
+The second iteration adds 19 accumulation checks, bringing the package total to
+48 pytest cases. Its separate [live and replay results](ACCUMULATION.md) quantify
+recent-cell density and source provenance. The next experiments are controlled
+forward/reverse and lateral motion to verify Doppler and velocity, measured
+mounting/time calibration with IMU and geometric odometry, and physical evaluation
+of pose compensation and radiometric weighting. These iterations do not increase
+native per-scan detections or establish mapping/navigation accuracy. See the
+[investigation and validation plan](../docs/umrr96-navigation-investigation.md).

@@ -367,5 +367,17 @@ geometry/consensus checks, experimental covariance, residual classification and
 stale-data handling. Its 29 pytest cases, 808-scan replay and 181-scan live check
 establish software behavior and local throughput. The live estimates remain on
 a separate experimental topic; physical sign/time/extrinsic/covariance calibration,
-dependable tuning readback, pose-aware accumulation and navigation benefit remain
+dependable tuning readback, moving-platform validation and navigation benefit remain
 open parts of the validation plan above.
+
+The [second iteration](../smartmicro_processing/ACCUMULATION.md) adds exact-time
+TF accumulation, one vote per voxel per scan, measured representatives with source
+timestamps/indices, confirmation and bounded lifetime/memory. A separate stationary
+preview is now live following the user's confirmation that the sensor is still.
+The new 10-second check measured 22.81 mean instantaneous cells, 50.66 recent cells
+over 0.5 s and 33.84 cells supported by multiple scans. Every representative's
+source values, age and support were checked. Missing odometry correctly produced
+empty pose-compensated output, and synthetic translation/rotation tests verify the
+transform path. All 48 package pytest cases pass. These are software/temporal
+density results; the physical error and navigation acceptance gates above remain
+unmeasured.

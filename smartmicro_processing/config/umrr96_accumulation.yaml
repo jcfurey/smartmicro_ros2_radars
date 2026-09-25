@@ -1,0 +1,16 @@
+# Applied only to the node using this parameter file; supports custom node_name.
+/**:
+  ros__parameters:
+    window_seconds: 0.5
+    voxel_size: 0.25
+    min_support_scans: 2
+    max_scans: 32
+    max_observations: 8192
+    tf_wait_seconds: 0.2
+    max_pending_scans: 32
+    max_input_age: 0.5
+    future_tolerance: 0.05
+    stale_timeout: 0.5
+    max_pose_translation_step: 1.0
+    max_pose_rotation_step: 0.5
+    publish_hz: 10.0

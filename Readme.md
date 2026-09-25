@@ -17,6 +17,9 @@ standalone URDF/TF launch and a reusable Xacro macro for a future robot mount.
 The [experimental processing package](smartmicro_processing/README.md) adds
 measurement-field validation, robust 3D Doppler velocity, separate residual-based
 return groups and freshness diagnostics for passive live or recorded comparisons.
+Its [temporal evidence iteration](smartmicro_processing/ACCUMULATION.md) adds
+exact-time pose compensation, bounded per-cell scan support and an explicitly
+stationary density preview with age/provenance fields.
 
 ## Get the Smart Access release
 ```bash

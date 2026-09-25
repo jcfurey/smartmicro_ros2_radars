@@ -1,0 +1,122 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ''
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Metre grid
+      Enabled: true
+      Alpha: 0.2
+      Cell Size: 1
+      Plane: XY
+      Plane Cell Count: 40
+      Color: 130; 145; 165
+      Reference Frame: <Fixed Frame>
+    - Class: rviz_default_plugins/RobotModel
+      Name: UMRR-96 housing
+      Enabled: true
+      Alpha: 1
+      Description Source: Topic
+      Description Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /umrr96/robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      TF Prefix: ''
+    - Class: rviz_default_plugins/Axes
+      Name: Sensor axes
+      Enabled: true
+      Reference Frame: <Fixed Frame>
+      Length: 0.6
+      Radius: 0.015
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Stationary preview - support per cell
+      Enabled: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /umrr96_accumulation/stationary_preview/accumulated_targets
+      Position Transformer: XYZ
+      Color Transformer: Intensity
+      Channel Name: support_scans
+      Autocompute Intensity Bounds: false
+      Min Intensity: 1
+      Max Intensity: 10
+      Use Rainbow: true
+      Style: Spheres
+      Size (m): 0.12
+      Size (Pixels): 6
+      Alpha: 0.8
+      Decay Time: 0
+      Use Fixed Frame: true
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Confirmed cells - age in seconds (optional)
+      Enabled: false
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /umrr96_accumulation/stationary_preview/confirmed_targets
+      Position Transformer: XYZ
+      Color Transformer: Intensity
+      Channel Name: age_seconds
+      Autocompute Intensity Bounds: false
+      Min Intensity: 0
+      Max Intensity: 0.5
+      Use Rainbow: true
+      Style: Spheres
+      Size (m): 0.12
+      Decay Time: 0
+      Use Fixed Frame: true
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Current Doppler inliers
+      Enabled: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /umrr96_processing/doppler_inliers
+      Position Transformer: XYZ
+      Color Transformer: FlatColor
+      Color: 255; 255; 255
+      Style: Points
+      Size (Pixels): 3
+      Decay Time: 0
+      Use Fixed Frame: true
+  Enabled: true
+  Global Options:
+    Background Color: 22; 27; 35
+    Fixed Frame: umrr96
+    Frame Rate: 20
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Distance: 28
+      Focal Point:
+        X: 8
+        Y: 0
+        Z: 0
+      Pitch: 0.9
+      Yaw: 3.141592653589793
+      Near Clip Distance: 0.01
+      Target Frame: <Fixed Frame>
+Window Geometry:
+  Width: 1250
+  Height: 850

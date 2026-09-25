@@ -1,0 +1,157 @@
+{
+  "generated_at": "2026-09-24T23:59:12.290497+00:00",
+  "mode": "stationary_preview",
+  "sensor_motion_compensated": false,
+  "stationary_assumption_verified_from_recording": false,
+  "independent_reference_available": false,
+  "sources": [
+    {
+      "file": "results/umrr96-investigation-20260924/live/0_live_2026_09_24-17_44_48.mcap",
+      "sha256": "b734494b6acad789c803f706bfd898da80f7917d91e935a141d8d41cbc57d751"
+    },
+    {
+      "file": "results/umrr96-investigation-20260924/live/metadata.yaml",
+      "sha256": "9100120fd1aab9c005b79d62f78da6e12246d2754cfefd52059c5da31d97d214"
+    }
+  ],
+  "input_topic": "/smart_radar/port_targets_0",
+  "frames": {
+    "umrr96": 808
+  },
+  "counts": {
+    "valid": 808,
+    "input_points": 21451,
+    "doppler_inlier_points": 21451
+  },
+  "duration_seconds": 44.455899707,
+  "fit_config": {
+    "doppler_sign": 1,
+    "residual_threshold": 0.2,
+    "min_inliers": 8,
+    "min_inlier_fraction": 0.6,
+    "max_condition": 30.0,
+    "ransac_trials": 128,
+    "noise_floor": 0.05,
+    "velocity_std_floor": 0.1,
+    "max_velocity_std": 1.0,
+    "max_speed": 15.0
+  },
+  "gate_config": {
+    "min_range": 0.15,
+    "max_range": 120.0,
+    "min_snr_db": 6.0
+  },
+  "instantaneous_inlier_points": {
+    "mean": 26.548267326732674,
+    "min": 21.0,
+    "median": 26.0,
+    "p95": 30.0,
+    "max": 33.0
+  },
+  "instantaneous_voxels": {
+    "mean": 26.548267326732674,
+    "min": 21.0,
+    "median": 26.0,
+    "p95": 30.0,
+    "max": 33.0
+  },
+  "windows": [
+    {
+      "config": {
+        "window_seconds": 0.3,
+        "voxel_size": 0.25,
+        "min_support_scans": 2,
+        "max_scans": 32,
+        "max_observations": 8192
+      },
+      "accumulated_voxels": {
+        "mean": 68.02970297029702,
+        "min": 25.0,
+        "median": 68.0,
+        "p95": 81.0,
+        "max": 93.0
+      },
+      "confirmed_voxels": {
+        "mean": 30.475247524752476,
+        "min": 0.0,
+        "median": 30.0,
+        "p95": 36.0,
+        "max": 42.0
+      },
+      "accumulated_to_instantaneous_voxel_ratio": {
+        "mean": 2.567106368504838,
+        "min": 1.0,
+        "median": 2.5416666666666665,
+        "p95": 3.0384615384615383,
+        "max": 3.625
+      },
+      "capacity_drops": 0,
+      "empty_after_last_scan_plus_window": true
+    },
+    {
+      "config": {
+        "window_seconds": 0.5,
+        "voxel_size": 0.25,
+        "min_support_scans": 2,
+        "max_scans": 32,
+        "max_observations": 8192
+      },
+      "accumulated_voxels": {
+        "mean": 93.59653465346534,
+        "min": 25.0,
+        "median": 94.0,
+        "p95": 113.0,
+        "max": 128.0
+      },
+      "confirmed_voxels": {
+        "mean": 42.03712871287129,
+        "min": 0.0,
+        "median": 42.0,
+        "p95": 49.0,
+        "max": 55.0
+      },
+      "accumulated_to_instantaneous_voxel_ratio": {
+        "mean": 3.5352082457046006,
+        "min": 1.0,
+        "median": 3.5384615384615383,
+        "p95": 4.269230769230769,
+        "max": 5.125
+      },
+      "capacity_drops": 0,
+      "empty_after_last_scan_plus_window": true
+    },
+    {
+      "config": {
+        "window_seconds": 1.0,
+        "voxel_size": 0.25,
+        "min_support_scans": 2,
+        "max_scans": 32,
+        "max_observations": 8192
+      },
+      "accumulated_voxels": {
+        "mean": 143.4529702970297,
+        "min": 25.0,
+        "median": 145.0,
+        "p95": 173.0,
+        "max": 188.0
+      },
+      "confirmed_voxels": {
+        "mean": 65.49381188118812,
+        "min": 0.0,
+        "median": 66.0,
+        "p95": 76.0,
+        "max": 81.0
+      },
+      "accumulated_to_instantaneous_voxel_ratio": {
+        "mean": 5.422240509614636,
+        "min": 1.0,
+        "median": 5.458333333333333,
+        "p95": 6.649,
+        "max": 7.956521739130435
+      },
+      "capacity_drops": 0,
+      "empty_after_last_scan_plus_window": true
+    }
+  ],
+  "interpretation": "Sensor-frame comparison under a stationary-sensor assumption. Counts include noisy cell-boundary crossings and repeated evidence; they do not establish independent surface coverage, physical resolution or mapping accuracy."
+}
