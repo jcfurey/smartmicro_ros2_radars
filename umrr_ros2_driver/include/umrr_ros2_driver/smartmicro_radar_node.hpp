@@ -1343,6 +1343,17 @@ private:
   }
 
   ///
+  /// @brief      Whether a service request names one of the configured sensors.
+  ///
+  bool is_configured_sensor(com::types::ClientId client_id) const
+  {
+    for (size_t i = 0; i < m_number_of_sensors; ++i) {
+      if (m_sensors[i].id == client_id) {return true;}
+    }
+    return false;
+  }
+
+  ///
   /// @brief      Initializes all the smart access and ros2 services.
   ///
   void initialize_services();
@@ -1451,7 +1462,6 @@ private:
 
   std::size_t m_number_of_sensors{};
   std::size_t m_number_of_adapters{};
-  com::types::ClientId client_id;
   std::uint64_t response_type{};
   std::shared_ptr<UpdateService> update_service;
   std::atomic_bool m_shutdown_requested{false};

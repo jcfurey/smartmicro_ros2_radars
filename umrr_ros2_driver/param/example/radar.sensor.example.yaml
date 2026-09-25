@@ -6,10 +6,11 @@
           # As many as 10 sensors all named as "sensor_<number>" in increasing order of numbers,
           # e.g., sensor_0, sensor_1, etc. The list must start with sensor_0.
           sensor_0:
-              # The model of the connected sensor. Available models umrr11, umrr9d, umrr96,
-              # umrr9f_v1_1_1, umrr9f_v2_0_0
+              # The model of the connected sensor; see ../model_uif_catalogue.yaml.
               link_type: "can"
-              model: "umrr9d_can"
+              # "target" for target lists, "mse" for object + target lists (mse models).
+              pub_type: "target"
+              model: "umrr9d_can_v1_0_3"
               # The client_id of the sensor/source, must be a unique integer.
               id: 500
               # Adapter id to which sensor is connected
@@ -27,9 +28,10 @@
               # Specify the history size.
               history_size: 10
           sensor_1:
-              # The model of the connected sensor. Available models umrr11, umrr9d, umrr96,
-              # umrr9f_v1_1_1, umrr9f_v2_0_0
+              # The model of the connected sensor; see ../model_uif_catalogue.yaml.
               link_type: "can"
+              # "target" for target lists, "mse" for object + target lists (mse models).
+              pub_type: "target"
               model: "umrr9f_can_v2_1_1"
               # The client_id of the sensor/source, must be a unique integer.
               id: 600
@@ -49,6 +51,8 @@
               history_size: 10
           sensor_2:
               link_type: "eth"
+              # "target" for target lists, "mse" for object + target lists (mse models).
+              pub_type: "target"
               # The model of the connected sensor.
               model: "umrr9f_v2_1_1"
               # Adapter id to which sensor is connected
@@ -75,8 +79,10 @@
               uifpatchv: 1
           sensor_3:
               link_type: "eth"
+              # "target" for target lists, "mse" for object + target lists (mse models).
+              pub_type: "target"
               # The model of the connected sensor.
-              model: "umrr11"
+              model: "umrr11_v1_1_2"
               # Adapter id to which sensor is connected
               dev_id: 3
               # The client_id of the sensor/source, must be a unique integer.
@@ -100,10 +106,11 @@
               # The pathc version of the interface
               uifpatchv: 2
           sensor_4:
-              # The model of the connected sensor. Available models umrr11, umrr9d, umrr96,
-              # umrr9f_v1_1_1, umrr9f_v2_0_0
+              # The model of the connected sensor; see ../model_uif_catalogue.yaml.
               link_type: "can"
-              model: "umrr9d_can"
+              # "target" for target lists, "mse" for object + target lists (mse models).
+              pub_type: "target"
+              model: "umrr9d_can_v1_0_3"
               # The client_id of the sensor/source, must be a unique integer.
               id: 900
               # Adapter id to which sensor is connected

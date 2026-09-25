@@ -19,6 +19,8 @@
 
 #include <nlohmann/json.hpp>
 #include <umrr_ros2_driver/point_cloud_builder.hpp>
+#include <umrr_ros2_driver/sensor_models.hpp>
+#include <umrr_ros2_driver/service_parsing.hpp>
 #include <umrr_ros2_driver/udp_socket_health.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 #include <umrr11_t132_automotive_v1_1_2/comtargetlist/PortHeader.h>
@@ -114,6 +116,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <variant>
 #include <vector>
 
 #include "umrr_ros2_driver/config_path.hpp"
@@ -128,14 +131,15 @@ using com::master::InstructionServiceIface;
 using com::master::Response;
 using com::master::ResponseBatch;
 using com::master::SetParamRequest;
-using std::literals::string_view_literals::operator""sv;
+using smartmicro::drivers::radar::ModeValue;
+using smartmicro::drivers::radar::parse_mode_value;
 
 namespace
 {
-constexpr auto kMseType = "mse"sv;
-constexpr auto kTargetType = "target"sv;
-constexpr auto kEthLink = "eth"sv;
-constexpr auto kCanLink = "can"sv;
+using smartmicro::drivers::radar::kEthLinkType;
+using smartmicro::drivers::radar::kMsePubType;
+using smartmicro::drivers::radar::kTargetPubType;
+using smartmicro::drivers::radar::validate_sensor_config;
 
 constexpr auto kDefaultClientId = 0;
 constexpr auto kDefaultInterfaceName = "lo";
@@ -402,32 +406,16 @@ void SmartmicroRadarNode::initialize_services()
 
 void SmartmicroRadarNode::setup_publishers()
 {
-  const auto validate_sensor = [](const auto & sensor) {
-      std::string_view pub_type{sensor.pub_type};
-      std::string_view model{sensor.model};
-
-      const bool is_mse = (pub_type == kMseType);
-      const bool has_mse = (model.find(kMseType) != std::string_view::npos);
-
-      if (is_mse == !has_mse) {
-        throw std::runtime_error(
-                std::string("Model name ") + (is_mse ? "must" : "must not") +
-                " contain 'mse' when pub_type is '" + std::string(pub_type) + "'");
-      }
-    };
-
   for (size_t i = 0; i < m_number_of_sensors; ++i) {
     const auto & sensor = m_sensors[i];
-
-    validate_sensor(sensor);
-
-    std::string_view link_type{sensor.link_type};
-    if (link_type == kEthLink) {
+    // Already validated with the parameters; repeated so this path never
+    // registers an SDK callback without its publishers.
+    validate_sensor_config(
+      "sensors.sensor_" + std::to_string(i), sensor.link_type, sensor.model, sensor.pub_type);
+    if (sensor.link_type == kEthLinkType) {
       port_publishers(sensor, i);
-    } else if (link_type == kCanLink) {
-      can_publishers(sensor, i);
     } else {
-      RCLCPP_WARN(get_logger(), "Unknown link type for sensor %zu", i);
+      can_publishers(sensor, i);
     }
   }
 }
@@ -437,7 +425,7 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
   std::string_view pub_type{m_sensors[sensor_idx].pub_type};
 
   try {
-    if (pub_type == kMseType) {
+    if (pub_type == kMsePubType) {
       m_publishers_obj[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/port_objects_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_port_obj_header[sensor_idx] =
@@ -454,7 +442,7 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
           "smart_radar/port_faultreport_" + std::to_string(sensor_idx), sensor.history_size);
       }
 
-    } else if (pub_type == kTargetType) {
+    } else if (pub_type == kTargetPubType) {
       m_publishers[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/port_targets_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_port_target_header[sensor_idx] =
@@ -945,7 +933,7 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
   std::string_view pub_type{m_sensors[sensor_idx].pub_type};
 
   try {
-    if (pub_type == kMseType) {
+    if (pub_type == kMsePubType) {
       m_publishers_obj[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/can_objects_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_can_obj_header[sensor_idx] =
@@ -957,14 +945,14 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
       m_publishers_can_target_header[sensor_idx] =
         create_publisher<umrr_ros2_msgs::msg::CanTargetHeader>(
         "smart_radar/can_targetheader_" + std::to_string(sensor_idx), sensor.history_size);
-    } else if (pub_type == kTargetType) {
+    } else if (pub_type == kTargetPubType) {
       m_publishers[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/can_targets_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_can_target_header[sensor_idx] =
         create_publisher<umrr_ros2_msgs::msg::CanTargetHeader>(
         "smart_radar/can_targetheader_" + std::to_string(sensor_idx), sensor.history_size);
     } else {
-      RCLCPP_INFO(this->get_logger(), "Unkwon publish type!");
+      throw std::invalid_argument("Unknown publish type: " + sensor.pub_type);
     }
 
     RCLCPP_INFO(get_logger(), "Successfully created CAN publishers for sensor %zu", sensor_idx);
@@ -1324,17 +1312,9 @@ void SmartmicroRadarNode::firmware_download(
   const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request,
   std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Response> result)
 {
-  bool check_flag_id = false;
-  client_id = request->sensor_id;
+  const auto client_id = request->sensor_id;
   std::string update_image = request->file_path;
-
-  for (auto & sensor : m_sensors) {
-    if (client_id == sensor.id) {
-      check_flag_id = true;
-      break;
-    }
-  }
-  if (!check_flag_id) {
+  if (!is_configured_sensor(client_id)) {
     result->res = "The sensor ID value entered is invalid! ";
     return;
   }
@@ -1385,16 +1365,8 @@ void SmartmicroRadarNode::set_radar_mode(
   const std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Request> request,
   std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Response> result)
 {
-  // Validate sensor ID
-  bool check_flag_id = false;
-  client_id = request->sensor_id;
-  for (auto & sensor : m_sensors) {
-    if (client_id == sensor.id) {
-      check_flag_id = true;
-      break;
-    }
-  }
-  if (!check_flag_id) {
+  const auto client_id = request->sensor_id;
+  if (!is_configured_sensor(client_id)) {
     result->res = "Error: Sensor ID is invalid! ";
     return;
   }
@@ -1419,6 +1391,19 @@ void SmartmicroRadarNode::set_radar_mode(
     return;
   }
 
+  // Parse every value before allocating an SDK batch, so a rejected request
+  // neither sends a partial batch nor leaves one allocated.
+  std::vector<ModeValue> parsed_values;
+  parsed_values.reserve(request->params.size());
+  for (size_t i = 0; i < request->params.size(); i++) {
+    try {
+      parsed_values.push_back(parse_mode_value(request->values[i], request->value_types[i]));
+    } catch (const std::exception & e) {
+      result->res = "Error: parameter '" + request->params[i] + "': " + e.what();
+      return;
+    }
+  }
+
   std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
   if (!inst) {
     result->res = "Error: Failed to get instruction service";
@@ -1433,73 +1418,11 @@ void SmartmicroRadarNode::set_radar_mode(
 
   for (size_t i = 0; i < request->params.size(); i++) {
     const auto & param = request->params[i];
-    const auto & value = request->values[i];
-    const auto & value_type = request->value_types[i];
-    bool request_added = false;
-    try {
-      switch (value_type) {
-        case 0: {
-            float float_value = std::stof(value);
-            auto radar_mode_float =
-              std::make_shared<SetParamRequest<float>>(section_name, param, float_value);
-            request_added = batch->AddRequest(radar_mode_float);
-            break;
-          }
-        case 1: {
-            if (value.find('.') != std::string::npos) {
-              result->res = "Error: uint32 value cannot contain decimal points";
-              return;
-            }
-            uint32_t u32_value = static_cast<uint32_t>(std::stoul(value));
-            auto radar_mode_u32 =
-              std::make_shared<SetParamRequest<uint32_t>>(section_name, param, u32_value);
-            request_added = batch->AddRequest(radar_mode_u32);
-            break;
-          }
-        case 2: {
-            if (value.find('.') != std::string::npos) {
-              result->res = "Error: uint16 value cannot contain decimal points";
-              return;
-            }
-            uint64_t temp = std::stoul(value);
-            if (temp > 65535) {
-              result->res = "Error: uint16 value must be between 0 and 65535";
-              return;
-            }
-            uint16_t u16_value = static_cast<uint16_t>(temp);
-            auto radar_mode_u16 =
-              std::make_shared<SetParamRequest<uint16_t>>(section_name, param, u16_value);
-            request_added = batch->AddRequest(radar_mode_u16);
-            break;
-          }
-        case 3: {
-            if (value.find('.') != std::string::npos) {
-              result->res = "Error: uint8 value cannot contain decimal points";
-              return;
-            }
-            uint64_t temp = std::stoul(value);
-            if (temp > 255) {
-              result->res = "Error: uint8 value must be between 0 and 255";
-              return;
-            }
-            uint8_t u8_value = static_cast<uint8_t>(temp);
-            auto radar_mode_u8 =
-              std::make_shared<SetParamRequest<uint8_t>>(section_name, param, u8_value);
-            request_added = batch->AddRequest(radar_mode_u8);
-            break;
-          }
-        default:
-          result->res =
-            "Error: Invalid value_type specified. Must be 0 (f32), 1 (u32), 2 (u16), 3 (u8)";
-          return;
-      }
-    } catch (const std::invalid_argument & e) {
-      result->res = "Error: Failed to convert value string, invalid format";
-      return;
-    } catch (const std::out_of_range & e) {
-      result->res = "Error: Value is out of range for the specified type";
-      return;
-    }
+    const bool request_added = std::visit(
+      [&](auto typed_value) {
+        return batch->AddRequest(
+          std::make_shared<SetParamRequest<decltype(typed_value)>>(section_name, param, typed_value));
+      }, parsed_values[i]);
 
     if (!request_added) {
       result->res = "Error: Failed to add instruction '" + param + "'! ";
@@ -1525,17 +1448,14 @@ void SmartmicroRadarNode::ip_address(
   const std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Request> request,
   std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Response> result)
 {
-  std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
-  bool check_flag = false;
-  client_id = request->sensor_id;
-  for (auto & sensor : m_sensors) {
-    if (client_id == sensor.id) {
-      check_flag = true;
-      break;
-    }
-  }
-  if (!check_flag) {
+  const auto client_id = request->sensor_id;
+  if (!is_configured_sensor(client_id)) {
     result->res_ip = "Sensor ID entered is not listed in the param file! ";
+    return;
+  }
+  std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
+  if (!inst) {
+    result->res_ip = "Failed to get instruction service";
     return;
   }
 
@@ -1584,19 +1504,9 @@ void SmartmicroRadarNode::radar_command(
   const std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Request> request,
   std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Response> result)
 {
-  std::string command_name{};
-  bool check_flag_id = false;
-
-  command_name = request->command;
-  client_id = request->sensor_id;
-
-  for (auto & sensor : m_sensors) {
-    if (client_id == sensor.id) {
-      check_flag_id = true;
-      break;
-    }
-  }
-  if (!check_flag_id) {
+  const std::string command_name = request->command;
+  const auto client_id = request->sensor_id;
+  if (!is_configured_sensor(client_id)) {
     result->res = "The sensor ID value entered is invalid! ";
     return;
   }
@@ -1613,6 +1523,10 @@ void SmartmicroRadarNode::radar_command(
   }
 
   std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
+  if (!inst) {
+    result->res = "Failed to get instruction service";
+    return;
+  }
   std::shared_ptr<InstructionBatch> batch;
 
   if (!inst->AllocateInstructionBatch(client_id, batch)) {
@@ -1644,16 +1558,8 @@ void SmartmicroRadarNode::get_radar_status(
   const std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Request> request,
   std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Response> result)
 {
-  // Validate sensor ID
-  bool check_flag_id = false;
-  client_id = request->sensor_id;
-  for (auto & sensor : m_sensors) {
-    if (client_id == sensor.id) {
-      check_flag_id = true;
-      break;
-    }
-  }
-  if (!check_flag_id) {
+  const auto client_id = request->sensor_id;
+  if (!is_configured_sensor(client_id)) {
     result->res = "Error: Sensor ID is invalid! ";
     return;
   }
@@ -1744,16 +1650,8 @@ void SmartmicroRadarNode::get_radar_mode(
   const std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Request> request,
   std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Response> result)
 {
-  // Validate sensor ID
-  bool check_flag_id = false;
-  client_id = request->sensor_id;
-  for (auto & sensor : m_sensors) {
-    if (client_id == sensor.id) {
-      check_flag_id = true;
-      break;
-    }
-  }
-  if (!check_flag_id) {
+  const auto client_id = request->sensor_id;
+  if (!is_configured_sensor(client_id)) {
     result->res = "Error: Sensor ID is invalid! ";
     return;
   }
@@ -1815,7 +1713,7 @@ void SmartmicroRadarNode::get_radar_mode(
         }
       default:
         result->res =
-          "Error: Invalid value_type specified. Must be 0(u32), 1(u16), 2(u8) or 3(float)";
+          "Error: Invalid param_type specified. Must be 0 (f32), 1 (u32), 2 (u16) or 3 (u8)";
         return;
     }
 
@@ -6292,6 +6190,7 @@ void SmartmicroRadarNode::update_config_files_from_params()
       sensor.data_type = startup_parameter(*this, prefix_3 + ".data_type", "");
       sensor.link_type = startup_parameter(*this, prefix_3 + ".link_type", kDefaultHwLinkType);
       sensor.pub_type = startup_parameter(*this, prefix_3 + ".pub_type", "");
+      validate_sensor_config(prefix_3, sensor.link_type, sensor.model, sensor.pub_type);
       if (sensor.port > 65535 || (sensor.link_type == "eth" && sensor.port == 0) ||
         sensor.history_size == 0 || sensor.frame_id.empty())
       {

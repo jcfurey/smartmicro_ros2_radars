@@ -202,6 +202,8 @@ if(BUILD_TESTING)
 
     ament_add_gtest(test_umrr96_tuning test/test_umrr96_tuning.cpp)
     target_include_directories(test_umrr96_tuning PRIVATE include)
+    ament_add_gtest(test_service_parsing test/test_service_parsing.cpp)
+    target_include_directories(test_service_parsing PRIVATE include)
     ament_add_gtest(test_udp_socket_health test/test_udp_socket_health.cpp)
     target_include_directories(test_udp_socket_health PRIVATE include)
 
