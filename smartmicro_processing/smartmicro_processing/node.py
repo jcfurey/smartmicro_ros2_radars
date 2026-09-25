@@ -59,7 +59,15 @@ TRACKER_PARAMETERS = {
     'background_time_constant': ('Memory of the static background used to tell novel '
                                  'zero-Doppler support from walls (s). Valid only while '
                                  'the input frame is fixed in the scene.', 1, 3600),
+    'background_threshold': ('Fraction of recent scans a polar cell must be hit in to be '
+                             'background; lower keeps walls a person occludes as background.',
+                             .01, .99),
+    'background_warmup': ('Observation time before the background is used; it restarts '
+                          'whenever the sensor is seen moving (s).', .1, 600),
 }
+# Consecutive valid fits faster than sensor_moving_speed before the sensor counts as moving;
+# the stationary captures never exceeded 0.05 m/s in two consecutive scans.
+MOVING_SCANS = 3
 OBSTACLE_PARAMETERS = {
     'persistence_hits': ('Static returns pass when their polar cell was hit in this many of '
                          'the last persistence_window scans.', 1, 64, 1),
@@ -119,6 +127,11 @@ class RadarProcessing(Node):
         self.ghost_config = _declare_config(self, GhostConfig, GHOST_PARAMETERS)
         self.tracker_config = _declare_config(self, TrackerConfig, TRACKER_PARAMETERS)
         self.tracker = MovingObjectTracker(self.tracker_config)
+        self.sensor_moving_speed = declare(
+            self, 'sensor_moving_speed', .05,
+            'Fitted sensor speed above which (for 3 consecutive scans) the sensor is moving: '
+            'the sensor-frame background is reset and not used (m/s).', .005, 10)
+        self.fast_scans = 0
         self.track_pub = self.create_publisher(PointCloud2, '~/tracked_objects',
                                                qos_profile_sensor_data)
         self.marker_pub = self.create_publisher(MarkerArray, '~/track_markers', 10)
@@ -155,12 +168,16 @@ class RadarProcessing(Node):
     def now_ns(self):
         now = self.get_clock().now().nanoseconds
         if self.last_now is not None and now < self.last_now:
+            self.clear_clouds()
             self.last_stamp = None
             self.last_fit_wall = None
             self.last_receipt_wall = None
             self.state = 'clock_reset'
             self.stats = {}
-            self.clear_clouds()
+            # Time went backwards (bag loop): tracks, background and persistence restart.
+            self.tracker = MovingObjectTracker(self.tracker_config)
+            self.persistence.reset()
+            self.fast_scans = 0
         self.last_now = now
         return now
 
@@ -170,6 +187,9 @@ class RadarProcessing(Node):
 
         The stamp is the last accepted input stamp, never a newer ``now()``, so
         downstream monotonic-stamp checks keep accepting the next real scan.
+        Tracker and background state are kept: one rejected scan must not discard
+        the learned background, and the tracker drops tracks itself after a gap
+        longer than ``max_coast``.
         """
         if not self.outputs_hold_data:
             return
@@ -181,8 +201,6 @@ class RadarProcessing(Node):
             publisher.publish(message)
         self.track_pub.publish(message)
         self.obstacle_pub.publish(message)
-        self.persistence.reset()
-        self.tracker = MovingObjectTracker(self.tracker_config)
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
 
     def reject(self, reason, detail=''):
@@ -214,6 +232,8 @@ class RadarProcessing(Node):
         if self.last_stamp is not None and stamp <= self.last_stamp:
             self.reject('nonmonotonic_stamp')
             return
+        if self.last_stamp is not None and (stamp - self.last_stamp) * 1e-9 > self.stale_timeout:
+            self.persistence.reset()  # k-of-n counts scans; do not span a data gap
         try:
             values = measurements(cloud)
             indices, stats = select_measurements(values, self.gate_config)
@@ -230,14 +250,18 @@ class RadarProcessing(Node):
                                 selected[result.inliers, :3], self.ghost_config)
             moving = indices[movers][~ghosts]
             local = np.flatnonzero(movers)[~ghosts]
-            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3],
-                                       result.residuals[local], selected[result.inliers, :3])
-            self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
+            speed = float(np.linalg.norm(result.velocity))
+            self.fast_scans = self.fast_scans + 1 if speed > self.sensor_moving_speed else 0
             static = selected[result.inliers, :3]
-            novel = ~self.tracker.background.is_background(static[:, :2])
+            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3],
+                                       result.residuals[local], static,
+                                       sensor_moving=self.sensor_moving)
+            self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
+            # None until the background is learned: never drop returns as track multipath
+            # against an unlearned (or, on a moving sensor, meaningless) background.
             obstacles = obstacle_points(
                 static, self.persistence.step(static), selected[movers, :3], ghosts,
-                [t.x[:2] for t in tracks], self.obstacle_config, novel)
+                [t.x[:2] for t in tracks], self.obstacle_config, self.tracker.static_novel)
             self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
             track_xy = [t.x[:2] for t in tracks]
             on_track = near_tracks(selected[local, :3], track_xy,
@@ -267,24 +291,34 @@ class RadarProcessing(Node):
                          max_velocity_std=float(np.sqrt(np.max(
                              np.linalg.eigvalsh(result.covariance)))))
         else:
-            # No valid static/moving split: fail conservative for marking and pass every
-            # quality target through persistence alone (ghosts cannot be told apart here).
+            # No valid static/moving split: tracks coast (a recorded miss) and stay marked;
+            # fail conservative and pass every quality target through persistence alone
+            # (ghosts cannot be told apart here).
+            tracks = self.tracker.coast(stamp * 1e-9)
+            self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
             points = selected[:, :3]
             obstacles = obstacle_points(points, self.persistence.step(points), np.empty((0, 3)),
-                                        np.empty(0, bool), [], self.obstacle_config)
+                                        np.empty(0, bool), [t.x[:2] for t in tracks],
+                                        self.obstacle_config)
             self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
             partitions = {'doppler_inliers': [], 'doppler_outliers': [],
                           'moving_targets': [], 'moving_ghosts': [], 'tracked_targets': [],
                           'unclassified_targets': indices}
-            stats.update(inliers=0, outliers=0, moving=0, ghosts=0, unclassified=len(indices))
+            stats.update(inliers=0, outliers=0, moving=0, ghosts=0, tracks=len(tracks),
+                         obstacles=len(obstacles), unclassified=len(indices))
         for name, subset in partitions.items():
             self.cloud_publishers[name].publish(subset_cloud(cloud, subset))
         self.outputs_hold_data = True
         self.state = result.reason
-        stats.update(stamp_ns=stamp, receive_age_seconds=age,
+        stats.update(stamp_ns=stamp, receive_age_seconds=age, sensor_moving=self.sensor_moving,
+                     background_ready=self.tracker.background.ready,
                      processing_ms=1000 * (time.monotonic() - start))
         self.stats = stats
         self.publish_diagnostics()
+
+    @property
+    def sensor_moving(self):
+        return self.fast_scans >= MOVING_SCANS
 
     def publish_tracks(self, header, tracks, now):
         rows = [(t.x[0], t.x[1], 0.0, t.x[2], t.x[3], t.speed, t.track_id, now - t.first_stamp)

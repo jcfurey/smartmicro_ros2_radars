@@ -180,3 +180,49 @@ def test_processing_clears_once_with_last_accepted_stamp(ros):
         assert len(diagnostics.messages) == 3
     finally:
         node.destroy_node()
+
+
+def moving_sensor_cloud(ns, velocity):
+    """Static scene seen from a sensor moving at ``velocity`` (positive-receding Doppler)."""
+    points = []
+    for azimuth in np.radians([-50, -35, -20, -8, 5, 15, 28, 40, 55, 65]):
+        for z in (-0.6, 0.0, 0.6):
+            xyz = np.array([4 * math.cos(azimuth), 4 * math.sin(azimuth), z])
+            points.append([*xyz, -xyz @ velocity / np.linalg.norm(xyz), 30])
+    return cloud(ns, points)
+
+
+def test_processing_keeps_tracker_across_rejects_and_coasts_on_failed_fit(ros):
+    ros()
+    node = RadarProcessing()
+    tracks = Recorder()
+    try:
+        node.track_pub = tracks
+        tracker = node.tracker
+        for t in (0.0, 5.0):
+            tracker.background.update(t, np.array([[4.0, 0.0]]))
+        now = node.get_clock().now().nanoseconds
+        node.receive(cloud(now - 20_000_000, [[2, 1, 0, 0, 30]] * 3))  # too few: failed fit
+        assert node.state == 'insufficient_points' and len(tracks.messages) == 1
+        node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))  # rejected
+        # One rejected scan clears the outputs but keeps the learned background.
+        assert node.tracker is tracker and tracker.background.ready
+    finally:
+        node.destroy_node()
+
+
+def test_processing_moving_sensor_disables_background(ros):
+    ros()
+    node = RadarProcessing()
+    try:
+        for t in (0.0, 5.0):
+            node.tracker.background.update(t, np.array([[4.0, 0.0]]))
+        now = node.get_clock().now().nanoseconds
+        for k in range(3):
+            node.receive(moving_sensor_cloud(now - (30 - 10 * k) * 1_000_000,
+                                             np.array([0.5, 0.0, 0.0])))
+            assert node.state == 'valid'
+        assert node.sensor_moving and node.stats['sensor_moving']
+        assert not node.tracker.background.ready and node.tracker.static_novel is None
+    finally:
+        node.destroy_node()

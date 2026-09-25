@@ -24,7 +24,8 @@
     wall_azimuth_deg: 4.0
     # Moving-object tracker (walk-through: person tracked in 96% of walking scans,
     # ghost tracks in 0.7% of labelled scans). The background model assumes the
-    # radar is fixed in the scene.
+    # radar is fixed in the scene: it restarts (and the obstacle shadow rule is off)
+    # while the fitted sensor speed exceeds sensor_moving_speed for 3 scans.
     cluster_radius: 0.6
     gate: 1.2
     confirm_hits: 8
@@ -32,6 +33,12 @@
     max_coast: 1.0
     static_hold: 5.0
     background_time_constant: 30.0
+    # 0.3 rather than 0.5: walls a person occludes stay background, so fewer are dropped
+    # as that person's multipath (walk: structure beyond a track 72% -> 81% kept, far
+    # ghost points 0.07 -> 0.14 per scan).
+    background_threshold: 0.3
+    background_warmup: 3.0
+    sensor_moving_speed: 0.05  # static captures: fitted speed <= 0.011 m/s
     # Nav2 obstacle evidence (~/obstacles, marking only). Static capture: 78% of
     # flicker removed, 97% of structure kept; walk: stationary ghosts beyond the
     # person cut 99% while walking, 84% while standing.

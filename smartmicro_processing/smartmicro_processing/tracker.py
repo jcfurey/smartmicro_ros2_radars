@@ -23,13 +23,15 @@ class TrackerConfig:
     background_range_bin: float = 0.5  # m, polar background cell size
     background_azimuth_bin_deg: float = 3.0
     background_time_constant: float = 30.0  # s, occupancy memory of the static background
-    background_threshold: float = 0.5  # occupancy above which a cell is background
+    background_threshold: float = 0.3  # occupancy fraction above which a cell is background
+    background_warmup: float = 3.0  # s of observation before any cell can be background
 
     def __post_init__(self):
         values = (self.cluster_radius, self.gate, self.position_std, self.radial_speed_std,
                   self.accel_std, self.max_coast, self.static_hold, self.static_gate,
                   self.ghost_range_gap, self.ghost_speed_tolerance, self.background_range_bin,
-                  self.background_azimuth_bin_deg, self.background_time_constant)
+                  self.background_azimuth_bin_deg, self.background_time_constant,
+                  self.background_warmup)
         if not all(math.isfinite(v) and v > 0 for v in values):
             raise ValueError('Tracker scales must be finite and positive')
         if not 0 < self.background_threshold < 1:
@@ -62,14 +64,29 @@ class BackgroundModel:
     """
     Exponentially forgetting polar occupancy of zero-Doppler detections.
 
-    Valid only while the input frame is fixed relative to the scene (stationary
-    sensor, or detections transformed into a fixed frame by the caller).
+    Occupancy is normalised by the weight accumulated since the last reset
+    (a bias-corrected moving average): a cell hit in every scan is background
+    once ``background_warmup`` seconds have been observed, instead of after
+    ~0.7 time constants (21 s at 30 s). Until then ``ready`` is false and
+    nothing is background. Valid only while the input frame is fixed relative
+    to the scene (stationary sensor, or detections transformed into a fixed
+    frame by the caller); ``reset()`` when the sensor moves.
     """
 
     def __init__(self, config):
         self.config = config
+        self.reset()
+
+    def reset(self):
         self.occupancy = {}
+        self.weight = 0.0
+        self.start = None
         self.stamp = None
+
+    @property
+    def ready(self):
+        return (self.start is not None and self.weight > 0
+                and self.stamp - self.start >= self.config.background_warmup)
 
     def keys(self, xy):
         c = self.config
@@ -79,23 +96,27 @@ class BackgroundModel:
                         np.floor(az / math.radians(c.background_azimuth_bin_deg)).astype(int)))
 
     def update(self, stamp, static_xy):
+        if self.start is None:
+            self.start = stamp
         dt = 0.0 if self.stamp is None else max(0.0, stamp - self.stamp)
         self.stamp = stamp
         keep = math.exp(-dt / self.config.background_time_constant)
         alpha = 1 - keep
+        self.weight = self.weight * keep + alpha
         occupied = set(self.keys(static_xy)) if len(static_xy) else set()
+        prune = 1e-3 * self.weight
         for key in list(self.occupancy):
             self.occupancy[key] *= keep
-            if self.occupancy[key] < 1e-3 and key not in occupied:
+            if self.occupancy[key] < prune and key not in occupied:
                 del self.occupancy[key]
         for key in occupied:
             self.occupancy[key] = self.occupancy.get(key, 0.0) + alpha
 
     def is_background(self, xy):
-        if not len(xy):
-            return np.zeros(0, bool)
-        return np.array([self.occupancy.get(k, 0.0) >= self.config.background_threshold
-                         for k in self.keys(xy)])
+        if not len(xy) or not self.ready:
+            return np.zeros(len(xy), bool)
+        limit = self.config.background_threshold * self.weight
+        return np.array([self.occupancy.get(k, 0.0) >= limit for k in self.keys(xy)])
 
 
 def cluster(xy, radius):
@@ -137,6 +158,10 @@ class MovingObjectTracker:
         self.tracks = []
         self.next_id = 1
         self.background = BackgroundModel(config)
+        # Per static input of the last step: True when outside the learned background;
+        # None when the background was not ready (or the static returns were unknown).
+        self.static_novel = None
+        self.last_step = None
 
     def measurements(self, mover_xyz, mover_speed):
         xy = np.asarray(mover_xyz, float).reshape(-1, 3)[:, :2]
@@ -187,9 +212,22 @@ class MovingObjectTracker:
         # Zero-Doppler support: the object is at rest or moving tangentially; damp speed.
         track.x[2:] *= 0.8
 
-    def step(self, stamp, mover_xyz, mover_speed, static_xyz=()):
-        """Advance to ``stamp`` (s); return the confirmed tracks."""
+    def coast(self, stamp):
+        """Advance without a static/moving split (failed Doppler fit): record a miss."""
+        return self.step(stamp, (), (), None)
+
+    def step(self, stamp, mover_xyz, mover_speed, static_xyz=(), sensor_moving=False):
+        """
+        Advance to ``stamp`` (s); return the confirmed tracks.
+
+        ``static_xyz=None`` means the static returns are unknown: the background
+        is neither learned nor used. ``sensor_moving`` resets the background,
+        which assumes a scene-fixed input frame.
+        """
         c = self.config
+        if self.last_step is not None and stamp - self.last_step > c.max_coast:
+            self.tracks = []  # no coasting through a data gap longer than max_coast
+        self.last_step = stamp
         for track in self.tracks:
             self.predict(track, stamp)
         measurements = self.measurements(mover_xyz, mover_speed)
@@ -210,14 +248,21 @@ class MovingObjectTracker:
                 track.last_moving = track.last_support = stamp
             track.history = (track.history + [hit])[-c.confirm_window:]
             track.hits += hit
-        static_xy = np.asarray(static_xyz, float).reshape(-1, 3)[:, :2]
-        # Learn the background before using it, so a new standing object is still novel.
-        if len(static_xy):
-            novel = static_xy[~self.background.is_background(static_xy)]
+        if sensor_moving:
+            self.background.reset()
+        if static_xyz is None:
+            static_xy = np.empty((0, 2))
+            self.static_novel = None
         else:
-            novel = static_xy
-        self.background.update(stamp, static_xy)
-        static_xy = novel
+            static_xy = np.asarray(static_xyz, float).reshape(-1, 3)[:, :2]
+            # Judge novelty before learning this scan, so a new standing object stays novel.
+            # Before warm-up every return is novel for holding tracks, but static_novel
+            # is None: callers must not drop returns on an unlearned background.
+            ready = self.background.ready
+            novel = ~self.background.is_background(static_xy)
+            self.static_novel = novel if ready else None
+            self.background.update(stamp, static_xy)
+            static_xy = static_xy[novel]
         for track in self.tracks:
             if (track.confirmed and not track.ghost and track.last_moving < stamp
                     and len(static_xy)):

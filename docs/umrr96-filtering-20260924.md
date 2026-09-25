@@ -177,11 +177,60 @@ pair the radar source with a clearing lidar source (radar ghosts in space the
 lidar sees as free are then cleared), or use STVL with voxel decay for a
 radar-only costmap. See `config/nav2_obstacle_layer.example.yaml`.
 
+## Background warm-up and moving-sensor guard (2026-09-25)
+
+The obstacle metrics above never measured structure while a track exists (the
+static capture has no tracks). Scored on `walk` (`scripts/umrr96_obstacle_eval.py`,
+new "structure beyond a track" column: returns beyond 3.4 m in cells present in
+≥ 50% of `static` scans, while a confirmed track exists):
+
+| | Structure beyond a track kept | Far ghost points/scan, walking |
+|---|---:|---:|
+| Before | 38.8% | 0.07 |
+| Background warm-up 3 s | 72.4% | 0.07 |
+| … plus `background_threshold` 0.5 → 0.3 (adopted) | 80.6% | 0.14 |
+| Shadow rule off (`shadow_gap` ≤ 0), for reference | 88.1% | 1.97 |
+
+Cause: the background was an exponential average from zero, so a wall hit in
+every scan became background only after 0.7 time constants (21 s at 30 s); until
+then the shadow rule dropped *all* static returns beyond the person. Any single
+rejected scan (stale or non-monotonic stamp, wrong frame) also rebuilt the
+tracker, restarting that 21 s. Now:
+
+- The occupancy is bias-corrected (normalised by the accumulated weight): a cell
+  hit in every scan is background after `background_warmup` (3 s). Until then
+  the shadow rule is off.
+- Rejected scans clear the outputs but keep tracker and background; only a
+  backwards clock (bag loop) resets them. The tracker drops tracks after a data
+  gap longer than `max_coast`, and persistence restarts after a gap longer than
+  `stale_timeout`.
+- The background assumes a scene-fixed sensor. When the fitted sensor speed
+  exceeds `sensor_moving_speed` (0.05 m/s) for 3 consecutive scans, the
+  background is reset (shadow rule off) until the sensor has been still for
+  the warm-up again. The static captures never exceeded 0.011 m/s; the walk
+  exceeded 0.05 m/s in 5 isolated scans. Pure rotation about the sensor's own
+  axis produces no Doppler and is not detected.
+- A failed Doppler fit now coasts the tracks (a recorded miss) and still
+  publishes `tracked_objects`; track positions stay in `obstacles`.
+
+Ghost-removal, tracking and far-ghost numbers are otherwise unchanged.
+
+Requiring the same Doppler sign for the same-speed ghost rule (so that two
+people walking in opposite directions are not merged) was evaluated and not
+adopted: ghosts removed fell from 93.7% to 83.5% and ghost-track scans rose
+from 0.7% to 6.3%: many `walk` ghosts carry the opposite sign.
+
 ## Limits
 
 - One room, one person, stationary radar; parameters are tuned on the same
-  recording they are scored on (no held-out data yet). Two movers at the same speed and
-  bearing, ≥ 1.5 m apart in range, lose the farther one.
+  recording they are scored on (no held-out data yet). The same-speed ghost
+  rule ignores bearing and Doppler sign: of two real movers with similar
+  |speed| (or one about twice the other) more than 1.5 m apart in range, at
+  any bearing, the farther one is rejected, and a slow near mover (e.g.
+  swaying at 0.1 m/s) suppresses farther movers up to about 0.7 m/s. The
+  tracker's ghost rule behaves the same way. A second real person is only
+  marked in `obstacles` within `safety_range` or through static persistence.
+  A two-person capture is needed before relying on moving-object output.
 - Ego-velocity settings are validated only with the sensor at rest; motion
   may raise Doppler noise and needs a moving-platform check before fusion.
 - Doppler sign convention remains unverified against controlled motion.

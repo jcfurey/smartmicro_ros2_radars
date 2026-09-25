@@ -52,17 +52,17 @@ in separate runs. Run one publisher for these output names at a time.
 | `doppler_inliers` | Quality targets compatible with the fitted static-scene Doppler model |
 | `doppler_outliers` | Quality targets outside that model's residual gate; not automatically moving objects |
 | `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`) |
-| `moving_ghosts` | Doppler outliers rejected as ghosts: a nearer same-speed mover, or a nearer static return at the same bearing. On a 2026-09-24 walk-through (stationary sensor, one person, 3 m room) the rules removed 85% of ghosts and kept 97% of real returns; about 23% of `moving_targets` remained ghosts. Two movers at the same speed and bearing lose the farther one. |
+| `moving_ghosts` | Doppler outliers rejected as ghosts: a nearer same-speed mover, or a nearer static return at the same bearing. On a 2026-09-24 walk-through (stationary sensor, one person, 3 m room) the rules removed 85% of ghosts and kept 97% of real returns; about 23% of `moving_targets` remained ghosts. The same-speed rule ignores bearing and Doppler sign: of two real movers with similar \|speed\| (or one about twice the other), at any bearing and more than `range_gap` apart in range, the farther one is rejected. |
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
 | `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id, age (sensor frame) |
 | `track_markers` | RViz markers for the tracks (built only with subscribers) |
-| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height` |
+| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height`. Novel static returns beyond a track (`shadow_gap`) are dropped only once the background is learned (`background_warmup`) and never while the sensor moves |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 
 `/diagnostics` includes `/umrr96_processing/doppler`, rejection reasons, counts,
 condition, residual RMSE, computation time, last velocity age and
-`calibrated=False`. An OK diagnostic means numerical checks passed, not measured
+`calibrated=False`, `sensor_moving` and `background_ready`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
 
