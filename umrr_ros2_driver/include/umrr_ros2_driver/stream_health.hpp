@@ -29,7 +29,8 @@ public:
     if (state_.frames) {
       state_.repeated += timestamp == state_.device_timestamp_us;
       state_.backwards += timestamp < state_.device_timestamp_us;
-      state_.receive_interval_seconds = std::chrono::duration<double>(receipt - last_receipt_).count();
+      state_.receive_interval_seconds = std::chrono::duration<double>(receipt -
+          last_receipt_).count();
       if (timestamp > state_.device_timestamp_us && state_.device_timestamp_us) {
         state_.device_interval_seconds = (timestamp - state_.device_timestamp_us) * 1e-6;
         // Clock offsets cancel. This measures changing delay, not absolute
@@ -74,4 +75,4 @@ private:
   uint64_t checked_frames_{}, checked_anomalies_{};
 };
 }  // namespace smartmicro::drivers::radar
-#endif
+#endif  // UMRR_ROS2_DRIVER__STREAM_HEALTH_HPP_

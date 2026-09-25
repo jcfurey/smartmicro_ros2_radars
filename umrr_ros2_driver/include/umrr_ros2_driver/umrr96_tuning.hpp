@@ -87,4 +87,4 @@ inline std::vector<TuningValue> validate_umrr96_tuning(
   return result;
 }
 }  // namespace smartmicro::drivers::radar
-#endif
+#endif  // UMRR_ROS2_DRIVER__UMRR96_TUNING_HPP_

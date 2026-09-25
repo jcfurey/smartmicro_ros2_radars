@@ -28,7 +28,8 @@ TEST(RuntimeConfig, IndependentDirectoriesAndExceptionCleanup)
       EXPECT_EQ(nlohmann::json::parse(std::ifstream(first / "routing_table.json"))["port"],
         12345);
       throw std::runtime_error("constructor failure");
-    } catch (const std::runtime_error &) {}
+    } catch (const std::runtime_error &) {
+    }
     EXPECT_FALSE(std::filesystem::exists(second));
     EXPECT_TRUE(std::filesystem::exists(first));
   }
@@ -109,9 +110,9 @@ TEST(SdkCallbackGate, DrainsAnActiveCallAndDropsLateCalls)
   auto release_future = release.get_future().share();
   unsigned calls = 0;
   auto callback = gate.wrap([&] {
-      ++calls;
-      entered.set_value();
-      release_future.wait();
+        ++calls;
+        entered.set_value();
+        release_future.wait();
     });
   std::thread worker(callback);
   entered.get_future().wait();

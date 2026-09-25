@@ -296,7 +296,8 @@ void SmartmicroRadarNode::setup_diagnostics()
         status.hardware_id = hardware_id;
         status.add("sensor_id", m_sensors[i].id);
         if (!health.frames || health.age_seconds > stale_timeout_seconds_) {
-          status.summary(Status::STALE, health.frames ? "No recent targets" : "Waiting for targets");
+          status.summary(Status::STALE,
+                health.frames ? "No recent targets" : "Waiting for targets");
         } else if (health.timestamp_warning) {
           status.summary(Status::WARN, "Device timestamp anomaly; headers use ROS receive time");
         } else {
@@ -335,7 +336,7 @@ void SmartmicroRadarNode::setup_diagnostics()
           return;
         }
         const auto delta = socket.inode == previous_inode && socket.drops >= previous_drops ?
-          socket.drops - previous_drops : socket.drops;
+        socket.drops - previous_drops : socket.drops;
         previous_inode = socket.inode;
         previous_drops = socket.drops;
         status.summary(delta ? Status::WARN : Status::OK,
@@ -1461,7 +1462,8 @@ void SmartmicroRadarNode::set_radar_mode(
     const bool request_added = std::visit(
       [&](auto typed_value) {
         return batch->AddRequest(
-          std::make_shared<SetParamRequest<decltype(typed_value)>>(section_name, param, typed_value));
+          std::make_shared<SetParamRequest<decltype(typed_value)>>(section_name, param,
+              typed_value));
       }, parsed_values[i]);
 
     if (!request_added) {
@@ -6138,7 +6140,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
   auto read_adapter_params_if_possible = [&](const std::uint32_t index) {
       auto & current_adapter = m_adapters[index];
       const auto prefix_2 = "adapters.adapter_" + std::to_string(index);
-      current_adapter.hw_dev_id = startup_parameter(*this, prefix_2 + ".hw_dev_id", kDefaultHwDevId);
+      current_adapter.hw_dev_id = startup_parameter(*this, prefix_2 + ".hw_dev_id",
+            kDefaultHwDevId);
       if (current_adapter.hw_dev_id == kDefaultHwDevId) {
         // The id was not set, so the adapter with this index was not defined.
         // Stop here.
@@ -6188,7 +6191,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
       if (sensor.port > 65535 || (sensor.link_type == "eth" && sensor.port == 0) ||
         sensor.history_size == 0 || sensor.frame_id.empty())
       {
-        throw std::invalid_argument(prefix_3 + ": invalid port, empty frame_id or zero history_size");
+        throw std::invalid_argument(prefix_3 +
+              ": invalid port, empty frame_id or zero history_size");
       }
       bool adapter_found = false;
       for (size_t i = 0; i < m_number_of_adapters; ++i) {

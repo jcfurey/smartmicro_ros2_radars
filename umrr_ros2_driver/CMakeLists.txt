@@ -262,46 +262,55 @@ if(BUILD_TESTING)
         TIMEOUT 90 ENV ${offline_environment}
         "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>")
     set_tests_properties(test_umrr96_views test_umrr96_measure test_readback test_driver_runtime PROPERTIES RUN_SERIAL TRUE)
-       
-    # Not applying ros2 linters on external sources
-    list(APPEND AMENT_LINT_AUTO_EXCLUDE
-        ament_cmake_copyright
-        ament_cmake_lint_cmake
-        ament_cmake_uncrustify
-        ament_cmake_cpplint
-        ament_cmake_flake8
-        ament_cmake_cppcheck
-        ament_cmake_pep257
-    )
 
+    # Linters run explicitly on first-party files: automatic discovery would
+    # also scan the vendored Smart Access SDK under smartmicro/ (C++, CMake and
+    # Python examples), which is not ours to reformat. xmllint stays automatic.
+    list(APPEND AMENT_LINT_AUTO_EXCLUDE
+      ament_cmake_copyright
+      ament_cmake_cppcheck
+      ament_cmake_cpplint
+      ament_cmake_flake8
+      ament_cmake_lint_cmake
+      ament_cmake_pep257
+      ament_cmake_uncrustify
+    )
     find_package(ament_lint_auto REQUIRED)
     ament_lint_auto_find_test_dependencies()
 
-    set(PROJECT_CPP_FILES
-      src/smartmicro_radar_node.cpp
-      src/update_service.cpp
-      include/umrr_ros2_driver/smartmicro_radar_node.hpp
-      include/umrr_ros2_driver/update_service.hpp
-    )
-
+    file(GLOB PROJECT_CPP_FILES
+      src/*.cpp
+      include/umrr_ros2_driver/*.hpp
+      test/*.cpp)
+    # scripts/ and the views/measure tests belong to the Python package and are
+    # linted there.
     set(PROJECT_PY_FILES
       launch/radar.launch.py
+      test/compare_umrr96_settings.py
       test/radar_node_test.launch.py
-    )
+      test/readback_smoke.py
+      test/test_driver_runtime.py
+      test/test_sdk_patch.py)
 
-    # C++ linting
     ament_cppcheck(${PROJECT_CPP_FILES})
-
-    # Python linting
+    # Vendor headers are included with <>, which cpplint misclassifies as C system
+    # headers; SPDX-only fork files carry no copyright holder line.
+    ament_cpplint(${PROJECT_CPP_FILES}
+      FILTERS "-build/include_order,-legal/copyright")
+    ament_uncrustify(${PROJECT_CPP_FILES})
+    ament_flake8(${PROJECT_PY_FILES})
     ament_pep257(${PROJECT_PY_FILES})
-
-    # Copyright should cover all first-party text sources.
+    ament_lint_cmake(CMakeLists.txt)
+    # Files derived from upstream carry a copyright line; fork additions use
+    # SPDX-License-Identifier only, which ament_copyright does not accept.
     ament_copyright(
       CMakeLists.txt
-      ${PROJECT_CPP_FILES}
-      ${PROJECT_PY_FILES}
-    )
-
+      include/umrr_ros2_driver/smartmicro_radar_node.hpp
+      include/umrr_ros2_driver/update_service.hpp
+      launch/radar.launch.py
+      src/smartmicro_radar_node.cpp
+      src/update_service.cpp
+      test/radar_node_test.launch.py)
 endif()
 
 install(PROGRAMS scripts/umrr96_views.py DESTINATION lib/${PROJECT_NAME}

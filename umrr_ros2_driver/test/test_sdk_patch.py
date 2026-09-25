@@ -2,6 +2,7 @@
 """Check extraction repair idempotence and fail-closed handling of unfamiliar SDKs."""
 import importlib.util
 from pathlib import Path
+
 import pytest
 
 path = Path(__file__).resolve().parents[2] / 'tools/patch_smart_access.py'

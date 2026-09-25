@@ -6,17 +6,17 @@ import json
 import os
 from pathlib import Path
 import signal
-import struct
 import socket
+import struct
 import subprocess
 import tempfile
 import time
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
+from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 import rclpy
 from rclpy.parameter import Parameter
-from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming, Umrr96RawQuality
@@ -90,11 +90,12 @@ def test_driver_runtime():
             while len(ports) < 3:
                 ports.add(unused_port())
             port_a, port_b, peer_port = ports
-            parameters = dict(
+            parameters = dict(  # noqa: C408 (keyword form mirrors the parameter file)
                 master_data_serial_type='port_based', master_inst_serial_type='port_based',
-                adapters={'adapter_0': dict(hw_type='eth', hw_dev_id=4, hw_iface_name='lo',
-                                           hw_ip_address='127.0.0.1', port=port_a)},
-                sensors={'sensor_0': dict(
+                adapters={'adapter_0': dict(  # noqa: C408
+                    hw_type='eth', hw_dev_id=4, hw_iface_name='lo',
+                    hw_ip_address='127.0.0.1', port=port_a)},
+                sensors={'sensor_0': dict(  # noqa: C408
                     link_type='eth', pub_type='target', model='umrr96_v1_2_2', dev_id=4,
                     id=200, frame_id='umrr96_test', history_size=10, ip='127.0.0.1',
                     port=peer_port, inst_type='port_based', data_type='port_based',
@@ -177,7 +178,8 @@ def test_driver_runtime():
             fixture = bytearray((repo / 'simulator/targetlist_port_v2_1_0.bin').read_bytes())
             struct.pack_into('<fHH', fixture, 24, .1, 17, 0x1234)
             for index in range(17):
-                struct.pack_into('<10fIffH', fixture, 32 + index * 56,
+                struct.pack_into(
+                    '<10fIffH', fixture, 32 + index * 56,
                     1.0 + index, .5, .1, .2, .01 + index, .02 + index,
                     .03 + index, .04 + index, 2.0, .25, 0x123400 + index, 40.0, 10.0, index + 100)
             fixture_path = run / 'known_quality_port.bin'
@@ -220,22 +222,24 @@ def test_driver_runtime():
                         expected = struct.unpack('<f', struct.pack('<f', base + index))[0]
                         assert float(record[field]) == expected, (field, index, record[field])
                     assert int(record['peak_idx']) == index + 100
-            wait(lambda: any(s.name == 'runtime_a: UDP adapter 0' and
-                             {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
-                             for s in statuses))
+            wait(lambda: any(
+                s.name == 'runtime_a: UDP adapter 0' and
+                {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
+                for s in statuses))
             assert matched >= 3
             # The fixture deliberately repeats its original counter. ROS stamps still advance.
             assert len({t.device_timestamp_us for t in timing}) == 1
             assert len({(c.header.stamp.sec, c.header.stamp.nanosec) for c in clouds}) >= 5
             wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
                              s.level == DiagnosticStatus.WARN and
-                             int(dict((v.key, v.value) for v in s.values).get(
+                             int({v.key: v.value for v in s.values}.get(
                                  'timestamp_repeats', '0')) > 0 for s in statuses))
             stop(sender)
             statuses.clear()
             wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
                              s.level == DiagnosticStatus.STALE for s in statuses))
-            restarted_sender = launch([os.environ['SMARTMICRO_TEST_SENDER'], str(fixture_path)],
+            restarted_sender = launch(
+                [os.environ['SMARTMICRO_TEST_SENDER'], str(fixture_path)],
                 SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
             previous_count = len(clouds)
             wait(lambda: len(clouds) >= previous_count + 3)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check read/tuning validation, timeouts and cleanup without a connected radar.
+"""
+Check read/tuning validation, timeouts and cleanup without a connected radar.
 
 Run after building and sourcing the workspace:
     ROS_DOMAIN_ID=174 python3 path/to/test/readback_smoke.py
@@ -14,10 +15,10 @@ import tempfile
 import time
 
 from ament_index_python.packages import get_package_prefix
-import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
-from rclpy.parameter import Parameter
 from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
+import rclpy
+from rclpy.parameter import Parameter
 from umrr_ros2_msgs.srv import GetMode, GetStatus, SetMode
 
 
@@ -67,23 +68,24 @@ def main():
                 assert mode.wait_for_service(timeout_sec=10), 'Mode service unavailable'
                 assert status.wait_for_service(timeout_sec=5), 'Status service unavailable'
                 assert setter.wait_for_service(timeout_sec=5), 'Set service unavailable'
-                describe = node.create_client(DescribeParameters,
-                    '/umrr96_readback_smoke_server/describe_parameters')
+                describe = node.create_client(
+                    DescribeParameters, '/umrr96_readback_smoke_server/describe_parameters')
                 assert describe.wait_for_service(timeout_sec=5)
                 future = describe.call_async(DescribeParameters.Request(names=[
                     'sensor_id', 'host_port', 'sensor_port', 'host_ip', 'sensor_ip',
                     'interface_name', 'timeout_ms']))
                 rclpy.spin_until_future_complete(node, future, timeout_sec=4)
                 assert future.done() and all(d.read_only for d in future.result().descriptors)
-                parameter_setter = node.create_client(SetParametersAtomically,
+                parameter_setter = node.create_client(
+                    SetParametersAtomically,
                     '/umrr96_readback_smoke_server/set_parameters_atomically')
                 assert parameter_setter.wait_for_service(timeout_sec=5)
                 future = parameter_setter.call_async(SetParametersAtomically.Request(parameters=[
                     Parameter('host_port', value=host_port + 1).to_parameter_msg()]))
                 rclpy.spin_until_future_complete(node, future, timeout_sec=4)
                 assert future.done() and not future.result().result.successful
-                normal = dict(sensor_id=230739, section_name='auto_interface_0dim',
-                              params=['frequency_sweep_idx'], param_types=[3])
+                normal = {'sensor_id': 230739, 'section_name': 'auto_interface_0dim',
+                          'params': ['frequency_sweep_idx'], 'param_types': [3]}
                 cases = [
                     ({'sensor_id': 1}, 'Sensor ID'),
                     ({'section_name': 'wrong_section'}, 'section'),
@@ -102,8 +104,9 @@ def main():
                 call(status, GetStatus.Request(
                     sensor_id=230739, section_name='auto_interface',
                     statuses=['sw_version_major'], status_types=[0]), 'incorrectly typed')
-                tuning = dict(sensor_id=230739, section_name='auto_interface_0dim',
-                              params=['frequency_sweep_idx'], values=['2'], value_types=[3])
+                tuning = {'sensor_id': 230739, 'section_name': 'auto_interface_0dim',
+                          'params': ['frequency_sweep_idx'], 'values': ['2'],
+                          'value_types': [3]}
                 for changes, error in (
                     ({'sensor_id': 1}, 'sensor ID'),
                     ({'section_name': 'wrong_section'}, 'section'),
@@ -118,9 +121,9 @@ def main():
                       'values': ['2', '3'], 'value_types': [3, 3]}, 'Invalid tuning value'),
                 ):
                     call(setter, SetMode.Request(**dict(tuning, **changes)), error)
-                velocity = dict(sensor_id=230739, section_name='auto_interface_0dim',
-                                params=['tv_min_speed_sweep_idx_2', 'tv_max_speed_sweep_idx_2'],
-                                values=['-12.5', '25.25'], value_types=[0, 0])
+                velocity = {'sensor_id': 230739, 'section_name': 'auto_interface_0dim',
+                            'params': ['tv_min_speed_sweep_idx_2', 'tv_max_speed_sweep_idx_2'],
+                            'values': ['-12.5', '25.25'], 'value_types': [0, 0]}
                 for changes, error in (
                     ({'values': ['nan', '20']}, 'Invalid tuning value'),
                     ({'values': ['-151', '20']}, 'Invalid tuning value'),
@@ -157,7 +160,7 @@ def main():
                 while time.monotonic() < deadline:
                     rclpy.spin_once(node, timeout_sec=.1)
                     matched = [s for s in diagnostics if s.name.endswith('Control requests') and
-                               dict((v.key, v.value) for v in s.values).get('timeouts') == '5']
+                               {v.key: v.value for v in s.values}.get('timeouts') == '5']
                     if matched:
                         break
                 assert matched and matched[-1].level == DiagnosticStatus.WARN, diagnostics

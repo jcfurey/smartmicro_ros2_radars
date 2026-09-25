@@ -99,7 +99,8 @@ UpdateResult UpdateService::StartSoftwareUpdate(
   }
 
   RCLCPP_INFO(
-    rclcpp::get_logger("UpdateService"), "Starting firmware download of %lu bytes...", totalSize);
+    rclcpp::get_logger("UpdateService"), "Starting firmware download of %s bytes...",
+    std::to_string(totalSize).c_str());
 
   std::string image = update_image;  // The SDK takes a mutable reference.
   if (updateService->SoftwareUpdate(
@@ -161,8 +162,8 @@ void UpdateService::UpdateCallback(com::types::SWUpdateInfo & info)
     {
       last_progress_log_ = now;
       RCLCPP_INFO(
-        rclcpp::get_logger("FirmwareUpdater"), "Downloaded %lu bytes...",
-        static_cast<unsigned long>(info.GetCurrentDownloadedBytes()));  // NOLINT(runtime/int)
+        rclcpp::get_logger("FirmwareUpdater"), "Downloaded %s bytes...",
+        std::to_string(info.GetCurrentDownloadedBytes()).c_str());
     }
   }
   cv_.notify_all();

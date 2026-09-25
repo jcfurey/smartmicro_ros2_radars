@@ -16,16 +16,15 @@ import os
 import time
 import unittest
 
+from ament_index_python import get_package_share_directory
 import launch
+from launch.actions import ExecuteProcess, TimerAction
+from launch_ros.actions import Node
 import launch_testing
 import launch_testing.actions
-from launch.actions import ExecuteProcess, TimerAction
-
 import pytest
 import rclpy
 import sensor_msgs.msg as sensor_msgs
-from ament_index_python import get_package_share_directory
-from launch_ros.actions import Node
 
 PACKAGE_NAME = 'umrr_ros2_driver'
 
@@ -182,11 +181,11 @@ class TestSmartNode(unittest.TestCase):
             while time.time() < end_time:
                 rclpy.spin_once(self.test_node, timeout_sec=0.1)
                 if len(data_rx_s1) > 1:
-                    print(f"Data from S1 received at {time.time()}")
+                    print(f'Data from S1 received at {time.time()}')
                 if len(data_rx_s2) > 1:
-                    print(f"Data from S2 received at {time.time()}")
+                    print(f'Data from S2 received at {time.time()}')
                 if len(data_rx_s3) > 1:
-                    print(f"Data from S3 received at {time.time()}")
+                    print(f'Data from S3 received at {time.time()}')
             self.assertGreater(len(data_rx_s1), 1)
             self.assertGreater(len(data_rx_s2), 1)
             self.assertGreater(len(data_rx_s3), 1)

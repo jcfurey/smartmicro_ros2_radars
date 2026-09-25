@@ -75,4 +75,4 @@ public:
   std::filesystem::path path;
 };
 }  // namespace smartmicro::drivers::radar
-#endif
+#endif  // UMRR_ROS2_DRIVER__RUNTIME_CONFIG_HPP_

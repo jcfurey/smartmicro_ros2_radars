@@ -135,29 +135,29 @@ public:
     timeout_ = std::chrono::milliseconds(timeout_ms);
 
     config_.write("smart_access_config.json", {
-      {"name", "UMRR-96 readback"}, {"version", "1.0.0"},
-      {"client_id", 0xc0000001u}, {"role", "master"}, {"alive", false},
-      {"shared_lib_path", config_.sdk_library_path(SMARTMICRO_SDK_LIBRARY_PATH)},
-      {"config_path", config_.path.string()}, {"download_path", ""},
-      {"user_interface_name", "base"}, {"user_interface_major_v", 1},
-      {"user_interface_minor_v", 0}, {"user_interface_patch_v", 2},
-      {"instruction_serialization_type", "can_based"},
-      {"data_serialization_type", "can_based"}});
-    config_.write("hw_inventory.json", {
-      {"name", "Readback socket"}, {"version", "1.1.0"},
-      {"hwItems", Json::array({{
-        {"type", "eth"}, {"dev_id", 1}, {"iface_name", interface},
-        {"ip_address", host_ip}, {"port", host_port}}})}});
-    config_.write("routing_table.json", {
-      {"name", "Readback route"}, {"version", "1.0.0"},
-      {"clients", Json::array({{
-        {"client_id", sensor_id_}, {"link_type", "eth"}, {"dev_id", 1},
-        {"ip", sensor_ip}, {"port", sensor_port}, {"can_network_id", 0},
+        {"name", "UMRR-96 readback"}, {"version", "1.0.0"},
+        {"client_id", 0xc0000001u}, {"role", "master"}, {"alive", false},
+        {"shared_lib_path", config_.sdk_library_path(SMARTMICRO_SDK_LIBRARY_PATH)},
+        {"config_path", config_.path.string()}, {"download_path", ""},
+        {"user_interface_name", "base"}, {"user_interface_major_v", 1},
+        {"user_interface_minor_v", 0}, {"user_interface_patch_v", 2},
         {"instruction_serialization_type", "can_based"},
-        {"data_serialization_type", "can_based"},
-        {"user_interface_name", "umrr96_t153_automotive"},
-        {"user_interface_major_v", 1}, {"user_interface_minor_v", 2},
-        {"user_interface_patch_v", 2}}})}});
+        {"data_serialization_type", "can_based"}});
+    config_.write("hw_inventory.json", {
+        {"name", "Readback socket"}, {"version", "1.1.0"},
+        {"hwItems", Json::array({{
+            {"type", "eth"}, {"dev_id", 1}, {"iface_name", interface},
+            {"ip_address", host_ip}, {"port", host_port}}})}});
+    config_.write("routing_table.json", {
+        {"name", "Readback route"}, {"version", "1.0.0"},
+        {"clients", Json::array({{
+            {"client_id", sensor_id_}, {"link_type", "eth"}, {"dev_id", 1},
+            {"ip", sensor_ip}, {"port", sensor_port}, {"can_network_id", 0},
+            {"instruction_serialization_type", "can_based"},
+            {"data_serialization_type", "can_based"},
+            {"user_interface_name", "umrr96_t153_automotive"},
+            {"user_interface_major_v", 1}, {"user_interface_minor_v", 2},
+            {"user_interface_patch_v", 2}}})}});
     config_.activate();
     services_ = com::master::CommunicationServicesIface::Get();
     if (!services_->Init()) {
@@ -185,7 +185,8 @@ public:
       });
     diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
     diagnostics_->setHardwareID("umrr96@" + sensor_ip);
-    diagnostics_->add("Control requests", [this](diagnostic_updater::DiagnosticStatusWrapper & stat) {
+    diagnostics_->add("Control requests",
+      [this](diagnostic_updater::DiagnosticStatusWrapper & stat) {
         using Status = diagnostic_msgs::msg::DiagnosticStatus;
         if (!last_error_.empty()) {
           stat.summary(Status::WARN, last_error_);
@@ -205,8 +206,8 @@ public:
           std::chrono::duration<double>(std::chrono::steady_clock::now() - last_response_).count() :
           -1.0);
       });
-    RCLCPP_INFO(get_logger(), "Readback ready for sensor %u on %s:%ld", sensor_id_,
-      host_ip.c_str(), static_cast<long>(host_port));
+    RCLCPP_INFO(get_logger(), "Readback ready for sensor %u on %s:%s", sensor_id_,
+      host_ip.c_str(), std::to_string(host_port).c_str());
   }
 
 private:
@@ -229,7 +230,8 @@ private:
         const bool floating = std::holds_alternative<float>(values[i]);
         types.push_back(floating ? ValueType::F32 : ValueType::U8);
         const bool added = std::visit([&](auto value) {
-            return batch->AddRequest(std::make_shared<com::master::SetParamRequest<decltype(value)>>(
+              return batch->AddRequest(
+              std::make_shared<com::master::SetParamRequest<decltype(value)>>(
               request.section_name, request.params[i], value));
           }, values[i]);
         if (!added) {

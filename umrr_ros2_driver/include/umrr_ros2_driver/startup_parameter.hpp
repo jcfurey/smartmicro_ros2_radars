@@ -35,4 +35,4 @@ auto startup_parameter(
   }
 }
 }  // namespace smartmicro::drivers::radar
-#endif
+#endif  // UMRR_ROS2_DRIVER__STARTUP_PARAMETER_HPP_

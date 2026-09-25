@@ -46,8 +46,9 @@ private:
 
   class Lease
   {
-  public:
-    explicit Lease(std::shared_ptr<State> state) : state_(std::move(state))
+public:
+    explicit Lease(std::shared_ptr<State> state)
+    : state_(std::move(state))
     {
       std::lock_guard<std::mutex> lock(state_->mutex);
       entered_ = !state_->closed;
@@ -64,7 +65,7 @@ private:
     Lease(const Lease &) = delete;
     Lease & operator=(const Lease &) = delete;
 
-  private:
+private:
     std::shared_ptr<State> state_;
     bool entered_{false};
   };
@@ -155,4 +156,4 @@ private:
   std::shared_ptr<State> state_{std::make_shared<State>()};
 };
 }  // namespace smartmicro::drivers::radar
-#endif
+#endif  // UMRR_ROS2_DRIVER__SDK_CALLBACK_GATE_HPP_

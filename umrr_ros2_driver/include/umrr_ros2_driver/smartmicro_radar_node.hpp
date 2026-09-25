@@ -1313,7 +1313,7 @@ private:
     const std::uint32_t sensor_idx)
   {
     constexpr bool objects =
-      std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::PortObjectHeader> ||
+      std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::PortObjectHeader>||
       std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::CanObjectHeader>;
     using Timing = umrr_ros2_msgs::msg::RadarTiming;
     const auto stamp = receive_stamp(

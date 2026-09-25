@@ -54,7 +54,9 @@ void check_records(const Point & point, const std::vector<uint8_t> & golden)
     Builder builder(cloud, "radar_test");
     builder.reserve(count);
     const auto capacity = cloud.data.capacity();
-    for (size_t i = 0; i < count; ++i) {builder.push_back(point);}
+    for (size_t i = 0; i < count; ++i) {
+      builder.push_back(point);
+    }
     EXPECT_EQ(cloud.data.capacity(), capacity);
     EXPECT_EQ(cloud.header.frame_id, "radar_test");
     EXPECT_EQ(cloud.header.stamp.sec, 123);
@@ -150,7 +152,9 @@ TEST(PointCloudBuilder, PreservesSpecialFloatsAndIntegerLimitsAcrossAppends)
       EXPECT_EQ(targets.data[i * 72 + 60 + byte], expected);
       EXPECT_EQ(objects.data[i * 48 + byte], expected);
     }
-    for (size_t byte = 64; byte < 70; ++byte) {EXPECT_EQ(targets.data[i * 72 + byte], 255);}
+    for (size_t byte = 64; byte < 70; ++byte) {
+      EXPECT_EQ(targets.data[i * 72 + byte], 255);
+    }
     for (size_t byte = 36; byte < 46; ++byte) {
       EXPECT_EQ(objects.data[i * 48 + byte], byte == 43 ? 0 : 255);
     }
