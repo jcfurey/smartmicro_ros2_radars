@@ -134,6 +134,15 @@ using smartmicro::drivers::radar::parse_mode_value;
 
 namespace
 {
+using SetModeRequest = umrr_ros2_msgs::srv::SetMode::Request;
+using smartmicro::drivers::radar::ModeValueType;
+static_assert(
+  static_cast<uint8_t>(ModeValueType::kFloat32) == SetModeRequest::TYPE_FLOAT32 &&
+  static_cast<uint8_t>(ModeValueType::kUint32) == SetModeRequest::TYPE_UINT32 &&
+  static_cast<uint8_t>(ModeValueType::kUint16) == SetModeRequest::TYPE_UINT16 &&
+  static_cast<uint8_t>(ModeValueType::kUint8) == SetModeRequest::TYPE_UINT8,
+  "SetMode value type constants must match parse_mode_value");
+
 using smartmicro::drivers::radar::kEthLinkType;
 using smartmicro::drivers::radar::kMsePubType;
 using smartmicro::drivers::radar::kTargetPubType;
@@ -1630,24 +1639,24 @@ void SmartmicroRadarNode::get_radar_status(
     bool request_added = false;
 
     switch (status_type) {
-      case 0: {
+      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_UINT32: {
           auto radar_status_u32 =
             std::make_shared<GetStatusRequest<uint32_t>>(section_name, status);
           request_added = batch->AddRequest(radar_status_u32);
           break;
         }
-      case 1: {
+      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_UINT16: {
           auto radar_status_u16 =
             std::make_shared<GetStatusRequest<uint16_t>>(section_name, status);
           request_added = batch->AddRequest(radar_status_u16);
           break;
         }
-      case 2: {
+      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_UINT8: {
           auto radar_status_u8 = std::make_shared<GetStatusRequest<uint8_t>>(section_name, status);
           request_added = batch->AddRequest(radar_status_u8);
           break;
         }
-      case 3: {
+      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_INT32: {
           auto radar_status_i32 = std::make_shared<GetStatusRequest<int32_t>>(section_name, status);
           request_added = batch->AddRequest(radar_status_i32);
           break;
@@ -1722,22 +1731,22 @@ void SmartmicroRadarNode::get_radar_mode(
     bool request_added = false;
 
     switch (param_type) {
-      case 0: {
+      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_FLOAT32: {
           auto radar_param_float = std::make_shared<GetParamRequest<float>>(section_name, param);
           request_added = batch->AddRequest(radar_param_float);
           break;
         }
-      case 1: {
+      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_UINT32: {
           auto radar_param_u32 = std::make_shared<GetParamRequest<uint32_t>>(section_name, param);
           request_added = batch->AddRequest(radar_param_u32);
           break;
         }
-      case 2: {
+      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_UINT16: {
           auto radar_param_u16 = std::make_shared<GetParamRequest<uint16_t>>(section_name, param);
           request_added = batch->AddRequest(radar_param_u16);
           break;
         }
-      case 3: {
+      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_UINT8: {
           auto radar_param_u8 = std::make_shared<GetParamRequest<uint8_t>>(section_name, param);
           request_added = batch->AddRequest(radar_param_u8);
           break;
@@ -2112,7 +2121,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v3_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra4_mse_v3_0_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -2188,7 +2198,8 @@ void SmartmicroRadarNode::faultreport_callback_umrra4_mse_v3_0_0(
     report_msg.cycle_count = fault->GetCycleCount();
     report_msg.instance_id = fault->GetInstanceId();
     report_msg.criticality = fault->GetCriticality();
-    report_msg.occurence_count = fault->GetOccurrenceCount();
+    report_msg.occurrence_count = fault->GetOccurrenceCount();
+    report_msg.occurence_count = report_msg.occurrence_count;  // Deprecated spelling.
 
     msg.reports.push_back(report_msg);
   }
@@ -2294,7 +2305,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v2_1_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra4_mse_v2_1_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -2415,7 +2427,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_mse_v1_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra4_mse_v1_0_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -2538,7 +2551,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v2_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9f_mse_v2_0_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -2614,7 +2628,8 @@ void SmartmicroRadarNode::faultreport_callback_umrr9f_mse_v2_0_0(
     report_msg.cycle_count = fault->GetCycleCount();
     report_msg.instance_id = fault->GetInstanceId();
     report_msg.criticality = fault->GetCriticality();
-    report_msg.occurence_count = fault->GetOccurrenceCount();
+    report_msg.occurrence_count = fault->GetOccurrenceCount();
+    report_msg.occurence_count = report_msg.occurrence_count;  // Deprecated spelling.
 
     msg.reports.push_back(report_msg);
   }
@@ -2722,7 +2737,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_3_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9f_mse_v1_3_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -2845,7 +2861,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_1_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9f_mse_v1_1_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -2968,7 +2985,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_mse_v1_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9f_mse_v1_0_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -3349,7 +3367,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_2_1(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9f_v2_2_1->GetTargetList();
   modifier.reserve(targets.size());
@@ -3412,7 +3431,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v2_4_1(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9f_v2_4_1->GetTargetList();
   modifier.reserve(targets.size());
@@ -3475,7 +3495,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9f_v3_0_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -3538,7 +3559,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9f_v3_2_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   header.acquisition_time_stamp_base = target_header->GetAcquisitionTimestampBase();
 
@@ -3616,7 +3638,8 @@ void SmartmicroRadarNode::faultreport_callback_umrr9f_v3_2_0(
     report_msg.cycle_count = fault->GetCycleCount();
     report_msg.instance_id = fault->GetInstanceId();
     report_msg.criticality = fault->GetCriticality();
-    report_msg.occurence_count = fault->GetOccurrenceCount();
+    report_msg.occurrence_count = fault->GetOccurrenceCount();
+    report_msg.occurence_count = report_msg.occurrence_count;  // Deprecated spelling.
 
     msg.reports.push_back(report_msg);
   }
@@ -3725,7 +3748,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_2_2(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9d_v1_2_2->GetTargetList();
   modifier.reserve(targets.size());
@@ -3788,7 +3812,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_4_1(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9d_v1_4_1->GetTargetList();
   modifier.reserve(targets.size());
@@ -3851,7 +3876,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_5_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrr9d_v1_5_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -3913,7 +3939,8 @@ void SmartmicroRadarNode::targetlist_callback_umrr9d_v1_7_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
 
   header.acquisition_time_stamp_base = target_header->GetAcquisitionTimestampBase();
@@ -3992,7 +4019,8 @@ void SmartmicroRadarNode::faultreport_callback_umrr9d_v1_7_0(
     report_msg.cycle_count = fault->GetCycleCount();
     report_msg.instance_id = fault->GetInstanceId();
     report_msg.criticality = fault->GetCriticality();
-    report_msg.occurence_count = fault->GetOccurrenceCount();
+    report_msg.occurrence_count = fault->GetOccurrenceCount();
+    report_msg.occurence_count = report_msg.occurrence_count;  // Deprecated spelling.
 
     msg.reports.push_back(report_msg);
   }
@@ -4039,7 +4067,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_0_1(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra4_v1_0_1->GetTargetList();
   modifier.reserve(targets.size());
@@ -4101,7 +4130,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_2_1(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra4_v1_2_1->GetTargetList();
   modifier.reserve(targets.size());
@@ -4163,7 +4193,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_4_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra4_v1_4_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -4226,7 +4257,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra4_v1_6_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   header.acquisition_time_stamp_base = target_header->GetAcquisitionTimestampBase();
 
@@ -4303,7 +4335,8 @@ void SmartmicroRadarNode::faultreport_callback_umrra4_v1_6_0(
     report_msg.cycle_count = fault->GetCycleCount();
     report_msg.instance_id = fault->GetInstanceId();
     report_msg.criticality = fault->GetCriticality();
-    report_msg.occurence_count = fault->GetOccurrenceCount();
+    report_msg.occurrence_count = fault->GetOccurrenceCount();
+    report_msg.occurence_count = report_msg.occurrence_count;  // Deprecated spelling.
 
     msg.reports.push_back(report_msg);
   }
@@ -4352,7 +4385,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v1_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra1_v1_0_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -4416,7 +4450,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra1_v2_0_0->GetTargetList();
   modifier.reserve(targets.size());
@@ -4480,7 +4515,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v2_0_1(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra1_v2_0_1->GetTargetList();
   modifier.reserve(targets.size());
@@ -4544,7 +4580,8 @@ void SmartmicroRadarNode::targetlist_callback_umrra1_v3_0_0(
   header.acquisition_sweep_idx = target_header->GetAcquisitionSweepIdx();
   header.acquisition_cf_idx = target_header->GetAcquisitionCfIdx();
   header.prf = target_header->GetPrf();
-  header.umambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.unambiguous_speed = target_header->GetUmambiguousSpeed();
+  header.umambiguous_speed = header.unambiguous_speed;  // Deprecated spelling.
   header.acquisition_start = target_header->GetAcquisitionStart();
   const auto & targets = targetlist_port_umrra1_v3_0_0->GetTargetList();
   modifier.reserve(targets.size());

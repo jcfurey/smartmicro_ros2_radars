@@ -1,4 +1,6 @@
-uint32 value_ip
+# Changes the sensor's IPv4 source address and saves it to EEPROM; restart the
+# sensor and update the parameter file afterwards.
+uint32 value_ip         # IPv4 address as a 32-bit integer (as the sensor parameter expects)
 uint32 sensor_id
 ---
 string res_ip

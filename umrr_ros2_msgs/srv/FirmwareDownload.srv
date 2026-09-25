@@ -1,4 +1,6 @@
+# Transfers and flashes a firmware image. The reply is sent when the sensor
+# reports a final status (success or failure), which can take minutes.
 uint32 sensor_id
-string file_path
+string file_path        # absolute path of the image on the driver host
 ---
 string res

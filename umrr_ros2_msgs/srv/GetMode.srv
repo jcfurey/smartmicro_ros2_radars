@@ -1,6 +1,11 @@
+# Reads sensor parameters.
+uint8 TYPE_FLOAT32=0
+uint8 TYPE_UINT32=1
+uint8 TYPE_UINT16=2
+uint8 TYPE_UINT8=3
 string section_name     # name of the interface section
 uint32 sensor_id        # id of the sensor to send request
 string[] params         # list of parameters or parameter to read
-uint8[] param_types     # 0: float32, 1: uint32, 2: uint16, 3: uint8
+uint8[] param_types     # one TYPE_* constant per parameter
 ---
 string res              # response from the sensor
