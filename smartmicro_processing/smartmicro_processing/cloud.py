@@ -71,19 +71,29 @@ def select_measurements(values, config=GateConfig()):
 
 
 def subset_cloud(cloud, indices):
-    """Indices refer to row-major input points; padding/unknown fields survive."""
+    """Gather whole point records; indices refer to row-major input points.
+
+    Padding bytes inside a record and unknown fields survive unchanged; row
+    padding between input rows is dropped because the output is one packed row.
+    """
     indices = np.asarray(indices, dtype=np.int64)
     if indices.ndim != 1 or np.any(indices < 0) or np.any(indices >= cloud.width * cloud.height):
         raise ValueError('Invalid point indices')
-    data = bytes(cloud.data)
-    selected = bytearray()
-    for index in indices:
-        start = int(index // cloud.width * cloud.row_step + index % cloud.width * cloud.point_step)
-        selected.extend(data[start:start + cloud.point_step])
+    if len(indices):
+        try:
+            source = np.frombuffer(cloud.data, dtype=np.uint8)
+        except TypeError:  # A plain list of byte values.
+            source = np.frombuffer(bytes(cloud.data), dtype=np.uint8)
+        starts = indices // cloud.width * cloud.row_step + indices % cloud.width * cloud.point_step
+        if int(starts.max()) + cloud.point_step > len(source):
+            raise ValueError('Point data shorter than its layout')
+        data = source[starts[:, None] + np.arange(cloud.point_step)].tobytes()
+    else:
+        data = b''
     return PointCloud2(header=deepcopy(cloud.header), height=1, width=len(indices),
                        fields=deepcopy(cloud.fields), is_bigendian=cloud.is_bigendian,
                        point_step=cloud.point_step, row_step=len(indices) * cloud.point_step,
-                       data=bytes(selected), is_dense=False)
+                       data=data, is_dense=False)
 
 
 def empty_cloud(header):

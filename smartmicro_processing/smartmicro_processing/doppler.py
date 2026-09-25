@@ -59,6 +59,12 @@ def condition(matrix):
     return float(singular[0] / singular[-1]) if singular[-1] > 1e-9 else float('inf')
 
 
+def huber_weights(residuals, residual_threshold):
+    """Bounded IRLS weights in (0.05, 1]; the Huber knee is half the inlier gate."""
+    absolute = np.abs(residuals)
+    return np.clip(residual_threshold * .5 / np.maximum(absolute, 1e-12), .05, 1)
+
+
 def fit_velocity(xyz, radial_speed, config=FitConfig()):
     """Fit d = -u.v in 3D. Unknown vertical motion is never forced to zero.
 
@@ -104,11 +110,8 @@ def fit_velocity(xyz, radial_speed, config=FitConfig()):
     # Refine a fixed consensus; then reclassify every input with the final model.
     a, b = matrix[best], -doppler[best]
     velocity = np.linalg.lstsq(a, b, rcond=None)[0]
-    weights = np.ones(len(a))
     for _ in range(5):
-        absolute = np.abs(a @ velocity - b)
-        weights = np.clip(config.residual_threshold * .5 / np.maximum(absolute, 1e-12), .05, 1)
-        root_weights = np.sqrt(weights)
+        root_weights = np.sqrt(huber_weights(a @ velocity - b, config.residual_threshold))
         refined = np.linalg.lstsq(a * root_weights[:, None], b * root_weights, rcond=None)[0]
         change = np.linalg.norm(refined - velocity)
         velocity = refined
@@ -125,12 +128,17 @@ def fit_velocity(xyz, radial_speed, config=FitConfig()):
         return FitResult(False, 'speed_limit')
     # Use only points supporting both fitting and final classification. Weights
     # <= 1 prevent a large radiometric value from inventing extra information.
+    # Recompute the Huber weights at the returned velocity so the information
+    # matrix and the residual variance describe the same weighted model:
+    # Var(r_i) = sigma^2 / w_i, sigma^2 = sum(w r^2) / (n - 3).
+    weights = huber_weights(a @ velocity - b, config.residual_threshold)
     support = mask[best]
     information = a[support].T @ (weights[support, None] * a[support])
     if condition(a[support] * np.sqrt(weights[support, None])) > config.max_condition:
         return FitResult(False, 'unobservable_weighted_geometry')
+    supported = residual[best][support]
     sigma2 = max(config.noise_floor ** 2, float(
-        np.sum(residual[best][support] ** 2) / max(1, int(support.sum()) - 3)))
+        np.sum(weights[support] * supported ** 2) / max(1, int(support.sum()) - 3)))
     covariance = sigma2 * np.linalg.inv(information)
     covariance += np.eye(3) * config.velocity_std_floor ** 2
     if (not np.isfinite(covariance).all()
