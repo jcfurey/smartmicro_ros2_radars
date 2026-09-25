@@ -1,7 +1,13 @@
+# Writes sensor parameters. Values are parsed completely: unsigned values must be
+# plain decimal integers within the type's range, float values finite.
+uint8 TYPE_FLOAT32=0
+uint8 TYPE_UINT32=1
+uint8 TYPE_UINT16=2
+uint8 TYPE_UINT8=3
 string section_name     # name of the interface section
 uint32 sensor_id        # id of the sensor to send request
 string[] params         # list of params or param to send
 string[] values         # list of values or value to send
-uint8[] value_types     # 0: float32, 1: uint32, 2: uint16, 3: uint8
+uint8[] value_types     # one TYPE_* constant per value
 ---
 string res              # response from the sensor

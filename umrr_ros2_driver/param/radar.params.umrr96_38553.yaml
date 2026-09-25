@@ -1,6 +1,10 @@
-# UMRR-96 on cam-ripper. Add 192.168.11.17/24 to enp68s0f0 before starting.
+# Bench configuration: UMRR-96 on cam-ripper. It hard-codes this host's interface
+# (enp68s0f0, 192.168.11.17) and the sensor address; copy and edit it for any
+# other host and pass it as params_file:=... to umrr96_live.launch.py.
+# Add 192.168.11.17/24 to enp68s0f0 before starting.
 # See docs/umrr96-bringup.md for setup and hardware verification limits.
-/smart_radar:
+# Keys use /** so the same file works when the nodes run in a namespace.
+/**/smart_radar:
   ros__parameters:
     master_data_serial_type: port_based
     master_inst_serial_type: port_based
@@ -31,7 +35,7 @@
         uifminorv: 2
         uifpatchv: 2
 
-/smart_radar_readback:
+/**/smart_radar_readback:
   ros__parameters:
     sensor_id: 230739
     interface_name: enp68s0f0
@@ -41,14 +45,13 @@
     sensor_port: 55555
     timeout_ms: 2000
 
-/umrr96_views:
+/**/umrr96_views:
   ros__parameters:
     frame_id: umrr96
     # Set to odom only when timestamped odom -> umrr96 TF is available.
     # Fan/image and raw/filtered target clouds remain in the sensor frame.
     grid_frame_id: ''
     tf_wait_seconds: 0.25
-    input_topic: /smart_radar/port_targets_0
     max_range: 20.0
     half_angle_degrees: 90.0
     cell_size: 0.25

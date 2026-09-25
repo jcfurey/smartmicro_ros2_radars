@@ -171,6 +171,24 @@ The original `view:=live` configuration shows targets colored by return power,
 with a dim gray `Recent targets (2 seconds)` layer for historical context.
 All configurations use fixed frame `umrr96` and include the sensor control panel.
 
+The default `params_file` is this bench's file,
+`param/radar.params.umrr96_38553.yaml`, which hard-codes `enp68s0f0`,
+`192.168.11.17` and the sensor address. On any other host copy it, edit the
+adapter and sensor entries, and pass it explicitly. Further arguments:
+`rviz:=false` (headless; RViz exit no longer ends the launch), `namespace:=<ns>`
+(all nodes and topics under `<ns>/smart_radar/...`; parameter keys use `/**`
+wildcards so the same file applies) and `use_sim_time:=true` for replay:
+
+```bash
+ros2 launch umrr_ros2_driver umrr96_live.launch.py \
+  params_file:=/path/to/my_radar.yaml rviz:=false namespace:=front_radar
+```
+
+The saved RViz configurations subscribe to absolute `/smart_radar/...` topics;
+with a namespace, change the display topics accordingly. See
+[driver interfaces](../umrr_ros2_driver/doc/interfaces.md) for topic, unit and
+install-layout details.
+
 ### Density grid and fan
 
 Each detection adds one hit to its 0.25 m Cartesian XY cell. Counts decay

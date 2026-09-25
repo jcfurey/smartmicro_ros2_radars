@@ -65,4 +65,4 @@ inline UdpSocketSnapshot udp_socket_health(uint16_t port)
   return parse_udp_socket_health(table, owned, port);
 }
 }  // namespace smartmicro::drivers::radar
-#endif
+#endif  // UMRR_ROS2_DRIVER__UDP_SOCKET_HEALTH_HPP_

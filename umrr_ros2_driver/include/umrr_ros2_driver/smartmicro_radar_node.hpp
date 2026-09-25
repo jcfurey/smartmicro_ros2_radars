@@ -19,35 +19,6 @@
 
 #include <CommunicationServicesIface.h>
 #include <InstructionServiceIface.h>
-#include <umrr11_t132_automotive_v1_1_2/DataStreamServiceIface.h>
-#include <umrr96_t153_automotive_v1_2_2/DataStreamServiceIface.h>
-#include <umrr9d_t152_automotive_v1_0_3/DataStreamServiceIface.h>
-#include <umrr9d_t152_automotive_v1_2_2/DataStreamServiceIface.h>
-#include <umrr9d_t152_automotive_v1_4_1/DataStreamServiceIface.h>
-#include <umrr9d_t152_automotive_v1_5_0/DataStreamServiceIface.h>
-#include <umrr9d_t152_automotive_v1_7_0/DataStreamServiceIface.h>
-#include <umrr9f_t169_automotive_v1_1_1/DataStreamServiceIface.h>
-#include <umrr9f_t169_automotive_v2_0_0/DataStreamServiceIface.h>
-#include <umrr9f_t169_automotive_v2_1_1/DataStreamServiceIface.h>
-#include <umrr9f_t169_automotive_v2_2_1/DataStreamServiceIface.h>
-#include <umrr9f_t169_automotive_v2_4_1/DataStreamServiceIface.h>
-#include <umrr9f_t169_automotive_v3_0_0/DataStreamServiceIface.h>
-#include <umrr9f_t169_automotive_v3_2_0/DataStreamServiceIface.h>
-#include <umrr9f_t169_mse_v1_0_0/DataStreamServiceIface.h>
-#include <umrr9f_t169_mse_v1_1_0/DataStreamServiceIface.h>
-#include <umrr9f_t169_mse_v1_3_0/DataStreamServiceIface.h>
-#include <umrr9f_t169_mse_v2_0_0/DataStreamServiceIface.h>
-#include <umrra4_automotive_v1_0_1/DataStreamServiceIface.h>
-#include <umrra4_automotive_v1_2_1/DataStreamServiceIface.h>
-#include <umrra4_automotive_v1_4_0/DataStreamServiceIface.h>
-#include <umrra4_automotive_v1_6_0/DataStreamServiceIface.h>
-#include <umrra4_mse_v1_0_0/DataStreamServiceIface.h>
-#include <umrra4_mse_v2_1_0/DataStreamServiceIface.h>
-#include <umrra4_mse_v3_0_0/DataStreamServiceIface.h>
-#include <umrra1_t166_b_automotive_v1_0_0/DataStreamServiceIface.h>
-#include <umrra1_t166_b_automotive_v2_0_0/DataStreamServiceIface.h>
-#include <umrra1_t166_b_automotive_v2_0_1/DataStreamServiceIface.h>
-#include <umrra1_t166_b_automotive_v3_0_0/DataStreamServiceIface.h>
 
 #include <rclcpp/rclcpp.hpp>
 #include <diagnostic_updater/diagnostic_updater.hpp>
@@ -77,9 +48,10 @@
 #include <umrr_ros2_driver/visibility_control.hpp>
 
 #include <array>
-#include <atomic>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -141,1053 +113,44 @@ public:
 
 private:
   ///
-  /// @brief      A callback that is called when a new object list port for
-  /// umrra4_v1_0_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_port_umrra4_mse_v1_0_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void objectlist_callback_umrra4_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v1_0_0::comobjectlist::ComObjectList> &
-    objectlist_port_umrra4_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra4_v1_0_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrra4_mse_v1_0_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrra4_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v1_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra4_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new object list port for
-  /// umrra4_v2_1_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_port_umrra4_mse_v2_1_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void objectlist_callback_umrra4_mse_v2_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v2_1_0::comobjectlist::ComObjectList> &
-    objectlist_port_umrra4_mse_v2_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra4_v2_1_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrra4_mse_v2_1_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrra4_mse_v2_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v2_1_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra4_mse_v2_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new object list port for
-  /// umrra4_v3_0_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_port_umrra4_mse_v3_0_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void objectlist_callback_umrra4_mse_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v3_0_0::comobjectlist::ComObjectList> &
-    objectlist_port_umrra4_mse_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra4_v3_0_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrra4_mse_v3_0_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrra4_mse_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v3_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra4_mse_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new fault report for
-  /// umrra4_v3_0_0 T169 MSE arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  fault_report_umrra4_mse_v3_0_0  The fault list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void faultreport_callback_umrra4_mse_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v3_0_0::faultreports::FaultReports> &
-    fault_report_umrra4_mse_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new object list port for
-  /// umrr9f_v1_0_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_port_umrr9f_mse_v1_0_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void objectlist_callback_umrr9f_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_0_0::comobjectlist::ComObjectList> &
-    objectlist_port_umrr9f_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v1_0_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_mse_v1_0_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new object list port for
-  /// umrr9f_v1_1_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_port_umrr9f_mse_v1_1_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void objectlist_callback_umrr9f_mse_v1_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_1_0::comobjectlist::ComObjectList> &
-    objectlist_port_umrr9f_mse_v1_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v1_1_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_mse_v1_1_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_mse_v1_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_1_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_mse_v1_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new object list port for
-  /// umrr9f_v1_3_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_port_umrr9f_mse_v1_3_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void objectlist_callback_umrr9f_mse_v1_3_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_3_0::comobjectlist::ComObjectList> &
-    objectlist_port_umrr9f_mse_v1_3_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v1_3_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_mse_v1_3_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_mse_v1_3_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_3_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_mse_v1_3_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new object list port for
-  /// umrr9f_v2_0_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_port_umrr9f_mse_v2_0_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void objectlist_callback_umrr9f_mse_v2_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v2_0_0::comobjectlist::ComObjectList> &
-    objectlist_port_umrr9f_mse_v2_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v2_0_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_mse_v2_0_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_mse_v2_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v2_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_mse_v2_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new fault report for
-  /// umrr9f_v2_0_0 T169 MSE arrives.
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  fault_report_umrr9f_mse_v2_0_0  The fault list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void faultreport_callback_umrr9f_mse_v2_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v2_0_0::faultreports::FaultReports> &
-    fault_report_umrr9f_mse_v2_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr11 T132 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr11  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-
-  void targetlist_callback_umrr11(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr11_t132_automotive_v1_1_2::comtargetlist::ComTargetList> &
-    targetlist_port_umrr11,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr96 T153 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr96  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr96(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr96_t153_automotive_v1_2_2::comtargetlist::ComTargetList> &
-    targetlist_port_umrr96,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v1_1_1 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_v1_1_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_v1_1_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v1_1_1::comtargetlistport::ComTargetListPort> &
-    targetlist_port_umrr9f_v1_1_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v2_0_0 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_v2_0_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_v2_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v2_0_0::comtargetlistport::ComTargetListPort> &
-    targetlist_port_umrr9f_v2_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v2_1_1 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_v2_1_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_v2_1_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v2_1_1::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_v2_1_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v2_2_1 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_v2_2_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_v2_2_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v2_2_1::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_v2_2_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v2_4_1 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_v2_4_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_v2_4_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v2_4_1::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_v2_4_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v3_0_0 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_v3_0_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v3_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9f_v3_2_0 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9f_v3_2_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9f_v3_2_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v3_2_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9f_v3_2_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new fault report for
-  /// umrr9f_v3_2_0 T169 arrives.
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  fault_report_umrr9f_v3_2_0  The fault report port.
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void faultreport_callback_umrr9f_v3_2_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v3_2_0::faultreports::FaultReports> &
-    fault_report_umrr9f_v3_2_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9d_v1_0_3 T152 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9d_v1_0_3  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9d_v1_0_3(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_0_3::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9d_v1_0_3,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9d_v1_2_2 T152 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_port_umrr9d_v1_2_2  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9d_v1_2_2(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_2_2::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9d_v1_2_2,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9d_v1_4_1 T152 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrr9d_v1_4_1  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9d_v1_4_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_4_1::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9d_v1_4_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9d_v1_5_0 T152 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrr9d_v1_5_0  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9d_v1_5_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_5_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9d_v1_5_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrr9d_v1_7_0 T152 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrr9d_v1_7_0  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrr9d_v1_7_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_7_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrr9d_v1_7_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new fault report for
-  /// umrr9d_v1_7_0 T152 arrives.
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  fault_report_umrr9d_v1_5_0  The fault report port.
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void faultreport_callback_umrr9d_v1_7_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_7_0::faultreports::FaultReports> &
-    fault_report_umrr9d_v1_5_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra4_v1_0_1 T171 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra4_v1_0_1  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra4_v1_0_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_0_1::comtargetlist::ComTargetList> &
-    targetlist_port_umrra4_v1_0_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra4_v1_2_1 T171 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra4_v1_2_1  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra4_v1_2_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_2_1::comtargetlist::ComTargetList> &
-    targetlist_port_umrra4_v1_2_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra4_v1_4_0 T171 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra4_v1_4_0  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra4_v1_4_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_4_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra4_v1_4_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra4_v1_6_0 T171 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra4_v1_6_0  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra4_v1_6_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_6_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra4_v1_6_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new fault report for
-  /// umrra4_v1_6_0 T171 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  fault_report_umrra4_v1_6_0  The fault list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void faultreport_callback_umrra4_v1_6_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_6_0::faultreports::FaultReports> &
-    fault_report_umrra4_v1_6_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra1_v1_0_0 T166 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra1_v1_0_0  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra1_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra1_t166_b_automotive_v1_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra1_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra1_v2_0_0 T166 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra1_v2_0_0  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra1_v2_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra1_t166_b_automotive_v2_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra1_v2_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra1_v2_0_1 T166 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra1_v2_0_1  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra1_v2_0_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra1_t166_b_automotive_v2_0_1::comtargetlist::ComTargetList> &
-    targetlist_port_umrra1_v2_0_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new target list port for
-  /// umrra1_v3_0_0 T166 arrives.
-  /// @param[in]  sensor_idx  The sensor id for the respected published topic.
-  /// @param[in]  targetlist_port_umrra1_v3_0_0  The target list port
-  /// @param[in]  client_id The client_id of the sensor
-  ///
-  void targetlist_callback_umrra1_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra1_t166_b_automotive_v3_0_0::comtargetlist::ComTargetList> &
-    targetlist_port_umrra1_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN object list for
-  /// umrra4_v1_0_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_can_umrra4_mse_v1_0_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  ///
-  void CAN_objectlist_callback_umrra4_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v1_0_0::comobjectbaselist::ComObjectBaseList> &
-    objectlist_can_umrra4_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief    A callback that is called when a new CAN target list for
-  /// umrra4_mse_v1_0_0 T171 MSE arrives.
-  /// @param[in] sensor_idx The sensor id for respective published topic.
-  /// @param[in] targetlist_can_umrra4_mse_v1_0_0 The target list port
-  /// @param[in] client_id  The client_id of the sensor.
-  ///
-  ///
-  void CAN_targetlist_callback_umrra4_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v1_0_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrra4_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN object list for
-  /// umrra4_v2_1_0 T171 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_can_umrra4_mse_v2_1_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  ///
-  void CAN_objectlist_callback_umrra4_mse_v2_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v2_1_0::comobjectbaselist::ComObjectBaseList> &
-    objectlist_can_umrra4_mse_v2_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief    A callback that is called when a new CAN target list for
-  /// umrra4_mse_v2_1_0 T171 MSE arrives.
-  /// @param[in] sensor_idx The sensor id for respective published topic.
-  /// @param[in] targetlist_can_umrra4_mse_v2_1_0 The target list port
-  /// @param[in] client_id  The client_id of the sensor.
-  ///
-  ///
-  void CAN_targetlist_callback_umrra4_mse_v2_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v2_1_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrra4_mse_v2_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN object list for
-  /// umrr9f_v1_0_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_can_umrr9f_mse_v1_0_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  ///
-  void CAN_objectlist_callback_umrr9f_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_0_0::comobjectbaselist::ComObjectBaseList> &
-    objectlist_can_umrr9f_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief    A callback that is called when a new CAN target list for
-  /// umrr9f_mse_v1_0_0 T169 MSE arrives.
-  ///
-  /// @param[in] sensor_idx The sensor id for respective published topic.
-  /// @param[in] targetlist_can_umrr9f_mse_v1_0_0 The target list port
-  /// @param[in] client_id  The client_id of the sensor.
-  ///
-  ///
-  void CAN_targetlist_callback_umrr9f_mse_v1_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_0_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_mse_v1_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN object list for
-  /// umrr9f_v1_1_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_can_umrr9f_mse_v1_1_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  ///
-  void CAN_objectlist_callback_umrr9f_mse_v1_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_1_0::comobjectbaselist::ComObjectBaseList> &
-    objectlist_can_umrr9f_mse_v1_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief    A callback that is called when a new CAN target list for
-  /// umrr9f_mse_v1_1_0 T169 MSE arrives.
-  ///
-  /// @param[in] sensor_idx The sensor id for respective published topic.
-  /// @param[in] targetlist_can_umrr9f_mse_v1_1_0 The target list port
-  /// @param[in] client_id  The client_id of the sensor.
-  ///
-  ///
-  void CAN_targetlist_callback_umrr9f_mse_v1_1_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_1_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_mse_v1_1_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN object list for
-  /// umrr9f_v1_3_0 T169 MSE arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  objectlist_can_umrr9f_mse_v1_3_0  The object list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  ///
-  void CAN_objectlist_callback_umrr9f_mse_v1_3_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_3_0::comobjectbaselist::ComObjectBaseList> &
-    objectlist_can_umrr9f_mse_v1_3_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief    A callback that is called when a new CAN target list for
-  /// umrr9f_mse_v1_3_0 T169 MSE arrives.
-  /// @param[in] sensor_idx The sensor id for respective published topic.
-  /// @param[in] targetlist_can_umrr9f_mse_v1_3_0 The target list port
-  /// @param[in] client_id  The client_id of the sensor.
-  ///
-  ///
-  void CAN_targetlist_callback_umrr9f_mse_v1_3_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v1_3_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_mse_v1_3_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      Handles a CAN object list from an UMRRA4 MSE v3.0.0 radar.
-  ///
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  objectlist_can_umrra4_mse_v3_0_0  The received CAN object list.
-  /// @param[in]  client_id  The client identifier of the sensor.
-  ///
-  void CAN_objectlist_callback_umrra4_mse_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v3_0_0::comobjectbaselist::ComObjectBaseList> &
-    objectlist_can_umrra4_mse_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      Handles a CAN target list from an UMRRA4 MSE v3.0.0 radar.
-  ///
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  targetlist_can_umrra4_mse_v3_0_0  The received CAN target list.
-  /// @param[in]  client_id  The client identifier of the sensor.
-  ///
-  void CAN_targetlist_callback_umrra4_mse_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_mse_v3_0_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrra4_mse_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      Handles a CAN object list from an UMRR9F MSE v2.0.0 radar.
-  ///
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  objectlist_can_umrr9f_mse_v2_0_0  The received CAN object list.
-  /// @param[in]  client_id  The client identifier of the sensor.
-  ///
-  void CAN_objectlist_callback_umrr9f_mse_v2_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v2_0_0::comobjectbaselist::ComObjectBaseList> &
-    objectlist_can_umrr9f_mse_v2_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      Handles a CAN target list from an UMRR9F MSE v2.0.0 radar.
-  ///
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  targetlist_can_umrr9f_mse_v2_0_0  The received CAN target list.
-  /// @param[in]  client_id  The client identifier of the sensor.
-  ///
-  void CAN_targetlist_callback_umrr9f_mse_v2_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_mse_v2_0_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_mse_v2_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr96_v1_2_2 T153 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr96  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr96(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr96_t153_automotive_v1_2_2::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr96,
-    const com::types::ClientId client_id);
-
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr11_v1_1_2 T132 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr11  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr11(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr11_t132_automotive_v1_1_2::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr11,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9f_v2_1_1 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9f_v2_1_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9f_v2_1_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v2_1_1::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_v2_1_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9f_v2_2_1 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9f_v2_2_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9f_v2_2_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v2_2_1::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_v2_2_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9f_v2_4_1 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9f_v2_4_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9f_v2_4_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v2_4_1::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_v2_4_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9f_v3_0_0 T169 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9f_v3_0_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9f_v3_0_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v3_0_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_v3_0_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      Handles a CAN target list from an UMRR9F v3.2.0 radar.
-  ///
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  targetlist_can_umrr9f_v3_2_0  The received CAN target list.
-  /// @param[in]  client_id  The client identifier of the sensor.
-  ///
-  void CAN_targetlist_callback_umrr9f_v3_2_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9f_t169_automotive_v3_2_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9f_v3_2_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9d_v1_0_3 T152 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9d_v1_0_3  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9d_v1_0_3(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_0_3::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9d_v1_0_3,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9d_v1_2_2 T152 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9d_v1_2_2  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9d_v1_2_2(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_2_2::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9d_v1_2_2,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9d_v1_4_1 T152 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9d_v1_4_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9d_v1_4_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_4_1::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9d_v1_4_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrr9d_v1_5_0 T152 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrr9d_v1_5_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrr9d_v1_5_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_5_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9d_v1_5_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      Handles a CAN target list from an UMRR9D v1.7.0 radar.
-  ///
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  targetlist_can_umrr9d_v1_7_0  The received CAN target list.
-  /// @param[in]  client_id  The client identifier of the sensor.
-  ///
-  void CAN_targetlist_callback_umrr9d_v1_7_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrr9d_t152_automotive_v1_7_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrr9d_v1_7_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrra4_v1_0_1 T171 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrra4_v1_0_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrra4_v1_0_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_0_1::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrra4_v1_0_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrra4_v1_2_1 T171 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrra4_v1_2_1  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrra4_v1_2_1(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_2_1::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrra4_v1_2_1,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      A callback that is called when a new CAN target list for
-  /// umrra4_v1_4_0 T171 arrives.
-  ///
-  /// @param[in]  sensor_idx   The sensor id for respective published topic.
-  /// @param[in]  targetlist_can_umrra4_v1_4_0  The target list port
-  /// @param[in]  client_id  The client_id of the sensor
-  ///
-  void CAN_targetlist_callback_umrra4_v1_4_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_4_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrra4_v1_4_0,
-    const com::types::ClientId client_id);
-
-  ///
-  /// @brief      Handles a CAN target list from an UMRRA4 v1.6.0 radar.
-  ///
-  /// @param[in]  sensor_idx  The sensor index for the respective published topic.
-  /// @param[in]  targetlist_can_umrra4_v1_6_0  The received CAN target list.
-  /// @param[in]  client_id  The client identifier of the sensor.
-  ///
-  void CAN_targetlist_callback_umrra4_v1_6_0(
-    const std::uint32_t sensor_idx,
-    const std::shared_ptr<
-      com::master::umrra4_automotive_v1_6_0::comtargetbaselist::ComTargetBaseList> &
-    targetlist_can_umrra4_v1_6_0,
-    const com::types::ClientId client_id);
+  /// @brief      Registers the SDK callbacks of the configured model's streams.
+  ///
+  /// @param[in]  sensor       The sensor configuration (model, link type, id).
+  /// @param[in]  sensor_idx   The sensor index used in topic names.
+  ///
+  void register_sensor_streams(const detail::SensorConfig & sensor, size_t sensor_idx);
+
+  ///
+  /// @brief      Per-stream SDK callbacks, instantiated once per sensor model.
+  ///
+  /// @tparam     Model  Model traits (SDK namespace and publishing options).
+  /// @param[in]  sensor_idx  The sensor index for the respective published topics.
+  /// @param[in]  list        The received SDK list.
+  /// @param[in]  client_id   The client identifier of the sensor.
+  ///
+  template<typename Model, typename List>
+  void on_port_targets(
+    std::uint32_t sensor_idx, const std::shared_ptr<List> & list,
+    com::types::ClientId client_id);
+  template<typename Model, typename List>
+  void on_port_objects(
+    std::uint32_t sensor_idx, const std::shared_ptr<List> & list,
+    com::types::ClientId client_id);
+  template<typename Model, typename List>
+  void on_fault_reports(
+    std::uint32_t sensor_idx, const std::shared_ptr<List> & list,
+    com::types::ClientId client_id);
+  template<typename Model, typename List>
+  void on_can_targets(
+    std::uint32_t sensor_idx, const std::shared_ptr<List> & list,
+    com::types::ClientId client_id);
+  template<typename Model, typename List>
+  void on_can_objects(
+    std::uint32_t sensor_idx, const std::shared_ptr<List> & list,
+    com::types::ClientId client_id);
+
+  template<typename Model>
+  void register_model(const detail::SensorConfig & sensor, size_t sensor_idx, bool can_link);
 
   ///
   /// @brief      Read parameters and update the json config files required by
@@ -1202,6 +165,11 @@ private:
   /// @param[in]  sensor_idx   The sensor index.
   ///
   void port_publishers(const detail::SensorConfig & sensor, size_t sensor_idx);
+
+  ///
+  /// @brief      Publishes a target cloud as radar_msgs/RadarScan when enabled.
+  ///
+  void publish_radar_scan(size_t sensor_idx, const sensor_msgs::msg::PointCloud2 & cloud);
 
   ///
   /// @brief      Creates publishers for sensors using CAN.
@@ -1278,14 +246,16 @@ private:
     std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Response> response);
 
   ///
-  /// @brief      Service for firmware download.
+  /// @brief      Service for firmware download (deferred response).
   ///
-  /// @param[in]  request   The request.
-  /// @param[out] result    The result.
+  /// @param[in]  request_header  Identifies the request for the deferred reply.
+  /// @param[in]  request         The request.
   ///
   void firmware_download(
-    const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request,
-    std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Response> result);
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request);
+
+  static std::string firmware_download_result(UpdateResult update_result);
 
   builtin_interfaces::msg::Time receive_stamp(
     uint64_t timestamp_us, uint32_t sensor_idx, uint8_t stream);
@@ -1310,7 +280,7 @@ private:
     const std::uint32_t sensor_idx)
   {
     constexpr bool objects =
-      std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::PortObjectHeader> ||
+      std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::PortObjectHeader>||
       std::is_same_v<HeaderMsgT, umrr_ros2_msgs::msg::CanObjectHeader>;
     using Timing = umrr_ros2_msgs::msg::RadarTiming;
     const auto stamp = receive_stamp(
@@ -1340,6 +310,17 @@ private:
 
     msg.header.stamp = stamp;
     msg.header.frame_id = m_sensors[sensor_idx].frame_id;
+  }
+
+  ///
+  /// @brief      Whether a service request names one of the configured sensors.
+  ///
+  bool is_configured_sensor(com::types::ClientId client_id) const
+  {
+    for (size_t i = 0; i < m_number_of_sensors; ++i) {
+      if (m_sensors[i].id == client_id) {return true;}
+    }
+    return false;
   }
 
   ///
@@ -1449,102 +430,23 @@ private:
     rclcpp::Publisher<umrr_ros2_msgs::msg::PortFaultReportsMsg>::SharedPtr, detail::kMaxSensorCount>
   m_publishers_fault_report_msg{};
 
+  // radar_msgs/RadarScan publishers (type-erased: radar_msgs is optional).
+  bool publish_radar_scan_{false};
+  std::array<rclcpp::PublisherBase::SharedPtr, detail::kMaxSensorCount> radar_scan_publishers_{};
+
   std::size_t m_number_of_sensors{};
   std::size_t m_number_of_adapters{};
-  com::types::ClientId client_id;
-  std::uint64_t response_type{};
   std::shared_ptr<UpdateService> update_service;
-  std::atomic_bool m_shutdown_requested{false};
+  std::mutex firmware_worker_mutex_;
+  std::thread firmware_worker_;
+
+  // SDK service handles are owned by the node (not namespace-scope globals in an
+  // installed header) and released before the SDK's own static objects.
+  std::shared_ptr<com::master::CommunicationServicesIface> m_services{};
+  // Data stream services of the configured models (type-erased).
+  std::vector<std::shared_ptr<void>> data_services_;
 };
 
-std::shared_ptr<com::master::CommunicationServicesIface> m_services{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_0_1::DataStreamServiceIface>
-data_umrra4_v1_0_1{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_2_1::DataStreamServiceIface>
-data_umrra4_v1_2_1{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_4_0::DataStreamServiceIface>
-data_umrra4_v1_4_0{};
-std::shared_ptr<
-  com::master::umrra4_automotive_v1_6_0::DataStreamServiceIface>
-data_umrra4_v1_6_0{};
-std::shared_ptr<
-  com::master::umrr11_t132_automotive_v1_1_2::DataStreamServiceIface>
-data_umrr11{};
-std::shared_ptr<
-  com::master::umrr96_t153_automotive_v1_2_2::DataStreamServiceIface>
-data_umrr96{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v1_1_1::DataStreamServiceIface>
-data_umrr9f_v1_1_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_0_0::DataStreamServiceIface>
-data_umrr9f_v2_0_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_1_1::DataStreamServiceIface>
-data_umrr9f_v2_1_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_2_1::DataStreamServiceIface>
-data_umrr9f_v2_2_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v2_4_1::DataStreamServiceIface>
-data_umrr9f_v2_4_1{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v3_0_0::DataStreamServiceIface>
-data_umrr9f_v3_0_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_automotive_v3_2_0::DataStreamServiceIface>
-data_umrr9f_v3_2_0{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_0_3::DataStreamServiceIface>
-data_umrr9d_v1_0_3{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_2_2::DataStreamServiceIface>
-data_umrr9d_v1_2_2{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_4_1::DataStreamServiceIface>
-data_umrr9d_v1_4_1{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_5_0::DataStreamServiceIface>
-data_umrr9d_v1_5_0{};
-std::shared_ptr<
-  com::master::umrr9d_t152_automotive_v1_7_0::DataStreamServiceIface>
-data_umrr9d_v1_7_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v1_0_0::DataStreamServiceIface>
-data_umrr9f_mse_v1_0_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v1_1_0::DataStreamServiceIface>
-data_umrr9f_mse_v1_1_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v1_3_0::DataStreamServiceIface>
-data_umrr9f_mse_v1_3_0{};
-std::shared_ptr<
-  com::master::umrr9f_t169_mse_v2_0_0::DataStreamServiceIface>
-data_umrr9f_mse_v2_0_0{};
-std::shared_ptr<
-  com::master::umrra4_mse_v1_0_0::DataStreamServiceIface>
-data_umrra4_mse_v1_0_0{};
-std::shared_ptr<
-  com::master::umrra4_mse_v2_1_0::DataStreamServiceIface>
-data_umrra4_mse_v2_1_0{};
-std::shared_ptr<
-  com::master::umrra4_mse_v3_0_0::DataStreamServiceIface>
-data_umrra4_mse_v3_0_0{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v1_0_0::DataStreamServiceIface>
-data_umrra1_v1_0_0{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v2_0_0::DataStreamServiceIface>
-data_umrra1_v2_0_0{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v2_0_1::DataStreamServiceIface>
-data_umrra1_v2_0_1{};
-std::shared_ptr<
-  com::master::umrra1_t166_b_automotive_v3_0_0::DataStreamServiceIface>
-data_umrra1_v3_0_0{};
 
 }  // namespace radar
 }  // namespace drivers

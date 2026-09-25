@@ -1,9 +1,10 @@
+# Generic port header and fault-report header of a PortFaultReportsMsg.
 uint32 port_identifier
 int16 port_ver_major
 int16 port_ver_minor
-uint32 port_size
+uint32 port_size                  # [bytes] including this header
 uint8 body_endianness
-uint8 port_index 
+uint8 port_index
 uint8 header_ver_major
 uint8 header_ver_minor
 uint16 num_max_reports

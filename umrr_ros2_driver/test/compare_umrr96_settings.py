@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Compare temporary UMRR-96 settings and restore the starting values.
+"""
+Compare temporary UMRR-96 settings and restore the starting values.
 
 Requires umrr96_live.launch.py. This hardware experiment sends parameter writes;
 it never sends EEPROM-save or reset commands. Keep the scene still for comparison.
@@ -41,6 +42,7 @@ def main():
               'trials': [], 'writes': []}
     rclpy.init()
     node = rclpy.create_node('umrr96_setting_comparison')
+
     # Restore through ROS before shutting down the context on Ctrl-C or SIGTERM.
     def interrupted(signum, frame):
         raise KeyboardInterrupt(f'Signal {signum}; restoring sensor settings')

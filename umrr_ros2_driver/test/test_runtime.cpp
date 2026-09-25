@@ -5,7 +5,9 @@
 #include <umrr_ros2_driver/sdk_callback_gate.hpp>
 #include <fstream>
 #include <future>
+#include <string>
 #include <thread>
+#include <vector>
 
 using smartmicro::drivers::radar::RuntimeConfig;
 using smartmicro::drivers::radar::StreamHealth;
@@ -26,11 +28,29 @@ TEST(RuntimeConfig, IndependentDirectoriesAndExceptionCleanup)
       EXPECT_EQ(nlohmann::json::parse(std::ifstream(first / "routing_table.json"))["port"],
         12345);
       throw std::runtime_error("constructor failure");
-    } catch (const std::runtime_error &) {}
+    } catch (const std::runtime_error &) {
+    }
     EXPECT_FALSE(std::filesystem::exists(second));
     EXPECT_TRUE(std::filesystem::exists(first));
   }
   EXPECT_FALSE(std::filesystem::exists(first));
+}
+
+TEST(RuntimeConfig, ShortSdkLibraryAliasIsRemovedWithoutTarget)
+{
+  RuntimeConfig target_owner("smartmicro-test-target");
+  const auto target = target_owner.path / std::string(200, 'x');
+  std::filesystem::create_directory(target);
+  std::ofstream(target / "libsmart_access.so") << "stub";
+  std::filesystem::path alias;
+  {
+    RuntimeConfig config("smartmicro-test");
+    alias = config.sdk_library_path(target);
+    EXPECT_LE(alias.string().size(), RuntimeConfig::kMaxSdkLibraryPathLength);
+    EXPECT_TRUE(std::filesystem::exists(alias / "libsmart_access.so"));
+  }
+  EXPECT_FALSE(std::filesystem::exists(alias));
+  EXPECT_TRUE(std::filesystem::exists(target / "libsmart_access.so"));
 }
 
 TEST(StreamHealth, SilenceRecoveryAndCounterReset)
@@ -90,9 +110,9 @@ TEST(SdkCallbackGate, DrainsAnActiveCallAndDropsLateCalls)
   auto release_future = release.get_future().share();
   unsigned calls = 0;
   auto callback = gate.wrap([&] {
-      ++calls;
-      entered.set_value();
-      release_future.wait();
+        ++calls;
+        entered.set_value();
+        release_future.wait();
     });
   std::thread worker(callback);
   entered.get_future().wait();
@@ -121,11 +141,20 @@ TEST(SdkCallbackGate, RetainedCallbackAndShutdownHookOutliveOwner)
   EXPECT_EQ(calls, 1U);
 }
 
-TEST(SdkCallbackGate, ExceptionReleasesActiveLease)
+TEST(SdkCallbackGate, ExceptionIsContainedReportedAndReleasesLease)
 {
   SdkCallbackGate gate;
+  std::vector<std::string> reports;
+  gate.set_error_handler([&](const std::string & message) {reports.push_back(message);});
   auto callback = gate.wrap([] {throw std::runtime_error("SDK callback failure");});
-  EXPECT_THROW(callback(), std::runtime_error);
-  gate.close();
+  auto unknown = gate.wrap([] {throw 42;});
   EXPECT_NO_THROW(callback());
+  EXPECT_NO_THROW(callback());  // Throttled: counted, not reported again within 1 s.
+  EXPECT_NO_THROW(unknown());
+  EXPECT_EQ(gate.exception_count(), 3U);
+  ASSERT_EQ(reports.size(), 1U);
+  EXPECT_NE(reports.front().find("SDK callback failure"), std::string::npos);
+  gate.close();  // The lease was released despite the exceptions.
+  EXPECT_NO_THROW(callback());
+  EXPECT_EQ(gate.exception_count(), 3U);
 }

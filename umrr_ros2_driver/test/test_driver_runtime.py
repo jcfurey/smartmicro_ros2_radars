@@ -6,21 +6,27 @@ import json
 import os
 from pathlib import Path
 import signal
-import struct
 import socket
+import struct
 import subprocess
 import tempfile
 import time
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
+from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 import rclpy
 from rclpy.parameter import Parameter
-from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming, Umrr96RawQuality
+from umrr_ros2_msgs.srv import FirmwareDownload, SetMode
 import yaml
+
+try:  # Optional: the driver publishes RadarScan only when built with radar_msgs.
+    from radar_msgs.msg import RadarScan
+except ImportError:
+    RadarScan = None
 
 
 def unused_port():
@@ -47,6 +53,9 @@ def test_driver_runtime():
     node.create_subscription(Umrr96RawQuality, topic + 'umrr96_raw_quality_0', quality.append, 10)
     node.create_subscription(DiagnosticArray, '/diagnostics',
                              lambda msg: statuses.extend(msg.status), 10)
+    scans = []
+    if RadarScan is not None:
+        node.create_subscription(RadarScan, topic + 'radar_scan_0', scans.append, 10)
 
     def wait(predicate, timeout=10):
         deadline = time.monotonic() + timeout
@@ -89,11 +98,12 @@ def test_driver_runtime():
             while len(ports) < 3:
                 ports.add(unused_port())
             port_a, port_b, peer_port = ports
-            parameters = dict(
+            parameters = dict(  # noqa: C408 (keyword form mirrors the parameter file)
                 master_data_serial_type='port_based', master_inst_serial_type='port_based',
-                adapters={'adapter_0': dict(hw_type='eth', hw_dev_id=4, hw_iface_name='lo',
-                                           hw_ip_address='127.0.0.1', port=port_a)},
-                sensors={'sensor_0': dict(
+                adapters={'adapter_0': dict(  # noqa: C408
+                    hw_type='eth', hw_dev_id=4, hw_iface_name='lo',
+                    hw_ip_address='127.0.0.1', port=port_a)},
+                sensors={'sensor_0': dict(  # noqa: C408
                     link_type='eth', pub_type='target', model='umrr96_v1_2_2', dev_id=4,
                     id=200, frame_id='umrr96_test', history_size=10, ip='127.0.0.1',
                     port=peer_port, inst_type='port_based', data_type='port_based',
@@ -102,6 +112,7 @@ def test_driver_runtime():
             driver_processes = []
             for name, port in (('a', port_a), ('b', port_b)):
                 parameters['adapters']['adapter_0']['port'] = port
+                parameters['publish_radar_scan'] = RadarScan is not None and name == 'a'
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
@@ -114,8 +125,10 @@ def test_driver_runtime():
             assert {json.loads((p / 'hw_inventory.json').read_text())['hwItems'][0]['port']
                     for p in dirs} == {port_a, port_b}
             for path in dirs:
-                assert json.loads((path / 'smart_access_config.json').read_text())[
-                    'config_path'] == str(path)
+                sdk_config = json.loads((path / 'smart_access_config.json').read_text())
+                assert sdk_config['config_path'] == str(path)
+                assert sdk_config['shared_lib_path'] == str(path / 'sdk-lib')
+                assert (path / 'sdk-lib' / 'libsmart_access.so').exists()
             assert all(p.read_bytes() == value for p, value in originals.items())
 
             descriptions = node.create_client(
@@ -129,6 +142,27 @@ def test_driver_runtime():
             result = call(setter, SetParametersAtomically.Request(parameters=[
                 Parameter('adapters.adapter_0.port', value=port_b).to_parameter_msg()]))
             assert not result.result.successful
+
+            # Service validation happens before anything reaches the SDK (C5, C6).
+            set_mode = node.create_client(SetMode, topic + 'set_radar_mode')
+            for sensor_id, value, value_type, expected in (
+                    (0, '1', 3, 'Sensor ID is invalid'),
+                    (200, '12abc', 1, 'not a decimal uint32'),
+                    (200, '-1', 1, 'not a decimal uint32'),
+                    (200, '5000000000', 1, 'out of range'),
+                    (200, 'nan', 0, 'not a finite float32'),
+                    (200, '256', 3, 'out of range')):
+                response = call(set_mode, SetMode.Request(
+                    section_name='auto_interface_0dim', sensor_id=sensor_id,
+                    params=['frequency_sweep_idx'], values=[value], value_types=[value_type]))
+                assert expected in response.res, (value, response.res)
+            # Firmware download replies are deferred to a worker thread (C4).
+            download = node.create_client(FirmwareDownload, topic + 'firmware_download')
+            response = call(download, FirmwareDownload.Request(sensor_id=0, file_path='/none'))
+            assert 'invalid' in response.res, response.res
+            response = call(download, FirmwareDownload.Request(
+                sensor_id=200, file_path=str(run / 'missing.bin')))
+            assert 'could not open update image' in response.res, response.res
             wait(lambda: any(s.name.endswith('Target stream 0') and
                              s.level == DiagnosticStatus.STALE for s in statuses))
 
@@ -137,7 +171,10 @@ def test_driver_runtime():
             for filename in ('com_lib_config.json', 'hw_inventory.json', 'routing_table.json'):
                 data = json.loads((repo / 'simulator/config_umrr96' / filename).read_text())
                 if filename == 'com_lib_config.json':
-                    data.update(shared_lib_path=str(prefix / 'lib'), config_path=str(sim),
+                    # The SDK aborts on library paths of 160+ characters; use a short alias.
+                    sdk_alias = run / 'sdk-lib'
+                    sdk_alias.symlink_to(prefix / 'lib' / 'umrr_ros2_driver')
+                    data.update(shared_lib_path=str(sdk_alias), config_path=str(sim),
                                 user_interface_patch_v=2)
                 elif filename == 'hw_inventory.json':
                     data['hwItems'][0].update(iface_name='lo', ip_address='127.0.0.1',
@@ -150,7 +187,8 @@ def test_driver_runtime():
             fixture = bytearray((repo / 'simulator/targetlist_port_v2_1_0.bin').read_bytes())
             struct.pack_into('<fHH', fixture, 24, .1, 17, 0x1234)
             for index in range(17):
-                struct.pack_into('<10fIffH', fixture, 32 + index * 56,
+                struct.pack_into(
+                    '<10fIffH', fixture, 32 + index * 56,
                     1.0 + index, .5, .1, .2, .01 + index, .02 + index,
                     .03 + index, .04 + index, 2.0, .25, 0x123400 + index, 40.0, 10.0, index + 100)
             fixture_path = run / 'known_quality_port.bin'
@@ -193,22 +231,32 @@ def test_driver_runtime():
                         expected = struct.unpack('<f', struct.pack('<f', base + index))[0]
                         assert float(record[field]) == expected, (field, index, record[field])
                     assert int(record['peak_idx']) == index + 100
-            wait(lambda: any(s.name == 'runtime_a: UDP adapter 0' and
-                             {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
-                             for s in statuses))
+            if RadarScan is not None:
+                wait(lambda: scans)
+                scan = scans[-1]
+                cloud = next((c for c in clouds if c.header == scan.header), None)
+                assert len(scan.returns) == 17
+                if cloud is not None:
+                    ranges = [float(r['range']) for r in point_cloud2.read_points(cloud)]
+                    assert [r.range for r in scan.returns] == ranges
+            wait(lambda: any(
+                s.name == 'runtime_a: UDP adapter 0' and
+                {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
+                for s in statuses))
             assert matched >= 3
             # The fixture deliberately repeats its original counter. ROS stamps still advance.
             assert len({t.device_timestamp_us for t in timing}) == 1
             assert len({(c.header.stamp.sec, c.header.stamp.nanosec) for c in clouds}) >= 5
             wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
                              s.level == DiagnosticStatus.WARN and
-                             int(dict((v.key, v.value) for v in s.values).get(
+                             int({v.key: v.value for v in s.values}.get(
                                  'timestamp_repeats', '0')) > 0 for s in statuses))
             stop(sender)
             statuses.clear()
             wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
                              s.level == DiagnosticStatus.STALE for s in statuses))
-            restarted_sender = launch([os.environ['SMARTMICRO_TEST_SENDER'], str(fixture_path)],
+            restarted_sender = launch(
+                [os.environ['SMARTMICRO_TEST_SENDER'], str(fixture_path)],
                 SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
             previous_count = len(clouds)
             wait(lambda: len(clouds) >= previous_count + 3)
@@ -230,3 +278,27 @@ def test_driver_runtime():
                 log.close()
             node.destroy_node()
             rclpy.shutdown()
+
+
+def test_radar_scan_requires_radar_msgs():
+    """Without radar_msgs, enabling the RadarScan output fails at startup."""
+    if RadarScan is not None:
+        return
+    prefix = Path(get_package_prefix('umrr_ros2_driver'))
+    with tempfile.TemporaryDirectory(prefix='umrr-radar-scan-test-') as directory:
+        params = Path(directory) / 'params.yaml'
+        params.write_text(yaml.safe_dump({'/**': {'ros__parameters': {
+            'publish_radar_scan': True,
+            'adapters': {'adapter_0': {'hw_type': 'eth', 'hw_dev_id': 4,
+                                       'hw_iface_name': 'lo', 'port': unused_port()}},
+            'sensors': {'sensor_0': {
+                'link_type': 'eth', 'pub_type': 'target', 'model': 'umrr96_v1_2_2',
+                'dev_id': 4, 'id': 200, 'ip': '127.0.0.1', 'port': unused_port()}}}}}))
+        result = subprocess.run(
+            [str(prefix / 'lib/umrr_ros2_driver/smartmicro_radar_node_exe'),
+             '--ros-args', '--params-file', str(params)],
+            capture_output=True, text=True, timeout=20,
+            env=dict(os.environ, TMPDIR=directory))
+        assert result.returncode != 0
+        assert 'built without radar_msgs' in result.stdout + result.stderr
+        assert not list(Path(directory).glob('smartmicro-data-*'))

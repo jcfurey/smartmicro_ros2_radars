@@ -49,6 +49,8 @@ struct ObjectPoint
   float mileage{};
   float quality{};
   float acceleration{};
+  // Published as int16 for schema compatibility. CAN object ids are uint16 in
+  // the SDK, so ids >= 32768 appear negative (see doc/interfaces.md).
   int16_t object_id{};
   uint16_t idle_cycles{};
   uint16_t spline_idx{};

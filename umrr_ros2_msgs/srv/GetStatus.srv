@@ -1,6 +1,11 @@
+# Reads sensor status values. Note the type codes differ from GetMode/SetMode.
+uint8 TYPE_UINT32=0
+uint8 TYPE_UINT16=1
+uint8 TYPE_UINT8=2
+uint8 TYPE_INT32=3
 string section_name       # name of the interface section
 uint32 sensor_id          # id of the sensor to send request
 string[] statuses         # list of status or status to send
-uint8[] status_types      # 0: uint32, 1: uint16, 2: uint8, 3: int32
+uint8[] status_types      # one TYPE_* constant per status
 ---
 string res                # response from the sensor

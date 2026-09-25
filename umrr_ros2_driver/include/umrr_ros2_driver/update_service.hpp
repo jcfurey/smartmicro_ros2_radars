@@ -18,7 +18,6 @@
 #define UMRR_ROS2_DRIVER__UPDATE_SERVICE_HPP_
 
 #include <CommunicationServicesIface.h>
-#include <DeviceMonitorServiceIface.h>
 #include <Instruction.h>
 #include <InstructionBatch.h>
 #include <InstructionServiceIface.h>
@@ -27,6 +26,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <umrr_ros2_driver/sdk_callback_gate.hpp>
 
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <string>
@@ -62,7 +62,11 @@ public:
   UpdateService();
   ~UpdateService() {callback_gate_.close();}
   ///
-  /// @brief  Starts a firmware update and waits for its result.
+  /// @brief  Starts a firmware update and blocks until the sensor reports a
+  ///         final (non-RUNNING) status, the timeout expires or Cancel() is called.
+  ///
+  /// Call from a worker thread, never from an executor callback: the wait can
+  /// last several minutes.
   ///
   /// @param[in]  client_id     Client identifier of the target sensor.
   /// @param[in]  update_image  Path to the firmware image.
@@ -70,7 +74,17 @@ public:
   ///
   UpdateResult StartSoftwareUpdate(
     com::types::ClientId client_id,
-    std::string & update_image);
+    const std::string & update_image);
+
+  ///
+  /// @brief  Whether an update is currently running.
+  ///
+  bool Busy() const;
+
+  ///
+  /// @brief  Aborts a running update and rejects new ones (used at shutdown).
+  ///
+  void Cancel();
 
 private:
   ///
@@ -87,9 +101,11 @@ private:
   UpdateResult HandleResult();
   smartmicro::drivers::radar::SdkCallbackGate callback_gate_;
   com::types::SWUpdateInfo updateInfo_;
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
   std::condition_variable cv_;
   bool update_in_progress_{false};
+  bool cancelled_{false};
+  std::chrono::steady_clock::time_point last_progress_log_{};
 };
 
 #endif  // UMRR_ROS2_DRIVER__UPDATE_SERVICE_HPP_

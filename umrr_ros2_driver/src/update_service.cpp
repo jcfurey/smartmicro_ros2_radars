@@ -23,14 +23,37 @@
 
 using com::master::CommunicationServicesIface;
 
-UpdateService::UpdateService() {}
+UpdateService::UpdateService()
+{
+  callback_gate_.set_error_handler([](const std::string & message) {
+      RCLCPP_ERROR(rclcpp::get_logger("FirmwareUpdater"), "%s", message.c_str());
+    });
+}
 
-UpdateResult UpdateService::StartSoftwareUpdate(
-  com::types::ClientId client_id,
-  std::string & update_image)
+bool UpdateService::Busy() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return update_in_progress_;
+}
+
+void UpdateService::Cancel()
 {
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    cancelled_ = true;
+  }
+  cv_.notify_all();
+}
+
+UpdateResult UpdateService::StartSoftwareUpdate(
+  com::types::ClientId client_id,
+  const std::string & update_image)
+{
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (cancelled_) {
+      return UpdateResult::kStoppedByMaster;
+    }
     if (update_in_progress_) {
       RCLCPP_WARN(
         rclcpp::get_logger("FirmwareUpdater"),
@@ -76,10 +99,12 @@ UpdateResult UpdateService::StartSoftwareUpdate(
   }
 
   RCLCPP_INFO(
-    rclcpp::get_logger("UpdateService"), "Starting firmware download of %lu bytes...", totalSize);
+    rclcpp::get_logger("UpdateService"), "Starting firmware download of %s bytes...",
+    std::to_string(totalSize).c_str());
 
+  std::string image = update_image;  // The SDK takes a mutable reference.
   if (updateService->SoftwareUpdate(
-      update_image, client_id, callback_gate_.wrap([this](com::types::SWUpdateInfo & info) {
+      image, client_id, callback_gate_.wrap([this](com::types::SWUpdateInfo & info) {
         this->UpdateCallback(info);
       })) != com::types::ERROR_CODE_OK)
   {
@@ -89,28 +114,30 @@ UpdateResult UpdateService::StartSoftwareUpdate(
     return UpdateResult::kStartFailed;
   }
 
+  // All bytes may be transferred while the sensor is still flashing: only a
+  // non-RUNNING status ends the update, so the busy flag covers the flash phase.
   constexpr auto kUpdateTimeout = std::chrono::minutes(5);
   bool finished = false;
+  bool cancelled = false;
   {
-    std::unique_lock<std::mutex> lock(
-      mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     finished = cv_.wait_for(
-      lock,
-      kUpdateTimeout,
-      [this,
-      totalSize] {
-        return updateInfo_.GetUpdateStatus() != com::types::RUNNING ||
-        updateInfo_.GetCurrentDownloadedBytes() >= totalSize;
+      lock, kUpdateTimeout, [this] {
+        return cancelled_ || updateInfo_.GetUpdateStatus() != com::types::RUNNING;
       });
+    cancelled = cancelled_ && updateInfo_.GetUpdateStatus() == com::types::RUNNING;
   }
 
-  if (!finished) {
-    RCLCPP_ERROR(rclcpp::get_logger("FirmwareUpdater"), "Firmware download timed out. Aborting.");
+  if (!finished || cancelled) {
+    RCLCPP_ERROR(
+      rclcpp::get_logger("FirmwareUpdater"), "Firmware download %s. Aborting.",
+      cancelled ? "cancelled by shutdown" : "timed out");
     updateService->AbortSoftwareUpdate();
     std::lock_guard<std::mutex> lock(mutex_);
-    updateInfo_.SetUpdateStatus(com::types::STOPPED_BY_ERROR_TIMEOUT);
+    updateInfo_.SetUpdateStatus(
+      cancelled ? com::types::STOPPED_BY_MASTER : com::types::STOPPED_BY_ERROR_TIMEOUT);
     update_in_progress_ = false;
-    return UpdateResult::kTimeout;
+    return cancelled ? UpdateResult::kStoppedByMaster : UpdateResult::kTimeout;
   }
 
   const auto result = HandleResult();
@@ -128,11 +155,18 @@ void UpdateService::UpdateCallback(com::types::SWUpdateInfo & info)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     updateInfo_ = info;
-    RCLCPP_INFO(
-      rclcpp::get_logger("FirmwareUpdater"), "Downloaded %lu bytes...",
-      info.GetCurrentDownloadedBytes());
+    // One progress line per second instead of one per transferred block.
+    const auto now = std::chrono::steady_clock::now();
+    if (info.GetUpdateStatus() != com::types::RUNNING ||
+      now - last_progress_log_ >= std::chrono::seconds(1))
+    {
+      last_progress_log_ = now;
+      RCLCPP_INFO(
+        rclcpp::get_logger("FirmwareUpdater"), "Downloaded %s bytes...",
+        std::to_string(info.GetCurrentDownloadedBytes()).c_str());
+    }
   }
-  cv_.notify_one();
+  cv_.notify_all();
 }
 
 UpdateResult UpdateService::HandleResult()
