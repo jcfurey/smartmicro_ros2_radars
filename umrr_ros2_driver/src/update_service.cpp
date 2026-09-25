@@ -23,7 +23,12 @@
 
 using com::master::CommunicationServicesIface;
 
-UpdateService::UpdateService() {}
+UpdateService::UpdateService()
+{
+  callback_gate_.set_error_handler([](const std::string & message) {
+      RCLCPP_ERROR(rclcpp::get_logger("FirmwareUpdater"), "%s", message.c_str());
+    });
+}
 
 UpdateResult UpdateService::StartSoftwareUpdate(
   com::types::ClientId client_id,

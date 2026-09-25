@@ -5,7 +5,9 @@
 #include <umrr_ros2_driver/sdk_callback_gate.hpp>
 #include <fstream>
 #include <future>
+#include <string>
 #include <thread>
+#include <vector>
 
 using smartmicro::drivers::radar::RuntimeConfig;
 using smartmicro::drivers::radar::StreamHealth;
@@ -121,11 +123,20 @@ TEST(SdkCallbackGate, RetainedCallbackAndShutdownHookOutliveOwner)
   EXPECT_EQ(calls, 1U);
 }
 
-TEST(SdkCallbackGate, ExceptionReleasesActiveLease)
+TEST(SdkCallbackGate, ExceptionIsContainedReportedAndReleasesLease)
 {
   SdkCallbackGate gate;
+  std::vector<std::string> reports;
+  gate.set_error_handler([&](const std::string & message) {reports.push_back(message);});
   auto callback = gate.wrap([] {throw std::runtime_error("SDK callback failure");});
-  EXPECT_THROW(callback(), std::runtime_error);
-  gate.close();
+  auto unknown = gate.wrap([] {throw 42;});
   EXPECT_NO_THROW(callback());
+  EXPECT_NO_THROW(callback());  // Throttled: counted, not reported again within 1 s.
+  EXPECT_NO_THROW(unknown());
+  EXPECT_EQ(gate.exception_count(), 3U);
+  ASSERT_EQ(reports.size(), 1U);
+  EXPECT_NE(reports.front().find("SDK callback failure"), std::string::npos);
+  gate.close();  // The lease was released despite the exceptions.
+  EXPECT_NO_THROW(callback());
+  EXPECT_EQ(gate.exception_count(), 3U);
 }

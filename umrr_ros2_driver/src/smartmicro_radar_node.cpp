@@ -201,6 +201,9 @@ namespace radar
 SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_options)
 : rclcpp::Node{"smartmicro_radar_node", node_options}
 {
+  callback_gate_.set_error_handler([logger = get_logger()](const std::string & message) {
+      RCLCPP_ERROR(logger, "%s", message.c_str());
+    });
   try {
     update_config_files_from_params();
     update_service = std::make_shared<UpdateService>();
