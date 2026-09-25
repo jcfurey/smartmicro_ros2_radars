@@ -78,7 +78,9 @@
 
 #include <array>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -1277,14 +1279,16 @@ private:
     std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Response> response);
 
   ///
-  /// @brief      Service for firmware download.
+  /// @brief      Service for firmware download (deferred response).
   ///
-  /// @param[in]  request   The request.
-  /// @param[out] result    The result.
+  /// @param[in]  request_header  Identifies the request for the deferred reply.
+  /// @param[in]  request         The request.
   ///
   void firmware_download(
-    const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request,
-    std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Response> result);
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request);
+
+  static std::string firmware_download_result(UpdateResult update_result);
 
   builtin_interfaces::msg::Time receive_stamp(
     uint64_t timestamp_us, uint32_t sensor_idx, uint8_t stream);
@@ -1462,6 +1466,8 @@ private:
   std::size_t m_number_of_sensors{};
   std::size_t m_number_of_adapters{};
   std::shared_ptr<UpdateService> update_service;
+  std::mutex firmware_worker_mutex_;
+  std::thread firmware_worker_;
 
   // SDK service handles are owned by the node (not namespace-scope globals in an
   // installed header) and released before the SDK's own static objects.

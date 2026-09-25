@@ -20,6 +20,7 @@ from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming, Umrr96RawQuality
+from umrr_ros2_msgs.srv import FirmwareDownload, SetMode
 import yaml
 
 
@@ -129,6 +130,27 @@ def test_driver_runtime():
             result = call(setter, SetParametersAtomically.Request(parameters=[
                 Parameter('adapters.adapter_0.port', value=port_b).to_parameter_msg()]))
             assert not result.result.successful
+
+            # Service validation happens before anything reaches the SDK (C5, C6).
+            set_mode = node.create_client(SetMode, topic + 'set_radar_mode')
+            for sensor_id, value, value_type, expected in (
+                    (0, '1', 3, 'Sensor ID is invalid'),
+                    (200, '12abc', 1, 'not a decimal uint32'),
+                    (200, '-1', 1, 'not a decimal uint32'),
+                    (200, '5000000000', 1, 'out of range'),
+                    (200, 'nan', 0, 'not a finite float32'),
+                    (200, '256', 3, 'out of range')):
+                response = call(set_mode, SetMode.Request(
+                    section_name='auto_interface_0dim', sensor_id=sensor_id,
+                    params=['frequency_sweep_idx'], values=[value], value_types=[value_type]))
+                assert expected in response.res, (value, response.res)
+            # Firmware download replies are deferred to a worker thread (C4).
+            download = node.create_client(FirmwareDownload, topic + 'firmware_download')
+            response = call(download, FirmwareDownload.Request(sensor_id=0, file_path='/none'))
+            assert 'invalid' in response.res, response.res
+            response = call(download, FirmwareDownload.Request(
+                sensor_id=200, file_path=str(run / 'missing.bin')))
+            assert 'could not open update image' in response.res, response.res
             wait(lambda: any(s.name.endswith('Target stream 0') and
                              s.level == DiagnosticStatus.STALE for s in statuses))
 

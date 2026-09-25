@@ -113,6 +113,7 @@
 #include <memory>
 #include <utility>
 #include <string>
+#include <thread>
 #include <variant>
 #include <vector>
 
@@ -221,6 +222,11 @@ SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_option
 
 SmartmicroRadarNode::~SmartmicroRadarNode()
 {
+  if (update_service) {update_service->Cancel();}
+  {
+    std::lock_guard<std::mutex> lock(firmware_worker_mutex_);
+    if (firmware_worker_.joinable()) {firmware_worker_.join();}
+  }
   // Drains running SDK callbacks and drops late ones before members are destroyed.
   callback_gate_.close();
 }
@@ -395,8 +401,11 @@ void SmartmicroRadarNode::initialize_services()
   // create a ros2 service to perform firmware download
   download_srv_ = create_service<umrr_ros2_msgs::srv::FirmwareDownload>(
     "smart_radar/firmware_download",
-    std::bind(
-      &SmartmicroRadarNode::firmware_download, this, std::placeholders::_1, std::placeholders::_2));
+    [this](
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request) {
+      firmware_download(request_header, request);
+    });
 
   // create a ros2 service to read the radar status
   status_srv_ = create_service<umrr_ros2_msgs::srv::GetStatus>(
@@ -1318,55 +1327,68 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
 }
 
 void SmartmicroRadarNode::firmware_download(
-  const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request,
-  std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Response> result)
+  const std::shared_ptr<rmw_request_id_t> request_header,
+  const std::shared_ptr<umrr_ros2_msgs::srv::FirmwareDownload::Request> request)
 {
-  const auto client_id = request->sensor_id;
-  std::string update_image = request->file_path;
-  if (!is_configured_sensor(client_id)) {
-    result->res = "The sensor ID value entered is invalid! ";
+  // The transfer and flash can take minutes. Reply is deferred: the request is
+  // validated here, the blocking update runs on a worker thread and the worker
+  // sends the response, so the executor keeps serving diagnostics and the other
+  // services whatever executor or container the component runs in.
+  umrr_ros2_msgs::srv::FirmwareDownload::Response response;
+  if (!is_configured_sensor(request->sensor_id)) {
+    response.res = "The sensor ID value entered is invalid! ";
+    download_srv_->send_response(*request_header, response);
     return;
   }
+  std::lock_guard<std::mutex> lock(firmware_worker_mutex_);
+  if (update_service->Busy()) {
+    response.res = firmware_download_result(UpdateResult::kBusy);
+    download_srv_->send_response(*request_header, response);
+    return;
+  }
+  if (firmware_worker_.joinable()) {
+    firmware_worker_.join();  // The previous update has finished; reap its thread.
+  }
+  firmware_worker_ = std::thread(
+    [this, request_header, client_id = request->sensor_id, image = request->file_path]() {
+      umrr_ros2_msgs::srv::FirmwareDownload::Response result;
+      result.res = firmware_download_result(update_service->StartSoftwareUpdate(client_id, image));
+      try {
+        download_srv_->send_response(*request_header, result);
+      } catch (const std::exception & error) {
+        RCLCPP_ERROR(get_logger(), "Could not send firmware download reply: %s", error.what());
+      }
+    });
+}
 
-  const auto update_result = update_service->StartSoftwareUpdate(client_id, update_image);
+std::string SmartmicroRadarNode::firmware_download_result(UpdateResult update_result)
+{
   switch (update_result) {
     case UpdateResult::kSuccess:
-      result->res = "Firmware download completed successfully.";
-      break;
+      return "Firmware download completed successfully.";
     case UpdateResult::kBusy:
-      result->res = "Firmware download rejected: another update is already in progress.";
-      break;
+      return "Firmware download rejected: another update is already in progress.";
     case UpdateResult::kFileOpenError:
-      result->res = "Firmware download failed: could not open update image file.";
-      break;
+      return "Firmware download failed: could not open update image file.";
     case UpdateResult::kFileSizeError:
-      result->res = "Firmware download failed: could not determine update image size.";
-      break;
+      return "Firmware download failed: could not determine update image size.";
     case UpdateResult::kServiceUnavailable:
-      result->res = "Firmware download failed: update service is unavailable.";
-      break;
+      return "Firmware download failed: update service is unavailable.";
     case UpdateResult::kStartFailed:
-      result->res = "Firmware download failed: could not start software update.";
-      break;
+      return "Firmware download failed: could not start software update.";
     case UpdateResult::kTimeout:
-      result->res = "Firmware download failed: timed out and aborted.";
-      break;
+      return "Firmware download failed: timed out and aborted.";
     case UpdateResult::kStoppedByMaster:
-      result->res = "Firmware download stopped by master.";
-      break;
+      return "Firmware download stopped by master.";
     case UpdateResult::kStoppedBySlave:
-      result->res = "Firmware download stopped by slave.";
-      break;
+      return "Firmware download stopped by slave.";
     case UpdateResult::kBlockRepeatError:
-      result->res = "Firmware download failed: block repeat error.";
-      break;
+      return "Firmware download failed: block repeat error.";
     case UpdateResult::kImageInvalid:
-      result->res = "Firmware download failed: invalid image.";
-      break;
+      return "Firmware download failed: invalid image.";
     case UpdateResult::kUnknownError:
     default:
-      result->res = "Firmware download failed: unknown error.";
-      break;
+      return "Firmware download failed: unknown error.";
   }
 }
 
