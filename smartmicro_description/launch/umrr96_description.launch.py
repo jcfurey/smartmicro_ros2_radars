@@ -35,13 +35,14 @@ def _description(context):
 
     document = xacro.process_file(str(share / 'urdf' / 'umrr96.urdf.xacro'), mappings=mappings)
     topic = mappings['sensor_name'] + '/robot_description'
+    use_sim_time = ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)
     return [
         Node(
             package='robot_state_publisher', executable='robot_state_publisher',
             name=mappings['sensor_name'] + '_state_publisher',
             namespace=LaunchConfiguration('namespace'),
             parameters=[{'robot_description': ParameterValue(document.toxml(), value_type=str),
-                         'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
+                         'use_sim_time': use_sim_time}],
             remappings=[('robot_description', topic)],
             output='screen',
         ),
@@ -52,8 +53,10 @@ def _description(context):
             condition=IfCondition(LaunchConfiguration('rviz')),
             arguments=['-d', str(share / 'rviz' / 'umrr96_description.rviz'),
                        '-f', mappings['frame_id']],
-            parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
-            remappings=[('/umrr96/robot_description', topic)],
+            parameters=[{'use_sim_time': use_sim_time}],
+            # The RViz config subscribes to the relative 'robot_description'; resolve it
+            # to this sensor's description inside the launch namespace.
+            remappings=[('robot_description', topic)],
             output='log',
         ),
     ]
@@ -63,16 +66,20 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('sensor_name', default_value='umrr96',
                               description='Unique housing/joint/node name prefix'),
-        DeclareLaunchArgument('frame_id', default_value=LaunchConfiguration('sensor_name'),
-                              description='Measurement frame; must match radar PointCloud2.header.frame_id'),
-        DeclareLaunchArgument('measurement_xyz', default_value='0 0 0',
-                              description='Housing-to-measurement origin in metres; zero is an uncalibrated convention'),
+        DeclareLaunchArgument(
+            'frame_id', default_value=LaunchConfiguration('sensor_name'),
+            description='Measurement frame; must match radar PointCloud2.header.frame_id'),
+        DeclareLaunchArgument(
+            'measurement_xyz', default_value='0 0 0',
+            description='Housing-to-measurement origin in metres; '
+                        'zero is an uncalibrated convention'),
         DeclareLaunchArgument('measurement_rpy', default_value='0 0 0',
                               description='Housing-to-measurement roll/pitch/yaw in radians'),
         DeclareLaunchArgument('namespace', default_value='',
                               description='ROS node/topic namespace; does not prefix TF frames'),
         DeclareLaunchArgument('use_sim_time', default_value='false', choices=['true', 'false']),
-        DeclareLaunchArgument('rviz', default_value='false', choices=['true', 'false'],
-                              description='Open a close-up model viewer; does not start the radar driver'),
+        DeclareLaunchArgument(
+            'rviz', default_value='false', choices=['true', 'false'],
+            description='Open a close-up model viewer; does not start the radar driver'),
         OpaqueFunction(function=_description),
     ])

@@ -40,8 +40,8 @@ def test_late_subscriber_gets_model_and_correct_transform_without_joint_states(t
             while time.monotonic() < wait_until:
                 rclpy.spin_once(node, timeout_sec=.05)
             models = []
-            node.create_subscription(String, topic, models.append,
-                                     QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+            latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+            node.create_subscription(String, topic, models.append, latched)
             buffer = Buffer()
             listener = TransformListener(buffer, node)
             while time.monotonic() < deadline:
