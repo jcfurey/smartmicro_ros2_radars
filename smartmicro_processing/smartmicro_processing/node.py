@@ -50,6 +50,8 @@ GHOST_PARAMETERS = {
     'wall_azimuth_deg': ('Bearing match for the behind-static-return ghost rule (deg).', .1, 30),
 }
 TRACKER_PARAMETERS = {
+    'evidence_confirmation': ('Experimental early confirmation from consistent position '
+                              'and signed-Doppler predictions; M-of-N remains the fallback.',),
     'cluster_radius': ('Moving targets closer than this form one measurement (m).', .05, 10),
     'gate': ('Association distance from a predicted track position (m).', .05, 20),
     'confirm_hits': ('Hits within confirm_window scans needed to confirm a track.', 1, 64, 1),

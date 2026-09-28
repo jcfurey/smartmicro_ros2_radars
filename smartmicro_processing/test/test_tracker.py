@@ -121,3 +121,40 @@ def test_data_gap_longer_than_max_coast_drops_tracks():
 def test_invalid_config():
     with pytest.raises(ValueError):
         TrackerConfig(confirm_hits=6, confirm_window=5)
+
+
+def test_evidence_confirms_consistent_motion_in_six_scans_without_more_points():
+    tracker = MovingObjectTracker(TrackerConfig(evidence_confirmation=True))
+    for k in range(6):
+        position = [2. + .5 * k * DT, 0., 0.]
+        result = tracker.step(k * DT, [position] * 10, [.5] * 10)
+        assert bool(result) == (k == 5)
+    assert len(tracker.tracks[0].confirmation_evidence) == 6
+
+
+def test_evidence_does_not_accelerate_inconsistent_motion_and_preserves_fallback():
+    tracker = MovingObjectTracker(TrackerConfig(evidence_confirmation=True))
+    for k in range(8):
+        result = tracker.step(k * DT, [[2. + .2 * (-1) ** k, 0., 0.]], [.8 * (-1) ** k])
+        if k < 7:
+            assert not result
+    assert result
+
+
+def test_misses_reduce_confirmation_evidence_and_cannot_confirm():
+    tracker = MovingObjectTracker(TrackerConfig(evidence_confirmation=True))
+    for k in range(5):
+        assert not tracker.step(k * DT, [[2. + .5 * k * DT, 0., 0.]], [.5])
+    prior = sum(tracker.tracks[0].confirmation_evidence)
+    assert not tracker.coast(5 * DT)
+    assert sum(tracker.tracks[0].confirmation_evidence) == pytest.approx(prior - 1.)
+    assert not tracker.coast(6 * DT)
+    assert not tracker.step(7 * DT, [[2. + .5 * 7 * DT, 0., 0.]], [.5])
+
+
+def test_evidence_resets_after_a_data_gap():
+    tracker = MovingObjectTracker(TrackerConfig(evidence_confirmation=True))
+    for k in range(5):
+        tracker.step(k * DT, [[2. + .5 * k * DT, 0., 0.]], [.5])
+    assert not tracker.step(2., [[3., 0., 0.]], [.5])
+    assert tracker.tracks[0].confirmation_evidence == [1.]
