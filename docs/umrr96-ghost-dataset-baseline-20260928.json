@@ -1,0 +1,2375 @@
+{
+  "scope": "Exploratory 2D point-ghost-stage transfer test; not full pipeline or paper reproduction",
+  "dataset": "https://zenodo.org/records/6676246",
+  "prediction_policy": "All finite in-range points, each sensor/frame separately; zero ego speed; no SNR gate",
+  "scoring_policy": "Moving points only; confident direct vs specified-order ghosts; generic ghosts separate; groups/uncertain excluded",
+  "versions": {
+    "python": "3.14.4",
+    "numpy": "2.3.5",
+    "h5py": "3.16.0"
+  },
+  "source_sha256": {
+    "tools/assessment/assess_ghost_dataset.py": "bab9fa832a96817c25a63bc7f43361377b1ccce4d822beb3113ce8568e5ca4d4",
+    "smartmicro_processing/config/umrr96_processing.yaml": "60d45ddabeffdd71b72335c513d6c22f4bb4d02a7ee38b9457108fd460d98a2c",
+    "smartmicro_processing/smartmicro_processing/ghosts.py": "62cd5f18de0704d77e06b91850269ff5e84e57f8913cd578b75ae54c4695550c"
+  },
+  "config": {
+    "range_gap": 1.5,
+    "speed_tolerance": 0.25,
+    "wall_azimuth_deg": 4.0,
+    "residual_threshold": 0.05,
+    "min_range": 0.15,
+    "max_range": 120.0
+  },
+  "aggregates": {
+    "virtual.zip": {
+      "none": {
+        "direct_total": 4595,
+        "direct_rejected": 0,
+        "specific_ghost_total": 1230,
+        "specific_ghost_rejected": 0,
+        "generic_ghost_total": 213,
+        "generic_ghost_rejected": 0,
+        "direct_retention": 1.0,
+        "specific_ghost_rejection": 0.0,
+        "generic_ghost_rejection": 0.0
+      },
+      "same_speed": {
+        "direct_total": 4595,
+        "direct_rejected": 1737,
+        "specific_ghost_total": 1230,
+        "specific_ghost_rejected": 1159,
+        "generic_ghost_total": 213,
+        "generic_ghost_rejected": 212,
+        "direct_retention": 0.6219804134929271,
+        "specific_ghost_rejection": 0.9422764227642276,
+        "generic_ghost_rejection": 0.9953051643192489
+      },
+      "double_speed": {
+        "direct_total": 4595,
+        "direct_rejected": 2985,
+        "specific_ghost_total": 1230,
+        "specific_ghost_rejected": 1181,
+        "generic_ghost_total": 213,
+        "generic_ghost_rejected": 209,
+        "direct_retention": 0.35038084874863984,
+        "specific_ghost_rejection": 0.9601626016260163,
+        "generic_ghost_rejection": 0.9812206572769953
+      },
+      "behind_static": {
+        "direct_total": 4595,
+        "direct_rejected": 1438,
+        "specific_ghost_total": 1230,
+        "specific_ghost_rejected": 1067,
+        "generic_ghost_total": 213,
+        "generic_ghost_rejected": 176,
+        "direct_retention": 0.6870511425462459,
+        "specific_ghost_rejection": 0.8674796747967479,
+        "generic_ghost_rejection": 0.8262910798122066
+      },
+      "all": {
+        "direct_total": 4595,
+        "direct_rejected": 3441,
+        "specific_ghost_total": 1230,
+        "specific_ghost_rejected": 1230,
+        "generic_ghost_total": 213,
+        "generic_ghost_rejected": 213,
+        "direct_retention": 0.2511425462459195,
+        "specific_ghost_rejection": 1.0,
+        "generic_ghost_rejection": 1.0
+      }
+    },
+    "original.zip": {
+      "none": {
+        "direct_total": 13524,
+        "direct_rejected": 0,
+        "specific_ghost_total": 5161,
+        "specific_ghost_rejected": 0,
+        "generic_ghost_total": 730,
+        "generic_ghost_rejected": 0,
+        "direct_retention": 1.0,
+        "specific_ghost_rejection": 0.0,
+        "generic_ghost_rejection": 0.0
+      },
+      "same_speed": {
+        "direct_total": 13524,
+        "direct_rejected": 1827,
+        "specific_ghost_total": 5161,
+        "specific_ghost_rejected": 3083,
+        "generic_ghost_total": 730,
+        "generic_ghost_rejected": 521,
+        "direct_retention": 0.8649068322981367,
+        "specific_ghost_rejection": 0.5973648517729122,
+        "generic_ghost_rejection": 0.7136986301369863
+      },
+      "double_speed": {
+        "direct_total": 13524,
+        "direct_rejected": 3297,
+        "specific_ghost_total": 5161,
+        "specific_ghost_rejected": 1579,
+        "generic_ghost_total": 730,
+        "generic_ghost_rejected": 447,
+        "direct_retention": 0.7562111801242236,
+        "specific_ghost_rejection": 0.30594845960085254,
+        "generic_ghost_rejection": 0.6123287671232877
+      },
+      "behind_static": {
+        "direct_total": 13524,
+        "direct_rejected": 6090,
+        "specific_ghost_total": 5161,
+        "specific_ghost_rejected": 4199,
+        "generic_ghost_total": 730,
+        "generic_ghost_rejected": 638,
+        "direct_retention": 0.5496894409937888,
+        "specific_ghost_rejection": 0.8136020151133502,
+        "generic_ghost_rejection": 0.873972602739726
+      },
+      "all": {
+        "direct_total": 13524,
+        "direct_rejected": 8127,
+        "specific_ghost_total": 5161,
+        "specific_ghost_rejected": 4905,
+        "generic_ghost_total": 730,
+        "generic_ghost_rejected": 724,
+        "direct_retention": 0.39906832298136646,
+        "specific_ghost_rejection": 0.9503972098430536,
+        "generic_ghost_rejection": 0.9917808219178083
+      }
+    }
+  },
+  "files": [
+    {
+      "source": {
+        "name": "virtual/test/scenario-11_sequences-02-02-03_start-frames-143-037-118_cycl-cycl-ped_test.h5",
+        "bytes": 10413075,
+        "compressed_bytes": 4826525,
+        "crc32": "c41e06f8",
+        "archive": "virtual.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+        "archive_bytes": 8313881790,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "eaf1aed6498be78451d582c2fa8135a8d9c066f6cdae49d2ced5a4b474e58dc8",
+        "member_crc_verified": true
+      },
+      "radar_fields": [
+        "frame",
+        "frame_timestamp",
+        "timestamp",
+        "sensor",
+        "x_cc",
+        "y_cc",
+        "r_sc",
+        "phi_sc",
+        "vr_sc",
+        "amp",
+        "uuid",
+        "original_uuid",
+        "label_id",
+        "instance_id",
+        "human_readable_label",
+        "group",
+        "mirror"
+      ],
+      "rows": 14978,
+      "sensor_frames": 24,
+      "valid_rows": 14923,
+      "moving_rows": 8233,
+      "labels": {
+        "-1": 22,
+        "0": 14002,
+        "1111": 397,
+        "2100": 17,
+        "2111": 322,
+        "2112": 16,
+        "2122": 37,
+        "2124": 165
+      },
+      "categories_all": {
+        "direct": 719,
+        "specific_ghost": 218,
+        "generic_ghost": 17,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 14002,
+        "ignore": 22,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_invalid_measurement_or_range": {
+        "direct": 0,
+        "specific_ghost": 0,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 55,
+        "ignore": 0,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_stationary": {
+        "direct": 51,
+        "specific_ghost": 9,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 6618,
+        "ignore": 12,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_moving": {
+        "direct": 668,
+        "specific_ghost": 209,
+        "generic_ghost": 17,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 7329,
+        "ignore": 10,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "moving_reason_masks": {
+        "0": 231,
+        "1": 2,
+        "2": 135,
+        "3": 1311,
+        "4": 398,
+        "5": 24,
+        "6": 208,
+        "7": 5924
+      },
+      "variants": {
+        "none": {
+          "direct_total": 668,
+          "direct_rejected": 0,
+          "specific_ghost_total": 209,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 17,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": 0.0
+        },
+        "same_speed": {
+          "direct_total": 668,
+          "direct_rejected": 215,
+          "specific_ghost_total": 209,
+          "specific_ghost_rejected": 198,
+          "generic_ghost_total": 17,
+          "generic_ghost_rejected": 17,
+          "direct_retention": 0.6781437125748503,
+          "specific_ghost_rejection": 0.9473684210526315,
+          "generic_ghost_rejection": 1.0
+        },
+        "double_speed": {
+          "direct_total": 668,
+          "direct_rejected": 517,
+          "specific_ghost_total": 209,
+          "specific_ghost_rejected": 209,
+          "generic_ghost_total": 17,
+          "generic_ghost_rejected": 17,
+          "direct_retention": 0.22604790419161677,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "behind_static": {
+          "direct_total": 668,
+          "direct_rejected": 376,
+          "specific_ghost_total": 209,
+          "specific_ghost_rejected": 205,
+          "generic_ghost_total": 17,
+          "generic_ghost_rejected": 17,
+          "direct_retention": 0.437125748502994,
+          "specific_ghost_rejection": 0.9808612440191388,
+          "generic_ghost_rejection": 1.0
+        },
+        "all": {
+          "direct_total": 668,
+          "direct_rejected": 632,
+          "specific_ghost_total": 209,
+          "specific_ghost_rejected": 209,
+          "generic_ghost_total": 17,
+          "generic_ghost_rejected": 17,
+          "direct_retention": 0.05389221556886228,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "by_sensor": {
+        "left": {
+          "none": {
+            "direct_total": 494,
+            "direct_rejected": 0,
+            "specific_ghost_total": 206,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 17,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 494,
+            "direct_rejected": 149,
+            "specific_ghost_total": 206,
+            "specific_ghost_rejected": 196,
+            "generic_ghost_total": 17,
+            "generic_ghost_rejected": 17,
+            "direct_retention": 0.6983805668016194,
+            "specific_ghost_rejection": 0.9514563106796117,
+            "generic_ghost_rejection": 1.0
+          },
+          "double_speed": {
+            "direct_total": 494,
+            "direct_rejected": 368,
+            "specific_ghost_total": 206,
+            "specific_ghost_rejected": 206,
+            "generic_ghost_total": 17,
+            "generic_ghost_rejected": 17,
+            "direct_retention": 0.2550607287449393,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          },
+          "behind_static": {
+            "direct_total": 494,
+            "direct_rejected": 327,
+            "specific_ghost_total": 206,
+            "specific_ghost_rejected": 202,
+            "generic_ghost_total": 17,
+            "generic_ghost_rejected": 17,
+            "direct_retention": 0.33805668016194335,
+            "specific_ghost_rejection": 0.9805825242718447,
+            "generic_ghost_rejection": 1.0
+          },
+          "all": {
+            "direct_total": 494,
+            "direct_rejected": 481,
+            "specific_ghost_total": 206,
+            "specific_ghost_rejected": 206,
+            "generic_ghost_total": 17,
+            "generic_ghost_rejected": 17,
+            "direct_retention": 0.02631578947368421,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          }
+        },
+        "right": {
+          "none": {
+            "direct_total": 174,
+            "direct_rejected": 0,
+            "specific_ghost_total": 3,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": null
+          },
+          "same_speed": {
+            "direct_total": 174,
+            "direct_rejected": 66,
+            "specific_ghost_total": 3,
+            "specific_ghost_rejected": 2,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.6206896551724138,
+            "specific_ghost_rejection": 0.6666666666666666,
+            "generic_ghost_rejection": null
+          },
+          "double_speed": {
+            "direct_total": 174,
+            "direct_rejected": 149,
+            "specific_ghost_total": 3,
+            "specific_ghost_rejected": 3,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.14367816091954022,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": null
+          },
+          "behind_static": {
+            "direct_total": 174,
+            "direct_rejected": 49,
+            "specific_ghost_total": 3,
+            "specific_ghost_rejected": 3,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.7183908045977011,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": null
+          },
+          "all": {
+            "direct_total": 174,
+            "direct_rejected": 151,
+            "specific_ghost_total": 3,
+            "specific_ghost_rejected": 3,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.13218390804597702,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": null
+          }
+        }
+      },
+      "all_rules_by_range_m": {
+        "0-5": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "5-10": {
+          "direct_total": 354,
+          "direct_rejected": 323,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.08757062146892655,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "10-20": {
+          "direct_total": 314,
+          "direct_rejected": 309,
+          "specific_ghost_total": 208,
+          "specific_ghost_rejected": 208,
+          "generic_ghost_total": 6,
+          "generic_ghost_rejected": 6,
+          "direct_retention": 0.01592356687898089,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "20-120": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 1,
+          "specific_ghost_rejected": 1,
+          "generic_ghost_total": 11,
+          "generic_ghost_rejected": 11,
+          "direct_retention": null,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "all_rules_by_abs_bearing_deg": {
+        "0-30": {
+          "direct_total": 494,
+          "direct_rejected": 481,
+          "specific_ghost_total": 206,
+          "specific_ghost_rejected": 206,
+          "generic_ghost_total": 17,
+          "generic_ghost_rejected": 17,
+          "direct_retention": 0.02631578947368421,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "30-60": {
+          "direct_total": 149,
+          "direct_rejected": 128,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.14093959731543623,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "60-90": {
+          "direct_total": 25,
+          "direct_rejected": 23,
+          "specific_ghost_total": 3,
+          "specific_ghost_rejected": 3,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.08,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": null
+        },
+        "90-180": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      }
+    },
+    {
+      "source": {
+        "name": "virtual/train/scenario-13_sequences-01-05-05-06_start-frames-013-123-166-019_cycl-ped-ped-ped_train.h5",
+        "bytes": 32082225,
+        "compressed_bytes": 15621324,
+        "crc32": "0cc076f2",
+        "archive": "virtual.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+        "archive_bytes": 8313881790,
+        "reason": "Exact sequence named in MPET-GLMB paper; virtual overlay",
+        "sha256": "164e0e9476dcc348e35b02701bac915071826358393984d06e079dc880f3b57c",
+        "member_crc_verified": true
+      },
+      "radar_fields": [
+        "frame",
+        "frame_timestamp",
+        "timestamp",
+        "sensor",
+        "x_cc",
+        "y_cc",
+        "r_sc",
+        "phi_sc",
+        "vr_sc",
+        "amp",
+        "uuid",
+        "original_uuid",
+        "label_id",
+        "instance_id",
+        "human_readable_label",
+        "group",
+        "mirror"
+      ],
+      "rows": 31012,
+      "sensor_frames": 56,
+      "valid_rows": 30908,
+      "moving_rows": 17896,
+      "labels": {
+        "-1": 263,
+        "0": 26327,
+        "1100": 119,
+        "1110": 3,
+        "1111": 1809,
+        "1112": 172,
+        "1120": 28,
+        "1122": 129,
+        "1124": 398,
+        "1126": 30,
+        "2100": 47,
+        "2111": 1428,
+        "2112": 33,
+        "2122": 13,
+        "2124": 213
+      },
+      "categories_all": {
+        "direct": 3237,
+        "specific_ghost": 988,
+        "generic_ghost": 197,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 26327,
+        "ignore": 263,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_invalid_measurement_or_range": {
+        "direct": 0,
+        "specific_ghost": 0,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 104,
+        "ignore": 0,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_stationary": {
+        "direct": 240,
+        "specific_ghost": 36,
+        "generic_ghost": 10,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 12633,
+        "ignore": 93,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_moving": {
+        "direct": 2997,
+        "specific_ghost": 952,
+        "generic_ghost": 187,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 13590,
+        "ignore": 170,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "moving_reason_masks": {
+        "0": 1053,
+        "1": 25,
+        "2": 541,
+        "3": 3369,
+        "4": 557,
+        "5": 50,
+        "6": 302,
+        "7": 11999
+      },
+      "variants": {
+        "none": {
+          "direct_total": 2997,
+          "direct_rejected": 0,
+          "specific_ghost_total": 952,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 187,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": 0.0
+        },
+        "same_speed": {
+          "direct_total": 2997,
+          "direct_rejected": 1287,
+          "specific_ghost_total": 952,
+          "specific_ghost_rejected": 892,
+          "generic_ghost_total": 187,
+          "generic_ghost_rejected": 186,
+          "direct_retention": 0.5705705705705706,
+          "specific_ghost_rejection": 0.9369747899159664,
+          "generic_ghost_rejection": 0.9946524064171123
+        },
+        "double_speed": {
+          "direct_total": 2997,
+          "direct_rejected": 2014,
+          "specific_ghost_total": 952,
+          "specific_ghost_rejected": 913,
+          "generic_ghost_total": 187,
+          "generic_ghost_rejected": 183,
+          "direct_retention": 0.32799466132799465,
+          "specific_ghost_rejection": 0.9590336134453782,
+          "generic_ghost_rejection": 0.9786096256684492
+        },
+        "behind_static": {
+          "direct_total": 2997,
+          "direct_rejected": 847,
+          "specific_ghost_total": 952,
+          "specific_ghost_rejected": 802,
+          "generic_ghost_total": 187,
+          "generic_ghost_rejected": 159,
+          "direct_retention": 0.7173840507173841,
+          "specific_ghost_rejection": 0.842436974789916,
+          "generic_ghost_rejection": 0.8502673796791443
+        },
+        "all": {
+          "direct_total": 2997,
+          "direct_rejected": 2254,
+          "specific_ghost_total": 952,
+          "specific_ghost_rejected": 952,
+          "generic_ghost_total": 187,
+          "generic_ghost_rejected": 187,
+          "direct_retention": 0.24791458124791457,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "by_sensor": {
+        "left": {
+          "none": {
+            "direct_total": 1335,
+            "direct_rejected": 0,
+            "specific_ghost_total": 292,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 54,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 1335,
+            "direct_rejected": 660,
+            "specific_ghost_total": 292,
+            "specific_ghost_rejected": 283,
+            "generic_ghost_total": 54,
+            "generic_ghost_rejected": 53,
+            "direct_retention": 0.5056179775280899,
+            "specific_ghost_rejection": 0.9691780821917808,
+            "generic_ghost_rejection": 0.9814814814814815
+          },
+          "double_speed": {
+            "direct_total": 1335,
+            "direct_rejected": 948,
+            "specific_ghost_total": 292,
+            "specific_ghost_rejected": 279,
+            "generic_ghost_total": 54,
+            "generic_ghost_rejected": 50,
+            "direct_retention": 0.2898876404494382,
+            "specific_ghost_rejection": 0.9554794520547946,
+            "generic_ghost_rejection": 0.9259259259259259
+          },
+          "behind_static": {
+            "direct_total": 1335,
+            "direct_rejected": 578,
+            "specific_ghost_total": 292,
+            "specific_ghost_rejected": 263,
+            "generic_ghost_total": 54,
+            "generic_ghost_rejected": 43,
+            "direct_retention": 0.5670411985018726,
+            "specific_ghost_rejection": 0.9006849315068494,
+            "generic_ghost_rejection": 0.7962962962962963
+          },
+          "all": {
+            "direct_total": 1335,
+            "direct_rejected": 1089,
+            "specific_ghost_total": 292,
+            "specific_ghost_rejected": 292,
+            "generic_ghost_total": 54,
+            "generic_ghost_rejected": 54,
+            "direct_retention": 0.1842696629213483,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          }
+        },
+        "right": {
+          "none": {
+            "direct_total": 1662,
+            "direct_rejected": 0,
+            "specific_ghost_total": 660,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 133,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 1662,
+            "direct_rejected": 627,
+            "specific_ghost_total": 660,
+            "specific_ghost_rejected": 609,
+            "generic_ghost_total": 133,
+            "generic_ghost_rejected": 133,
+            "direct_retention": 0.6227436823104693,
+            "specific_ghost_rejection": 0.9227272727272727,
+            "generic_ghost_rejection": 1.0
+          },
+          "double_speed": {
+            "direct_total": 1662,
+            "direct_rejected": 1066,
+            "specific_ghost_total": 660,
+            "specific_ghost_rejected": 634,
+            "generic_ghost_total": 133,
+            "generic_ghost_rejected": 133,
+            "direct_retention": 0.358604091456077,
+            "specific_ghost_rejection": 0.9606060606060606,
+            "generic_ghost_rejection": 1.0
+          },
+          "behind_static": {
+            "direct_total": 1662,
+            "direct_rejected": 269,
+            "specific_ghost_total": 660,
+            "specific_ghost_rejected": 539,
+            "generic_ghost_total": 133,
+            "generic_ghost_rejected": 116,
+            "direct_retention": 0.8381468110709988,
+            "specific_ghost_rejection": 0.8166666666666667,
+            "generic_ghost_rejection": 0.8721804511278195
+          },
+          "all": {
+            "direct_total": 1662,
+            "direct_rejected": 1165,
+            "specific_ghost_total": 660,
+            "specific_ghost_rejected": 660,
+            "generic_ghost_total": 133,
+            "generic_ghost_rejected": 133,
+            "direct_retention": 0.2990373044524669,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          }
+        }
+      },
+      "all_rules_by_range_m": {
+        "0-5": {
+          "direct_total": 1958,
+          "direct_rejected": 1323,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.32431052093973445,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "5-10": {
+          "direct_total": 440,
+          "direct_rejected": 359,
+          "specific_ghost_total": 59,
+          "specific_ghost_rejected": 59,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.18409090909090908,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": null
+        },
+        "10-20": {
+          "direct_total": 397,
+          "direct_rejected": 370,
+          "specific_ghost_total": 713,
+          "specific_ghost_rejected": 713,
+          "generic_ghost_total": 90,
+          "generic_ghost_rejected": 90,
+          "direct_retention": 0.06801007556675064,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "20-120": {
+          "direct_total": 202,
+          "direct_rejected": 202,
+          "specific_ghost_total": 180,
+          "specific_ghost_rejected": 180,
+          "generic_ghost_total": 97,
+          "generic_ghost_rejected": 97,
+          "direct_retention": 0.0,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "all_rules_by_abs_bearing_deg": {
+        "0-30": {
+          "direct_total": 1773,
+          "direct_rejected": 1434,
+          "specific_ghost_total": 698,
+          "specific_ghost_rejected": 698,
+          "generic_ghost_total": 114,
+          "generic_ghost_rejected": 114,
+          "direct_retention": 0.19120135363790186,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "30-60": {
+          "direct_total": 1123,
+          "direct_rejected": 719,
+          "specific_ghost_total": 216,
+          "specific_ghost_rejected": 216,
+          "generic_ghost_total": 65,
+          "generic_ghost_rejected": 65,
+          "direct_retention": 0.3597506678539626,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "60-90": {
+          "direct_total": 101,
+          "direct_rejected": 101,
+          "specific_ghost_total": 38,
+          "specific_ghost_rejected": 38,
+          "generic_ghost_total": 8,
+          "generic_ghost_rejected": 8,
+          "direct_retention": 0.0,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "90-180": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      }
+    },
+    {
+      "source": {
+        "name": "virtual/train/scenario-21_sequences-03-06-06_start-frames-001-074-006_cycl-ped-ped_train.h5",
+        "bytes": 7302467,
+        "compressed_bytes": 3289747,
+        "crc32": "1f2d8745",
+        "archive": "virtual.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+        "archive_bytes": 8313881790,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "e5a739ac8aec69e3446779f56597458d563b6f6d94fb9293f2016990fa7fb047",
+        "member_crc_verified": true
+      },
+      "radar_fields": [
+        "frame",
+        "frame_timestamp",
+        "timestamp",
+        "sensor",
+        "x_cc",
+        "y_cc",
+        "r_sc",
+        "phi_sc",
+        "vr_sc",
+        "amp",
+        "uuid",
+        "original_uuid",
+        "label_id",
+        "instance_id",
+        "human_readable_label",
+        "group",
+        "mirror"
+      ],
+      "rows": 11757,
+      "sensor_frames": 24,
+      "valid_rows": 11718,
+      "moving_rows": 6580,
+      "labels": {
+        "-1": 10,
+        "0": 10655,
+        "1100": 9,
+        "1111": 479,
+        "1112": 39,
+        "1122": 35,
+        "1124": 14,
+        "2111": 516
+      },
+      "categories_all": {
+        "direct": 995,
+        "specific_ghost": 88,
+        "generic_ghost": 9,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 10655,
+        "ignore": 10,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_invalid_measurement_or_range": {
+        "direct": 0,
+        "specific_ghost": 0,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 39,
+        "ignore": 0,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_stationary": {
+        "direct": 65,
+        "specific_ghost": 19,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 5053,
+        "ignore": 1,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_moving": {
+        "direct": 930,
+        "specific_ghost": 69,
+        "generic_ghost": 9,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 5563,
+        "ignore": 9,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "moving_reason_masks": {
+        "0": 539,
+        "1": 1,
+        "2": 164,
+        "3": 1135,
+        "4": 244,
+        "5": 23,
+        "6": 92,
+        "7": 4382
+      },
+      "variants": {
+        "none": {
+          "direct_total": 930,
+          "direct_rejected": 0,
+          "specific_ghost_total": 69,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 9,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": 0.0
+        },
+        "same_speed": {
+          "direct_total": 930,
+          "direct_rejected": 235,
+          "specific_ghost_total": 69,
+          "specific_ghost_rejected": 69,
+          "generic_ghost_total": 9,
+          "generic_ghost_rejected": 9,
+          "direct_retention": 0.7473118279569892,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "double_speed": {
+          "direct_total": 930,
+          "direct_rejected": 454,
+          "specific_ghost_total": 69,
+          "specific_ghost_rejected": 59,
+          "generic_ghost_total": 9,
+          "generic_ghost_rejected": 9,
+          "direct_retention": 0.5118279569892473,
+          "specific_ghost_rejection": 0.855072463768116,
+          "generic_ghost_rejection": 1.0
+        },
+        "behind_static": {
+          "direct_total": 930,
+          "direct_rejected": 215,
+          "specific_ghost_total": 69,
+          "specific_ghost_rejected": 60,
+          "generic_ghost_total": 9,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.7688172043010753,
+          "specific_ghost_rejection": 0.8695652173913043,
+          "generic_ghost_rejection": 0.0
+        },
+        "all": {
+          "direct_total": 930,
+          "direct_rejected": 555,
+          "specific_ghost_total": 69,
+          "specific_ghost_rejected": 69,
+          "generic_ghost_total": 9,
+          "generic_ghost_rejected": 9,
+          "direct_retention": 0.4032258064516129,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "by_sensor": {
+        "left": {
+          "none": {
+            "direct_total": 654,
+            "direct_rejected": 0,
+            "specific_ghost_total": 14,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": null
+          },
+          "same_speed": {
+            "direct_total": 654,
+            "direct_rejected": 127,
+            "specific_ghost_total": 14,
+            "specific_ghost_rejected": 14,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.8058103975535168,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": null
+          },
+          "double_speed": {
+            "direct_total": 654,
+            "direct_rejected": 249,
+            "specific_ghost_total": 14,
+            "specific_ghost_rejected": 14,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.6192660550458715,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": null
+          },
+          "behind_static": {
+            "direct_total": 654,
+            "direct_rejected": 49,
+            "specific_ghost_total": 14,
+            "specific_ghost_rejected": 8,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.9250764525993884,
+            "specific_ghost_rejection": 0.5714285714285714,
+            "generic_ghost_rejection": null
+          },
+          "all": {
+            "direct_total": 654,
+            "direct_rejected": 296,
+            "specific_ghost_total": 14,
+            "specific_ghost_rejected": 14,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.5474006116207951,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": null
+          }
+        },
+        "right": {
+          "none": {
+            "direct_total": 276,
+            "direct_rejected": 0,
+            "specific_ghost_total": 55,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 276,
+            "direct_rejected": 108,
+            "specific_ghost_total": 55,
+            "specific_ghost_rejected": 55,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 9,
+            "direct_retention": 0.6086956521739131,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          },
+          "double_speed": {
+            "direct_total": 276,
+            "direct_rejected": 205,
+            "specific_ghost_total": 55,
+            "specific_ghost_rejected": 45,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 9,
+            "direct_retention": 0.2572463768115942,
+            "specific_ghost_rejection": 0.8181818181818182,
+            "generic_ghost_rejection": 1.0
+          },
+          "behind_static": {
+            "direct_total": 276,
+            "direct_rejected": 166,
+            "specific_ghost_total": 55,
+            "specific_ghost_rejected": 52,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.39855072463768115,
+            "specific_ghost_rejection": 0.9454545454545454,
+            "generic_ghost_rejection": 0.0
+          },
+          "all": {
+            "direct_total": 276,
+            "direct_rejected": 259,
+            "specific_ghost_total": 55,
+            "specific_ghost_rejected": 55,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 9,
+            "direct_retention": 0.06159420289855073,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          }
+        }
+      },
+      "all_rules_by_range_m": {
+        "0-5": {
+          "direct_total": 747,
+          "direct_rejected": 376,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.4966532797858099,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "5-10": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 16,
+          "specific_ghost_rejected": 16,
+          "generic_ghost_total": 9,
+          "generic_ghost_rejected": 9,
+          "direct_retention": null,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "10-20": {
+          "direct_total": 183,
+          "direct_rejected": 179,
+          "specific_ghost_total": 53,
+          "specific_ghost_rejected": 53,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.02185792349726776,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": null
+        },
+        "20-120": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      },
+      "all_rules_by_abs_bearing_deg": {
+        "0-30": {
+          "direct_total": 582,
+          "direct_rejected": 396,
+          "specific_ghost_total": 59,
+          "specific_ghost_rejected": 59,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.31958762886597936,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": null
+        },
+        "30-60": {
+          "direct_total": 304,
+          "direct_rejected": 117,
+          "specific_ghost_total": 10,
+          "specific_ghost_rejected": 10,
+          "generic_ghost_total": 9,
+          "generic_ghost_rejected": 9,
+          "direct_retention": 0.6151315789473685,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "60-90": {
+          "direct_total": 44,
+          "direct_rejected": 42,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.045454545454545456,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "90-180": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      }
+    },
+    {
+      "source": {
+        "name": "original/test/scenario-11_sequence-02_cycl_test.h5",
+        "bytes": 74428620,
+        "compressed_bytes": 27414502,
+        "crc32": "2688aa02",
+        "archive": "original.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+        "archive_bytes": 5818814597,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "4e15fb417f1d7e2405093e61809c6375ce4b2b1bd586a327f2d01e4ad773cdc9",
+        "member_crc_verified": true
+      },
+      "radar_fields": [
+        "frame",
+        "frame_timestamp",
+        "timestamp",
+        "sensor",
+        "x_cc",
+        "y_cc",
+        "r_sc",
+        "phi_sc",
+        "vr_sc",
+        "amp",
+        "uuid",
+        "label_id",
+        "instance_id",
+        "human_readable_label",
+        "group",
+        "mirror"
+      ],
+      "rows": 194219,
+      "sensor_frames": 325,
+      "valid_rows": 193244,
+      "moving_rows": 103478,
+      "labels": {
+        "-1": 93,
+        "-2": 2,
+        "-2112": 100,
+        "-2122": 1,
+        "-2124": 1,
+        "0": 189278,
+        "2100": 145,
+        "2111": 3342,
+        "2112": 141,
+        "2122": 272,
+        "2124": 843,
+        "2126": 1
+      },
+      "categories_all": {
+        "direct": 3342,
+        "specific_ghost": 1257,
+        "generic_ghost": 145,
+        "direct_ambiguous": 0,
+        "uncertain": 102,
+        "background": 189278,
+        "ignore": 93,
+        "noise": 2,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_invalid_measurement_or_range": {
+        "direct": 0,
+        "specific_ghost": 0,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 975,
+        "ignore": 0,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_stationary": {
+        "direct": 192,
+        "specific_ghost": 57,
+        "generic_ghost": 9,
+        "direct_ambiguous": 0,
+        "uncertain": 16,
+        "background": 89448,
+        "ignore": 44,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_moving": {
+        "direct": 3150,
+        "specific_ghost": 1200,
+        "generic_ghost": 136,
+        "direct_ambiguous": 0,
+        "uncertain": 86,
+        "background": 98855,
+        "ignore": 49,
+        "noise": 2,
+        "group": 0,
+        "invalid": 0
+      },
+      "moving_reason_masks": {
+        "0": 3566,
+        "1": 81,
+        "2": 238,
+        "3": 15668,
+        "4": 5618,
+        "5": 397,
+        "6": 763,
+        "7": 77147
+      },
+      "variants": {
+        "none": {
+          "direct_total": 3150,
+          "direct_rejected": 0,
+          "specific_ghost_total": 1200,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 136,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": 0.0
+        },
+        "same_speed": {
+          "direct_total": 3150,
+          "direct_rejected": 700,
+          "specific_ghost_total": 1200,
+          "specific_ghost_rejected": 485,
+          "generic_ghost_total": 136,
+          "generic_ghost_rejected": 121,
+          "direct_retention": 0.7777777777777778,
+          "specific_ghost_rejection": 0.4041666666666667,
+          "generic_ghost_rejection": 0.8897058823529411
+        },
+        "double_speed": {
+          "direct_total": 3150,
+          "direct_rejected": 1246,
+          "specific_ghost_total": 1200,
+          "specific_ghost_rejected": 569,
+          "generic_ghost_total": 136,
+          "generic_ghost_rejected": 123,
+          "direct_retention": 0.6044444444444445,
+          "specific_ghost_rejection": 0.4741666666666667,
+          "generic_ghost_rejection": 0.9044117647058824
+        },
+        "behind_static": {
+          "direct_total": 3150,
+          "direct_rejected": 1712,
+          "specific_ghost_total": 1200,
+          "specific_ghost_rejected": 1142,
+          "generic_ghost_total": 136,
+          "generic_ghost_rejected": 134,
+          "direct_retention": 0.45650793650793653,
+          "specific_ghost_rejection": 0.9516666666666667,
+          "generic_ghost_rejection": 0.9852941176470589
+        },
+        "all": {
+          "direct_total": 3150,
+          "direct_rejected": 2127,
+          "specific_ghost_total": 1200,
+          "specific_ghost_rejected": 1193,
+          "generic_ghost_total": 136,
+          "generic_ghost_rejected": 136,
+          "direct_retention": 0.32476190476190475,
+          "specific_ghost_rejection": 0.9941666666666666,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "by_sensor": {
+        "left": {
+          "none": {
+            "direct_total": 1949,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1171,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 127,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 1949,
+            "direct_rejected": 438,
+            "specific_ghost_total": 1171,
+            "specific_ghost_rejected": 473,
+            "generic_ghost_total": 127,
+            "generic_ghost_rejected": 113,
+            "direct_retention": 0.7752693689071318,
+            "specific_ghost_rejection": 0.4039282664389411,
+            "generic_ghost_rejection": 0.889763779527559
+          },
+          "double_speed": {
+            "direct_total": 1949,
+            "direct_rejected": 794,
+            "specific_ghost_total": 1171,
+            "specific_ghost_rejected": 558,
+            "generic_ghost_total": 127,
+            "generic_ghost_rejected": 115,
+            "direct_retention": 0.5926115956900975,
+            "specific_ghost_rejection": 0.47651579846285225,
+            "generic_ghost_rejection": 0.905511811023622
+          },
+          "behind_static": {
+            "direct_total": 1949,
+            "direct_rejected": 1430,
+            "specific_ghost_total": 1171,
+            "specific_ghost_rejected": 1113,
+            "generic_ghost_total": 127,
+            "generic_ghost_rejected": 125,
+            "direct_retention": 0.2662904053360698,
+            "specific_ghost_rejection": 0.950469684030743,
+            "generic_ghost_rejection": 0.984251968503937
+          },
+          "all": {
+            "direct_total": 1949,
+            "direct_rejected": 1581,
+            "specific_ghost_total": 1171,
+            "specific_ghost_rejected": 1164,
+            "generic_ghost_total": 127,
+            "generic_ghost_rejected": 127,
+            "direct_retention": 0.1888147768086198,
+            "specific_ghost_rejection": 0.9940222032450897,
+            "generic_ghost_rejection": 1.0
+          }
+        },
+        "right": {
+          "none": {
+            "direct_total": 1201,
+            "direct_rejected": 0,
+            "specific_ghost_total": 29,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 1201,
+            "direct_rejected": 262,
+            "specific_ghost_total": 29,
+            "specific_ghost_rejected": 12,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 8,
+            "direct_retention": 0.7818484596169858,
+            "specific_ghost_rejection": 0.41379310344827586,
+            "generic_ghost_rejection": 0.8888888888888888
+          },
+          "double_speed": {
+            "direct_total": 1201,
+            "direct_rejected": 452,
+            "specific_ghost_total": 29,
+            "specific_ghost_rejected": 11,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 8,
+            "direct_retention": 0.6236469608659451,
+            "specific_ghost_rejection": 0.3793103448275862,
+            "generic_ghost_rejection": 0.8888888888888888
+          },
+          "behind_static": {
+            "direct_total": 1201,
+            "direct_rejected": 282,
+            "specific_ghost_total": 29,
+            "specific_ghost_rejected": 29,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 9,
+            "direct_retention": 0.765195670274771,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          },
+          "all": {
+            "direct_total": 1201,
+            "direct_rejected": 546,
+            "specific_ghost_total": 29,
+            "specific_ghost_rejected": 29,
+            "generic_ghost_total": 9,
+            "generic_ghost_rejected": 9,
+            "direct_retention": 0.5453788509575354,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          }
+        }
+      },
+      "all_rules_by_range_m": {
+        "0-5": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "5-10": {
+          "direct_total": 1385,
+          "direct_rejected": 548,
+          "specific_ghost_total": 179,
+          "specific_ghost_rejected": 179,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.604332129963899,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": null
+        },
+        "10-20": {
+          "direct_total": 1765,
+          "direct_rejected": 1579,
+          "specific_ghost_total": 700,
+          "specific_ghost_rejected": 693,
+          "generic_ghost_total": 86,
+          "generic_ghost_rejected": 86,
+          "direct_retention": 0.10538243626062323,
+          "specific_ghost_rejection": 0.99,
+          "generic_ghost_rejection": 1.0
+        },
+        "20-120": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 321,
+          "specific_ghost_rejected": 321,
+          "generic_ghost_total": 50,
+          "generic_ghost_rejected": 50,
+          "direct_retention": null,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "all_rules_by_abs_bearing_deg": {
+        "0-30": {
+          "direct_total": 1801,
+          "direct_rejected": 1567,
+          "specific_ghost_total": 1135,
+          "specific_ghost_rejected": 1135,
+          "generic_ghost_total": 126,
+          "generic_ghost_rejected": 126,
+          "direct_retention": 0.12992781787895613,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "30-60": {
+          "direct_total": 1143,
+          "direct_rejected": 415,
+          "specific_ghost_total": 40,
+          "specific_ghost_rejected": 33,
+          "generic_ghost_total": 5,
+          "generic_ghost_rejected": 5,
+          "direct_retention": 0.636920384951881,
+          "specific_ghost_rejection": 0.825,
+          "generic_ghost_rejection": 1.0
+        },
+        "60-90": {
+          "direct_total": 206,
+          "direct_rejected": 145,
+          "specific_ghost_total": 25,
+          "specific_ghost_rejected": 25,
+          "generic_ghost_total": 5,
+          "generic_ghost_rejected": 5,
+          "direct_retention": 0.2961165048543689,
+          "specific_ghost_rejection": 1.0,
+          "generic_ghost_rejection": 1.0
+        },
+        "90-180": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      }
+    },
+    {
+      "source": {
+        "name": "original/train/scenario-13_sequence-02_cycl_train.h5",
+        "bytes": 109241051,
+        "compressed_bytes": 42364711,
+        "crc32": "8cd31182",
+        "archive": "original.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+        "archive_bytes": 5818814597,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "35aa9ae1a403070d6794b18cd8ed4b0280727d9540ec1733f839edf42550d10f",
+        "member_crc_verified": true
+      },
+      "radar_fields": [
+        "frame",
+        "frame_timestamp",
+        "timestamp",
+        "sensor",
+        "x_cc",
+        "y_cc",
+        "r_sc",
+        "phi_sc",
+        "vr_sc",
+        "amp",
+        "uuid",
+        "label_id",
+        "instance_id",
+        "human_readable_label",
+        "group",
+        "mirror"
+      ],
+      "rows": 251967,
+      "sensor_frames": 504,
+      "valid_rows": 250455,
+      "moving_rows": 135397,
+      "labels": {
+        "-1": 1957,
+        "-2110": 18,
+        "-2112": 1,
+        "-2120": 11,
+        "0": 240104,
+        "2100": 572,
+        "2110": 10,
+        "2111": 6297,
+        "2112": 914,
+        "2122": 688,
+        "2124": 1353,
+        "2126": 42
+      },
+      "categories_all": {
+        "direct": 6297,
+        "specific_ghost": 2997,
+        "generic_ghost": 582,
+        "direct_ambiguous": 0,
+        "uncertain": 30,
+        "background": 240104,
+        "ignore": 1957,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_invalid_measurement_or_range": {
+        "direct": 0,
+        "specific_ghost": 0,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 1512,
+        "ignore": 0,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_stationary": {
+        "direct": 202,
+        "specific_ghost": 43,
+        "generic_ghost": 9,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 114006,
+        "ignore": 798,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_moving": {
+        "direct": 6095,
+        "specific_ghost": 2954,
+        "generic_ghost": 573,
+        "direct_ambiguous": 0,
+        "uncertain": 30,
+        "background": 124586,
+        "ignore": 1159,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "moving_reason_masks": {
+        "0": 5242,
+        "1": 390,
+        "2": 563,
+        "3": 21317,
+        "4": 6017,
+        "5": 1495,
+        "6": 559,
+        "7": 99814
+      },
+      "variants": {
+        "none": {
+          "direct_total": 6095,
+          "direct_rejected": 0,
+          "specific_ghost_total": 2954,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 573,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": 0.0
+        },
+        "same_speed": {
+          "direct_total": 6095,
+          "direct_rejected": 732,
+          "specific_ghost_total": 2954,
+          "specific_ghost_rejected": 1957,
+          "generic_ghost_total": 573,
+          "generic_ghost_rejected": 385,
+          "direct_retention": 0.8799015586546349,
+          "specific_ghost_rejection": 0.6624915368991199,
+          "generic_ghost_rejection": 0.6719022687609075
+        },
+        "double_speed": {
+          "direct_total": 6095,
+          "direct_rejected": 1344,
+          "specific_ghost_total": 2954,
+          "specific_ghost_rejected": 647,
+          "generic_ghost_total": 573,
+          "generic_ghost_rejected": 306,
+          "direct_retention": 0.7794913863822805,
+          "specific_ghost_rejection": 0.2190250507786053,
+          "generic_ghost_rejection": 0.5340314136125655
+        },
+        "behind_static": {
+          "direct_total": 6095,
+          "direct_rejected": 2284,
+          "specific_ghost_total": 2954,
+          "specific_ghost_rejected": 2265,
+          "generic_ghost_total": 573,
+          "generic_ghost_rejected": 486,
+          "direct_retention": 0.6252666119770304,
+          "specific_ghost_rejection": 0.7667569397427217,
+          "generic_ghost_rejection": 0.8481675392670157
+        },
+        "all": {
+          "direct_total": 6095,
+          "direct_rejected": 3307,
+          "specific_ghost_total": 2954,
+          "specific_ghost_rejected": 2754,
+          "generic_ghost_total": 573,
+          "generic_ghost_rejected": 567,
+          "direct_retention": 0.4574241181296144,
+          "specific_ghost_rejection": 0.9322951929587001,
+          "generic_ghost_rejection": 0.9895287958115183
+        }
+      },
+      "by_sensor": {
+        "left": {
+          "none": {
+            "direct_total": 3084,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1414,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 96,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 3084,
+            "direct_rejected": 219,
+            "specific_ghost_total": 1414,
+            "specific_ghost_rejected": 1046,
+            "generic_ghost_total": 96,
+            "generic_ghost_rejected": 76,
+            "direct_retention": 0.9289883268482491,
+            "specific_ghost_rejection": 0.7397454031117398,
+            "generic_ghost_rejection": 0.7916666666666666
+          },
+          "double_speed": {
+            "direct_total": 3084,
+            "direct_rejected": 345,
+            "specific_ghost_total": 1414,
+            "specific_ghost_rejected": 140,
+            "generic_ghost_total": 96,
+            "generic_ghost_rejected": 56,
+            "direct_retention": 0.8881322957198443,
+            "specific_ghost_rejection": 0.09900990099009901,
+            "generic_ghost_rejection": 0.5833333333333334
+          },
+          "behind_static": {
+            "direct_total": 3084,
+            "direct_rejected": 1792,
+            "specific_ghost_total": 1414,
+            "specific_ghost_rejected": 1109,
+            "generic_ghost_total": 96,
+            "generic_ghost_rejected": 87,
+            "direct_retention": 0.41893644617380027,
+            "specific_ghost_rejection": 0.7842998585572843,
+            "generic_ghost_rejection": 0.90625
+          },
+          "all": {
+            "direct_total": 3084,
+            "direct_rejected": 2013,
+            "specific_ghost_total": 1414,
+            "specific_ghost_rejected": 1351,
+            "generic_ghost_total": 96,
+            "generic_ghost_rejected": 96,
+            "direct_retention": 0.3472762645914397,
+            "specific_ghost_rejection": 0.9554455445544554,
+            "generic_ghost_rejection": 1.0
+          }
+        },
+        "right": {
+          "none": {
+            "direct_total": 3011,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1540,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 477,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 3011,
+            "direct_rejected": 513,
+            "specific_ghost_total": 1540,
+            "specific_ghost_rejected": 911,
+            "generic_ghost_total": 477,
+            "generic_ghost_rejected": 309,
+            "direct_retention": 0.8296247093988708,
+            "specific_ghost_rejection": 0.5915584415584415,
+            "generic_ghost_rejection": 0.6477987421383647
+          },
+          "double_speed": {
+            "direct_total": 3011,
+            "direct_rejected": 999,
+            "specific_ghost_total": 1540,
+            "specific_ghost_rejected": 507,
+            "generic_ghost_total": 477,
+            "generic_ghost_rejected": 250,
+            "direct_retention": 0.6682165393556958,
+            "specific_ghost_rejection": 0.32922077922077925,
+            "generic_ghost_rejection": 0.5241090146750524
+          },
+          "behind_static": {
+            "direct_total": 3011,
+            "direct_rejected": 492,
+            "specific_ghost_total": 1540,
+            "specific_ghost_rejected": 1156,
+            "generic_ghost_total": 477,
+            "generic_ghost_rejected": 399,
+            "direct_retention": 0.8365991364995018,
+            "specific_ghost_rejection": 0.7506493506493507,
+            "generic_ghost_rejection": 0.8364779874213837
+          },
+          "all": {
+            "direct_total": 3011,
+            "direct_rejected": 1294,
+            "specific_ghost_total": 1540,
+            "specific_ghost_rejected": 1403,
+            "generic_ghost_total": 477,
+            "generic_ghost_rejected": 471,
+            "direct_retention": 0.570242444370641,
+            "specific_ghost_rejection": 0.9110389610389611,
+            "generic_ghost_rejection": 0.9874213836477987
+          }
+        }
+      },
+      "all_rules_by_range_m": {
+        "0-5": {
+          "direct_total": 2754,
+          "direct_rejected": 1547,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.4382716049382716,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "5-10": {
+          "direct_total": 1496,
+          "direct_rejected": 693,
+          "specific_ghost_total": 116,
+          "specific_ghost_rejected": 111,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.5367647058823529,
+          "specific_ghost_rejection": 0.9568965517241379,
+          "generic_ghost_rejection": null
+        },
+        "10-20": {
+          "direct_total": 1197,
+          "direct_rejected": 546,
+          "specific_ghost_total": 2084,
+          "specific_ghost_rejected": 1919,
+          "generic_ghost_total": 157,
+          "generic_ghost_rejected": 157,
+          "direct_retention": 0.543859649122807,
+          "specific_ghost_rejection": 0.9208253358925144,
+          "generic_ghost_rejection": 1.0
+        },
+        "20-120": {
+          "direct_total": 648,
+          "direct_rejected": 521,
+          "specific_ghost_total": 754,
+          "specific_ghost_rejected": 724,
+          "generic_ghost_total": 416,
+          "generic_ghost_rejected": 410,
+          "direct_retention": 0.19598765432098766,
+          "specific_ghost_rejection": 0.9602122015915119,
+          "generic_ghost_rejection": 0.9855769230769231
+        }
+      },
+      "all_rules_by_abs_bearing_deg": {
+        "0-30": {
+          "direct_total": 3852,
+          "direct_rejected": 2528,
+          "specific_ghost_total": 2124,
+          "specific_ghost_rejected": 2044,
+          "generic_ghost_total": 479,
+          "generic_ghost_rejected": 476,
+          "direct_retention": 0.34371754932502596,
+          "specific_ghost_rejection": 0.9623352165725048,
+          "generic_ghost_rejection": 0.9937369519832986
+        },
+        "30-60": {
+          "direct_total": 2001,
+          "direct_rejected": 690,
+          "specific_ghost_total": 661,
+          "specific_ghost_rejected": 619,
+          "generic_ghost_total": 72,
+          "generic_ghost_rejected": 72,
+          "direct_retention": 0.6551724137931034,
+          "specific_ghost_rejection": 0.9364599092284418,
+          "generic_ghost_rejection": 1.0
+        },
+        "60-90": {
+          "direct_total": 242,
+          "direct_rejected": 89,
+          "specific_ghost_total": 169,
+          "specific_ghost_rejected": 91,
+          "generic_ghost_total": 22,
+          "generic_ghost_rejected": 19,
+          "direct_retention": 0.6322314049586777,
+          "specific_ghost_rejection": 0.5384615384615384,
+          "generic_ghost_rejection": 0.8636363636363636
+        },
+        "90-180": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      }
+    },
+    {
+      "source": {
+        "name": "original/train/scenario-21_sequence-02_cycl_train.h5",
+        "bytes": 59627351,
+        "compressed_bytes": 20918327,
+        "crc32": "6fe7f358",
+        "archive": "original.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+        "archive_bytes": 5818814597,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "042d7c8b01f7086022ea6457f848c45c1ece83b2265d6c758ecca648ca1e93a3",
+        "member_crc_verified": true
+      },
+      "radar_fields": [
+        "frame",
+        "frame_timestamp",
+        "timestamp",
+        "sensor",
+        "x_cc",
+        "y_cc",
+        "r_sc",
+        "phi_sc",
+        "vr_sc",
+        "amp",
+        "uuid",
+        "label_id",
+        "instance_id",
+        "human_readable_label",
+        "group",
+        "mirror"
+      ],
+      "rows": 169053,
+      "sensor_frames": 367,
+      "valid_rows": 167948,
+      "moving_rows": 90629,
+      "labels": {
+        "-1": 228,
+        "-2122": 10,
+        "0": 163399,
+        "2100": 18,
+        "2110": 3,
+        "2111": 4380,
+        "2112": 368,
+        "2122": 364,
+        "2124": 283
+      },
+      "categories_all": {
+        "direct": 4380,
+        "specific_ghost": 1015,
+        "generic_ghost": 21,
+        "direct_ambiguous": 0,
+        "uncertain": 10,
+        "background": 163399,
+        "ignore": 228,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_invalid_measurement_or_range": {
+        "direct": 0,
+        "specific_ghost": 0,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 1105,
+        "ignore": 0,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_stationary": {
+        "direct": 101,
+        "specific_ghost": 8,
+        "generic_ghost": 0,
+        "direct_ambiguous": 0,
+        "uncertain": 0,
+        "background": 77156,
+        "ignore": 54,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "categories_moving": {
+        "direct": 4279,
+        "specific_ghost": 1007,
+        "generic_ghost": 21,
+        "direct_ambiguous": 0,
+        "uncertain": 10,
+        "background": 85138,
+        "ignore": 174,
+        "noise": 0,
+        "group": 0,
+        "invalid": 0
+      },
+      "moving_reason_masks": {
+        "0": 4289,
+        "1": 118,
+        "2": 338,
+        "3": 13664,
+        "4": 4623,
+        "5": 535,
+        "6": 388,
+        "7": 66674
+      },
+      "variants": {
+        "none": {
+          "direct_total": 4279,
+          "direct_rejected": 0,
+          "specific_ghost_total": 1007,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 21,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": 0.0
+        },
+        "same_speed": {
+          "direct_total": 4279,
+          "direct_rejected": 395,
+          "specific_ghost_total": 1007,
+          "specific_ghost_rejected": 641,
+          "generic_ghost_total": 21,
+          "generic_ghost_rejected": 15,
+          "direct_retention": 0.9076887123159617,
+          "specific_ghost_rejection": 0.6365441906653426,
+          "generic_ghost_rejection": 0.7142857142857143
+        },
+        "double_speed": {
+          "direct_total": 4279,
+          "direct_rejected": 707,
+          "specific_ghost_total": 1007,
+          "specific_ghost_rejected": 363,
+          "generic_ghost_total": 21,
+          "generic_ghost_rejected": 18,
+          "direct_retention": 0.8347744800186959,
+          "specific_ghost_rejection": 0.36047666335650447,
+          "generic_ghost_rejection": 0.8571428571428571
+        },
+        "behind_static": {
+          "direct_total": 4279,
+          "direct_rejected": 2094,
+          "specific_ghost_total": 1007,
+          "specific_ghost_rejected": 792,
+          "generic_ghost_total": 21,
+          "generic_ghost_rejected": 18,
+          "direct_retention": 0.5106333255433513,
+          "specific_ghost_rejection": 0.7864945382323734,
+          "generic_ghost_rejection": 0.8571428571428571
+        },
+        "all": {
+          "direct_total": 4279,
+          "direct_rejected": 2693,
+          "specific_ghost_total": 1007,
+          "specific_ghost_rejected": 958,
+          "generic_ghost_total": 21,
+          "generic_ghost_rejected": 21,
+          "direct_retention": 0.37064734751110073,
+          "specific_ghost_rejection": 0.9513406156901688,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "by_sensor": {
+        "left": {
+          "none": {
+            "direct_total": 1260,
+            "direct_rejected": 0,
+            "specific_ghost_total": 195,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": null
+          },
+          "same_speed": {
+            "direct_total": 1260,
+            "direct_rejected": 199,
+            "specific_ghost_total": 195,
+            "specific_ghost_rejected": 97,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.8420634920634921,
+            "specific_ghost_rejection": 0.49743589743589745,
+            "generic_ghost_rejection": null
+          },
+          "double_speed": {
+            "direct_total": 1260,
+            "direct_rejected": 364,
+            "specific_ghost_total": 195,
+            "specific_ghost_rejected": 90,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.7111111111111111,
+            "specific_ghost_rejection": 0.46153846153846156,
+            "generic_ghost_rejection": null
+          },
+          "behind_static": {
+            "direct_total": 1260,
+            "direct_rejected": 36,
+            "specific_ghost_total": 195,
+            "specific_ghost_rejected": 144,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.9714285714285714,
+            "specific_ghost_rejection": 0.7384615384615385,
+            "generic_ghost_rejection": null
+          },
+          "all": {
+            "direct_total": 1260,
+            "direct_rejected": 400,
+            "specific_ghost_total": 195,
+            "specific_ghost_rejected": 165,
+            "generic_ghost_total": 0,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 0.6825396825396826,
+            "specific_ghost_rejection": 0.8461538461538461,
+            "generic_ghost_rejection": null
+          }
+        },
+        "right": {
+          "none": {
+            "direct_total": 3019,
+            "direct_rejected": 0,
+            "specific_ghost_total": 812,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 21,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "same_speed": {
+            "direct_total": 3019,
+            "direct_rejected": 196,
+            "specific_ghost_total": 812,
+            "specific_ghost_rejected": 544,
+            "generic_ghost_total": 21,
+            "generic_ghost_rejected": 15,
+            "direct_retention": 0.9350778403444849,
+            "specific_ghost_rejection": 0.6699507389162561,
+            "generic_ghost_rejection": 0.7142857142857143
+          },
+          "double_speed": {
+            "direct_total": 3019,
+            "direct_rejected": 343,
+            "specific_ghost_total": 812,
+            "specific_ghost_rejected": 273,
+            "generic_ghost_total": 21,
+            "generic_ghost_rejected": 18,
+            "direct_retention": 0.8863862206028487,
+            "specific_ghost_rejection": 0.33620689655172414,
+            "generic_ghost_rejection": 0.8571428571428571
+          },
+          "behind_static": {
+            "direct_total": 3019,
+            "direct_rejected": 2058,
+            "specific_ghost_total": 812,
+            "specific_ghost_rejected": 648,
+            "generic_ghost_total": 21,
+            "generic_ghost_rejected": 18,
+            "direct_retention": 0.31831732361709175,
+            "specific_ghost_rejection": 0.7980295566502463,
+            "generic_ghost_rejection": 0.8571428571428571
+          },
+          "all": {
+            "direct_total": 3019,
+            "direct_rejected": 2293,
+            "specific_ghost_total": 812,
+            "specific_ghost_rejected": 793,
+            "generic_ghost_total": 21,
+            "generic_ghost_rejected": 21,
+            "direct_retention": 0.24047697913216295,
+            "specific_ghost_rejection": 0.9766009852216748,
+            "generic_ghost_rejection": 1.0
+          }
+        }
+      },
+      "all_rules_by_range_m": {
+        "0-5": {
+          "direct_total": 2178,
+          "direct_rejected": 858,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.6060606060606061,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "5-10": {
+          "direct_total": 894,
+          "direct_rejected": 725,
+          "specific_ghost_total": 424,
+          "specific_ghost_rejected": 382,
+          "generic_ghost_total": 15,
+          "generic_ghost_rejected": 15,
+          "direct_retention": 0.1890380313199105,
+          "specific_ghost_rejection": 0.9009433962264151,
+          "generic_ghost_rejection": 1.0
+        },
+        "10-20": {
+          "direct_total": 912,
+          "direct_rejected": 866,
+          "specific_ghost_total": 530,
+          "specific_ghost_rejected": 528,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.05043859649122807,
+          "specific_ghost_rejection": 0.9962264150943396,
+          "generic_ghost_rejection": null
+        },
+        "20-120": {
+          "direct_total": 295,
+          "direct_rejected": 244,
+          "specific_ghost_total": 53,
+          "specific_ghost_rejected": 48,
+          "generic_ghost_total": 6,
+          "generic_ghost_rejected": 6,
+          "direct_retention": 0.17288135593220338,
+          "specific_ghost_rejection": 0.9056603773584906,
+          "generic_ghost_rejection": 1.0
+        }
+      },
+      "all_rules_by_abs_bearing_deg": {
+        "0-30": {
+          "direct_total": 3224,
+          "direct_rejected": 2395,
+          "specific_ghost_total": 755,
+          "specific_ghost_rejected": 750,
+          "generic_ghost_total": 8,
+          "generic_ghost_rejected": 8,
+          "direct_retention": 0.25713399503722084,
+          "specific_ghost_rejection": 0.9933774834437086,
+          "generic_ghost_rejection": 1.0
+        },
+        "30-60": {
+          "direct_total": 878,
+          "direct_rejected": 194,
+          "specific_ghost_total": 252,
+          "specific_ghost_rejected": 208,
+          "generic_ghost_total": 13,
+          "generic_ghost_rejected": 13,
+          "direct_retention": 0.7790432801822323,
+          "specific_ghost_rejection": 0.8253968253968254,
+          "generic_ghost_rejection": 1.0
+        },
+        "60-90": {
+          "direct_total": 177,
+          "direct_rejected": 104,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.4124293785310734,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "90-180": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      }
+    }
+  ]
+}

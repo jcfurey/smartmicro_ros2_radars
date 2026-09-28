@@ -1,0 +1,189 @@
+{
+  "thresholds_m_s": [
+    0.05,
+    0.2
+  ],
+  "cohorts": "moving and all finite in-range labeled points; all_valid denominator stays fixed",
+  "config": {
+    "range_gap": 1.5,
+    "speed_tolerance": 0.25,
+    "wall_azimuth_deg": 4.0,
+    "min_range": 0.15,
+    "max_range": 120.0
+  },
+  "source_sha256": {
+    "tools/assessment/assess_ghost_thresholds.py": "47a8079625b6e792cebf57c6272a3d03aa12ac40ef194857bf3cfab289417fd3",
+    "tools/assessment/assess_ghost_dataset.py": "bab9fa832a96817c25a63bc7f43361377b1ccce4d822beb3113ce8568e5ca4d4",
+    "smartmicro_processing/config/umrr96_processing.yaml": "60d45ddabeffdd71b72335c513d6c22f4bb4d02a7ee38b9457108fd460d98a2c",
+    "smartmicro_processing/smartmicro_processing/ghosts.py": "62cd5f18de0704d77e06b91850269ff5e84e57f8913cd578b75ae54c4695550c",
+    "smartmicro_processing/smartmicro_processing/doppler.py": "3a0ba7296d376a17ad566ae9c83edb0e3a8ee38f95084d10c0c8d8bdecec75d8"
+  },
+  "members": [
+    {
+      "name": "virtual/test/scenario-11_sequences-02-02-03_start-frames-143-037-118_cycl-cycl-ped_test.h5",
+      "bytes": 10413075,
+      "compressed_bytes": 4826525,
+      "crc32": "c41e06f8",
+      "archive": "virtual.zip",
+      "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+      "archive_bytes": 8313881790,
+      "reason": "Smallest compressed member in preselected reflector scenario",
+      "sha256": "eaf1aed6498be78451d582c2fa8135a8d9c066f6cdae49d2ced5a4b474e58dc8",
+      "member_crc_verified": true
+    },
+    {
+      "name": "virtual/train/scenario-13_sequences-01-05-05-06_start-frames-013-123-166-019_cycl-ped-ped-ped_train.h5",
+      "bytes": 32082225,
+      "compressed_bytes": 15621324,
+      "crc32": "0cc076f2",
+      "archive": "virtual.zip",
+      "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+      "archive_bytes": 8313881790,
+      "reason": "Exact sequence named in MPET-GLMB paper; virtual overlay",
+      "sha256": "164e0e9476dcc348e35b02701bac915071826358393984d06e079dc880f3b57c",
+      "member_crc_verified": true
+    },
+    {
+      "name": "virtual/train/scenario-21_sequences-03-06-06_start-frames-001-074-006_cycl-ped-ped_train.h5",
+      "bytes": 7302467,
+      "compressed_bytes": 3289747,
+      "crc32": "1f2d8745",
+      "archive": "virtual.zip",
+      "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+      "archive_bytes": 8313881790,
+      "reason": "Smallest compressed member in preselected reflector scenario",
+      "sha256": "e5a739ac8aec69e3446779f56597458d563b6f6d94fb9293f2016990fa7fb047",
+      "member_crc_verified": true
+    },
+    {
+      "name": "original/test/scenario-11_sequence-02_cycl_test.h5",
+      "bytes": 74428620,
+      "compressed_bytes": 27414502,
+      "crc32": "2688aa02",
+      "archive": "original.zip",
+      "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+      "archive_bytes": 5818814597,
+      "reason": "Smallest compressed member in preselected reflector scenario",
+      "sha256": "4e15fb417f1d7e2405093e61809c6375ce4b2b1bd586a327f2d01e4ad773cdc9",
+      "member_crc_verified": true
+    },
+    {
+      "name": "original/train/scenario-13_sequence-02_cycl_train.h5",
+      "bytes": 109241051,
+      "compressed_bytes": 42364711,
+      "crc32": "8cd31182",
+      "archive": "original.zip",
+      "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+      "archive_bytes": 5818814597,
+      "reason": "Smallest compressed member in preselected reflector scenario",
+      "sha256": "35aa9ae1a403070d6794b18cd8ed4b0280727d9540ec1733f839edf42550d10f",
+      "member_crc_verified": true
+    },
+    {
+      "name": "original/train/scenario-21_sequence-02_cycl_train.h5",
+      "bytes": 59627351,
+      "compressed_bytes": 20918327,
+      "crc32": "6fe7f358",
+      "archive": "original.zip",
+      "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+      "archive_bytes": 5818814597,
+      "reason": "Smallest compressed member in preselected reflector scenario",
+      "sha256": "042d7c8b01f7086022ea6457f848c45c1ece83b2265d6c758ecca648ca1e93a3",
+      "member_crc_verified": true
+    }
+  ],
+  "aggregates": {
+    "0.05": {
+      "virtual.zip/moving": {
+        "direct_total": 4595,
+        "direct_rejected": 3441,
+        "specific_ghost_total": 1230,
+        "specific_ghost_rejected": 1230,
+        "generic_ghost_total": 213,
+        "generic_ghost_rejected": 213,
+        "direct_retention": 0.2511425462459195,
+        "specific_ghost_rejection": 1.0,
+        "generic_ghost_rejection": 1.0
+      },
+      "virtual.zip/all_valid": {
+        "direct_total": 4951,
+        "direct_rejected": 3441,
+        "specific_ghost_total": 1294,
+        "specific_ghost_rejected": 1230,
+        "generic_ghost_total": 223,
+        "generic_ghost_rejected": 213,
+        "direct_retention": 0.3049888911331044,
+        "specific_ghost_rejection": 0.9505409582689336,
+        "generic_ghost_rejection": 0.9551569506726457
+      },
+      "original.zip/moving": {
+        "direct_total": 13524,
+        "direct_rejected": 8127,
+        "specific_ghost_total": 5161,
+        "specific_ghost_rejected": 4905,
+        "generic_ghost_total": 730,
+        "generic_ghost_rejected": 724,
+        "direct_retention": 0.39906832298136646,
+        "specific_ghost_rejection": 0.9503972098430536,
+        "generic_ghost_rejection": 0.9917808219178083
+      },
+      "original.zip/all_valid": {
+        "direct_total": 14019,
+        "direct_rejected": 8127,
+        "specific_ghost_total": 5269,
+        "specific_ghost_rejected": 4905,
+        "generic_ghost_total": 748,
+        "generic_ghost_rejected": 724,
+        "direct_retention": 0.42028675369141877,
+        "specific_ghost_rejection": 0.9309166824824445,
+        "generic_ghost_rejection": 0.9679144385026738
+      }
+    },
+    "0.2": {
+      "virtual.zip/moving": {
+        "direct_total": 3987,
+        "direct_rejected": 2113,
+        "specific_ghost_total": 1115,
+        "specific_ghost_rejected": 1115,
+        "generic_ghost_total": 192,
+        "generic_ghost_rejected": 192,
+        "direct_retention": 0.47002758966641583,
+        "specific_ghost_rejection": 1.0,
+        "generic_ghost_rejection": 1.0
+      },
+      "virtual.zip/all_valid": {
+        "direct_total": 4951,
+        "direct_rejected": 2113,
+        "specific_ghost_total": 1294,
+        "specific_ghost_rejected": 1115,
+        "generic_ghost_total": 223,
+        "generic_ghost_rejected": 192,
+        "direct_retention": 0.5732175318117552,
+        "specific_ghost_rejection": 0.8616692426584235,
+        "generic_ghost_rejection": 0.8609865470852018
+      },
+      "original.zip/moving": {
+        "direct_total": 12590,
+        "direct_rejected": 6045,
+        "specific_ghost_total": 4947,
+        "specific_ghost_rejected": 4687,
+        "generic_ghost_total": 664,
+        "generic_ghost_rejected": 647,
+        "direct_retention": 0.5198570293884035,
+        "specific_ghost_rejection": 0.9474428946836466,
+        "generic_ghost_rejection": 0.9743975903614458
+      },
+      "original.zip/all_valid": {
+        "direct_total": 14019,
+        "direct_rejected": 6045,
+        "specific_ghost_total": 5269,
+        "specific_ghost_rejected": 4687,
+        "generic_ghost_total": 748,
+        "generic_ghost_rejected": 647,
+        "direct_retention": 0.568799486411299,
+        "specific_ghost_rejection": 0.8895426077054469,
+        "generic_ghost_rejection": 0.8649732620320856
+      }
+    }
+  }
+}

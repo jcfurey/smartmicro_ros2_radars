@@ -5,6 +5,11 @@ and its implemented per-point audit. Scope remains the current UMRR-96, a fixed
 installation with possibly moving people, and a current-scan display with zero
 point decay. This research did not change the live session or sensor settings.
 
+Follow-up: the [dataset study](umrr96-ghost-dataset-study-20260928.md) now measures
+the existing point ghost rules on six downloaded sequences and refines the
+recommendation below. It favors evaluating global association first and treats
+strict Doppler grouping as a separate hypothesis requiring fragmentation tests.
+
 The most useful next experiment is a small, measurable change to grouping and
 association, evaluated against labeled multipath examples. Learned ghost
 classification and explicit reflector estimation are promising follow-ups.
@@ -54,6 +59,10 @@ Algorithm Based on 60 GHz Millimeter-Wave Radar.** Screened the publisher's
 indexed sections and author abstract; direct full-page/PDF retrieval failed.
 [Publisher](https://www.mdpi.com/1424-8220/26/12/3758),
 [abstract and publication record](https://pubmed.ncbi.nlm.nih.gov/42356731/).
+
+The follow-up study subsequently retrieved the
+[open-access full text](https://pmc.ncbi.nlm.nih.gov/articles/PMC13306346/)
+and reviews the actual centroid-based velocity gate and candidate exclusions.
 
 The method combines DBSCAN spatial-extent and velocity-consistency constraints,
 SNR-based candidate validation, modified nearest-neighbor association and an

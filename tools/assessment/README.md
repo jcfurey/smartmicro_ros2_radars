@@ -1,5 +1,51 @@
 # UMRR-96 offline assessment
 
+## Radar Ghost Dataset
+
+The [2026-09-28 dataset study](../../docs/umrr96-ghost-dataset-study-20260928.md)
+evaluates the existing single-scan point ghost rules on a six-sequence sample of
+Radar Ghost Dataset v1.1. Data is on Bulk-Storage, outside Git. This is a 2D,
+fixed-radar stage adapter; it does not run our 3D ego fit, SNR gate or tracker.
+The script reads current range, residual and ghost settings from the launch
+YAML and records their values and source hashes. Labels only affect scoring.
+
+Dependencies are Python, NumPy, h5py and PyYAML; Matplotlib is needed for the
+plot. The existing research environment is
+`/tmp/umrr96-ghost-research-venv/bin/python`. To recreate it, use a virtual
+environment and install `numpy h5py pyyaml matplotlib`. From the repository:
+
+```bash
+python3 tools/assessment/assess_ghost_dataset.py \
+  --manifest /run/media/jcfurey/Bulk-Storage/RadarGhostDataset/v1.1/sample-manifest.json \
+  --output /tmp/ghost-dataset-repeat.json
+python3 -m unittest discover -s tools/assessment -p 'test_assess_ghost_dataset.py' -v
+MPLCONFIGDIR=/tmp/umrr96-matplotlib python3 tools/assessment/plot_ghost_dataset.py \
+  /tmp/ghost-dataset-repeat.json /tmp/ghost-dataset-repeat.png
+```
+
+Choose fresh output paths. Each H5 must match the manifest SHA256 before being
+evaluated; source member names and URLs remain in the output. Original and
+virtual archives are aggregated separately. Reported retention/rejection applies
+only to eligible moving detections with confident labels. Unspecified-order
+ghosts, stationary labels and exclusions have separate counts. The full archive
+MD5 verification record is `archives-verified.json` beside the manifest; partial
+downloads are not verified archives. The report is not a sensor accuracy claim.
+
+To reproduce the sensitivity comparison between the current YAML motion gate
+and the Python fallback, with all other gates unchanged:
+
+```bash
+python3 tools/assessment/assess_ghost_thresholds.py \
+  --manifest /run/media/jcfurey/Bulk-Storage/RadarGhostDataset/v1.1/sample-manifest.json \
+  --output /tmp/ghost-threshold-repeat.json
+```
+
+It reports both moving-only scores and scores over a fixed set of all valid
+labeled detections, so changing the motion gate does not silently change the
+denominator in that second comparison. Neither threshold is optimized here.
+
+## Recorded UMRR-96 bags
+
 These tools inspect recorded detections and reproduce the
 [2026-09-24 investigation](../../docs/umrr96-navigation-investigation.md).
 They do not publish poses, call sensor services, tune hardware, or establish

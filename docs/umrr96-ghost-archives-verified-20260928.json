@@ -1,0 +1,18 @@
+[
+  {
+    "name": "virtual.zip",
+    "bytes": 8313881790,
+    "published_checksum": "md5:bf19c69e8c68256d934cf3d09c1ec18f",
+    "md5_verified": true,
+    "sha256": "411e0cd793b4cd2f1b77eff121a461905dc702bc4e23392e9623bd91fcebdb46",
+    "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content"
+  },
+  {
+    "name": "original.zip",
+    "bytes": 5818814597,
+    "published_checksum": "md5:3873152766839286469b4b7e63ceba12",
+    "md5_verified": true,
+    "sha256": "d1a3ad23dc82d7977e5e3e6d096a651c0b5d63b725950a69685800cb10a5ddfa",
+    "url": "https://zenodo.org/api/records/6676246/files/original.zip/content"
+  }
+]
