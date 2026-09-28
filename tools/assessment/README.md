@@ -243,3 +243,31 @@ MPLCONFIGDIR=/tmp/umrr96-matplotlib python3 \
   --tuning src/smartmicro_ros2_radars/docs/umrr96_38553_tuning.json \
   --output /tmp/umrr96-assessment.png
 ```
+
+### Merged-option validation
+
+`compare_tracker_worktrees.py --integration-baseline <premerge-repo>` replays all
+8 combinations of confirmation, standing support and joint distance assignment.
+It checks the default against the frozen pre-merge tracker and each single option
+against its original worktree, at every scan. Comparisons include all reference
+track fields and background state; newly added fields absent from a reference are
+excluded. All runs share the current point-stage settings. The uncertainty
+association submode remains disabled.
+
+From the workspace root, after building/sourcing the processing overlay:
+
+```bash
+git -C src/smartmicro_ros2_radars worktree add --detach \
+  "$PWD/worktrees/smartmicro-premerge" 0349cc3
+python3 src/smartmicro_ros2_radars/tools/assessment/compare_tracker_worktrees.py \
+  results/umrr96-filtering-20260924/walk \
+  --worktrees worktrees --integration-baseline worktrees/smartmicro-premerge \
+  --output results/umrr96-opt-in-recheck/walk.json
+```
+
+Keep the three reference worktrees at the original experiment commits documented
+in [the integration report](../../docs/umrr96-opt-in-integration-20260928.md).
+Repeat for `results/umrr96-filtering-20260924/static` and
+`results/umrr96-ingest-research-20260928/recovered` with `--unlabeled` and fresh
+output paths. `--integration-baseline` replaces the isolated-variant mode and
+already includes the default-off check; do not also pass `--check-disabled`.

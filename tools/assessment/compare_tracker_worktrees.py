@@ -5,6 +5,7 @@ from collections import Counter
 from dataclasses import asdict
 import hashlib
 import importlib.util
+from itertools import product
 import json
 from pathlib import Path
 import sys
@@ -24,6 +25,7 @@ from smartmicro_processing.obstacles import near_tracks
 
 PHASES = {'walking': (6, 40), 'standing': (42, 50), 'swaying': (50, 56),
           'absent': (64, 80)}
+OPTIONS = ('evidence_confirmation', 'standing_support', 'joint_association')
 
 
 def load_tracker(name, repo, overrides=None):
@@ -43,6 +45,39 @@ def load_tracker(name, repo, overrides=None):
                                               'yaml_sha256': sha256_file(config_path)}
 
 
+def integrated_variants(args):
+    trackers, provenance, equivalent = {}, {}, {}
+    trackers['premerge'], provenance['premerge'] = load_tracker('premerge', args.integration_baseline)
+    for values in product((False, True), repeat=3):
+        name = 'options_' + ''.join(str(int(v)) for v in values)
+        trackers[name], provenance[name] = load_tracker(name, REPO, dict(zip(OPTIONS, values)))
+    equivalent['options_000'] = 'premerge'
+    for label, bits in [('confirmation', '100'), ('standing', '010'), ('association', '001')]:
+        name = label + '_reference'
+        trackers[name], provenance[name] = load_tracker(name, args.worktrees / ('smartmicro-' + label))
+        equivalent['options_' + bits] = name
+    return trackers, provenance, equivalent
+
+
+def canonical_state(tracker, track_fields):
+    """All runtime state shared with a reference implementation, including background."""
+    def value(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.generic):
+            return obj.item()
+        if isinstance(obj, (set, frozenset)):
+            return sorted(obj)
+        raise TypeError(type(obj).__name__)
+
+    bg = tracker.background
+    state = {'tracks': [{k: getattr(t, k) for k in track_fields} for t in tracker.tracks],
+             'next_id': tracker.next_id, 'last_step': tracker.last_step,
+             'static_novel': tracker.static_novel,
+             'background': [bg.weight, bg.start, bg.stamp, sorted(bg.occupancy.items())]}
+    return json.dumps(state, sort_keys=True, allow_nan=False, default=value)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bag', type=Path)
@@ -50,7 +85,12 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--check-disabled', action='store_true')
     parser.add_argument('--unlabeled', action='store_true', help='Disable room phases for other recordings')
+    parser.add_argument('--integration-baseline', type=Path,
+                        help='Frozen premerge repository: check all eight merged option combinations '
+                             'and exact default/individual-feature state equivalence')
     args = parser.parse_args()
+    if args.integration_baseline and args.check_disabled:
+        parser.error('--integration-baseline already checks the disabled default')
     if args.output.exists():
         parser.error('Choose a fresh output')
     names = ('baseline', 'confirmation', 'standing', 'association', 'long_static_hold_control',
@@ -58,18 +98,26 @@ def main():
     if args.check_disabled:
         names += ('confirmation_disabled', 'standing_disabled', 'association_disabled')
     trackers, provenance = {}, {}
-    for name in names:
-        repo = (REPO if name in ('baseline', 'long_static_hold_control') else args.worktrees /
-                ('smartmicro-' + name.split('_')[0]))
-        override = ({'static_hold': 30.} if name == 'long_static_hold_control' else
-                    {'association_uncertainty': True, 'association_doppler': False}
-                    if name == 'association_position_only_control' else
-                    {'association_uncertainty': True, 'association_doppler': True}
-                    if name == 'association_innovation_control' else
-                    {'evidence_confirmation': False} if name == 'confirmation_disabled' else
-                    {'standing_support': False} if name == 'standing_disabled' else
-                    {'joint_association': False} if name == 'association_disabled' else None)
-        trackers[name], provenance[name] = load_tracker(name, repo, override)
+    if not args.integration_baseline:
+        for name in names:
+            repo = (REPO if name in ('baseline', 'long_static_hold_control') else args.worktrees /
+                    ('smartmicro-' + name.split('_')[0]))
+            override = ({'static_hold': 30.} if name == 'long_static_hold_control' else
+                        {'association_uncertainty': True, 'association_doppler': False}
+                        if name == 'association_position_only_control' else
+                        {'association_uncertainty': True, 'association_doppler': True}
+                        if name == 'association_innovation_control' else
+                        {'evidence_confirmation': False} if name == 'confirmation_disabled' else
+                        {'standing_support': False} if name == 'standing_disabled' else
+                        {'joint_association': False} if name == 'association_disabled' else None)
+            trackers[name], provenance[name] = load_tracker(name, repo, override)
+    equivalent, comparison_fields = {}, {}
+    if args.integration_baseline:
+        trackers, provenance, equivalent = integrated_variants(args)
+        names = tuple(trackers)
+        comparison_fields = {
+            candidate: list(sys.modules[type(trackers[reference]).__module__].Track.__dataclass_fields__)
+            for candidate, reference in equivalent.items()}
     params_path = REPO / 'smartmicro_processing/config/umrr96_processing.yaml'
     params = yaml.safe_load(params_path.read_text())['/**/umrr96_processing']['ros__parameters']
 
@@ -139,6 +187,10 @@ def main():
                     ranges = np.linalg.norm(kept, axis=1)
                     count['direct_proxy_retained_on_track'] += int((on_track & (ranges < 3.)).sum())
                     count['ghost_proxy_retained_on_track'] += int((on_track & (ranges > 3.4)).sum())
+        for candidate, reference in equivalent.items():
+            fields = comparison_fields[candidate]
+            if canonical_state(trackers[candidate], fields) != canonical_state(trackers[reference], fields):
+                raise ValueError(f'State mismatch at scan {total["scans"]}: {candidate} vs {reference}')
     if not total['scans']:
         raise ValueError('No target scans')
     if args.check_disabled:
@@ -150,6 +202,9 @@ def main():
               'absent_phase_limit': 'Interior of historical 62-82 s absence interval, trimmed to 64-80 s; no camera annotation. Report all tracks, not identity accuracy.',
               'phases_s': {} if args.unlabeled else PHASES, 'totals': dict(total),
               'disabled_state_equivalence_checked': args.check_disabled,
+              'integration_equivalence': equivalent,
+              'integration_track_fields_compared': comparison_fields,
+              'option_bit_order': OPTIONS if args.integration_baseline else [],
               'point_config': {'fit': asdict(fit_config), 'gate': asdict(gate), 'ghost': asdict(ghosts)},
               'variants': {n: {**provenance[n], 'phases': {p: dict(c) for p, c in tallies[n].items()},
                                'state_digest': hashes[n].hexdigest(),

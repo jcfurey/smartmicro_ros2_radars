@@ -1,5 +1,8 @@
 # Experiment: confirmation from consistent motion
 
+> Historical isolated-worktree results. The merged implementation defaults off;
+> see [current launch options](../smartmicro_processing/README.md#opt-in-tracker-experiments).
+
 Branch `experiment/umrr96-confirmation`, based on shared checkpoint `3aee7a7`.
 The worktree YAML enables `evidence_confirmation`; the Python default is false.
 The original point rejection, clustering, association and standing support are

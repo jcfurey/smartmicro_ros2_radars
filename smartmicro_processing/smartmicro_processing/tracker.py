@@ -4,12 +4,16 @@ from dataclasses import dataclass, field
 import math
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 
 @dataclass
 class TrackerConfig:
     cluster_radius: float = 0.6  # m, movers closer than this form one measurement
     gate: float = 1.2  # m, association distance to the predicted position
+    joint_association: bool = False  # global distance matching within each priority tier
+    association_uncertainty: bool = False  # ablation: EKF innovation costs need calibration
+    association_doppler: bool = True  # only used by joint_association + association_uncertainty
     position_std: float = 0.15  # m, cluster-centroid measurement noise
     radial_speed_std: float = 0.1  # m/s, cluster radial-speed measurement noise
     accel_std: float = 2.0  # m/s^2, white-acceleration process noise
@@ -47,6 +51,9 @@ class TrackerConfig:
             raise ValueError('standing_support must be a boolean')
         if self.standing_support and self.standing_hold < self.static_hold:
             raise ValueError('standing_hold must cover the legacy static_hold interval')
+        if not all(isinstance(v, bool) for v in (
+                self.joint_association, self.association_uncertainty, self.association_doppler)):
+            raise ValueError('Association switches must be booleans')
 
 
 @dataclass
@@ -237,6 +244,73 @@ class MovingObjectTracker:
         return (c.evidence_confirmation and hits >= 6
                 and sum(track.confirmation_evidence) >= 4.5)
 
+    def association_cost(self, track, position, radial_speed):
+        """Squared innovation distance using the current EKF uncertainty model."""
+        c = self.config
+        if np.linalg.norm(position - track.x[:2]) >= c.gate:
+            return math.inf
+        H = np.zeros((3, 4))
+        H[0, 0] = H[1, 1] = 1.
+        radius = np.linalg.norm(track.x[:2])
+        predicted = 0.
+        if radius > 1e-3:
+            unit = track.x[:2] / radius
+            predicted = float(unit @ track.x[2:])
+            H[2, :2] = (track.x[2:] - unit * predicted) / radius
+            H[2, 2:] = unit
+        delta = np.r_[position - track.x[:2], radial_speed - predicted]
+        R = np.diag([c.position_std ** 2] * 2 + [c.radial_speed_std ** 2])
+        S = H @ track.P @ H.T + R
+        if not c.association_doppler:
+            delta, S = delta[:2], S[:2, :2]
+        S = (S + S.T) / 2
+        try:
+            value = float(delta @ np.linalg.solve(S, delta))
+        except np.linalg.LinAlgError:
+            return math.inf
+        return value if math.isfinite(value) and value >= 0 else math.inf
+
+    def associate(self, order, measurements):
+        """One-to-one matching with explicit misses and confirmed-first priority."""
+        c = self.config
+        matches, used = {}, set()
+        if not c.joint_association:
+            for track in order:
+                best, best_distance = None, c.gate
+                for i, (position, _, _) in enumerate(measurements):
+                    distance = np.linalg.norm(position - track.x[:2])
+                    if i not in used and distance < best_distance:
+                        best, best_distance = i, distance
+                if best is not None:
+                    matches[track.track_id] = best
+                    used.add(best)
+            return matches
+        # Nominal 99% chi-square gates for 3D or 2D innovations. The underlying
+        # radar covariance is experimental, so these are not coverage guarantees.
+        for confirmed in (True, False):
+            tier = [t for t in order if t.confirmed == confirmed]
+            available = [i for i in range(len(measurements)) if i not in used]
+            if not tier or not available:
+                continue
+            miss = ((11.345 if c.association_doppler else 9.211)
+                    if c.association_uncertainty else len(tier) + 1.)
+            cost = np.full((len(tier), len(available) + len(tier)), miss)
+            for row, track in enumerate(tier):
+                for col, index in enumerate(available):
+                    position, speed, _ = measurements[index]
+                    if c.association_uncertainty:
+                        value = self.association_cost(track, position, speed)
+                    else:
+                        distance = np.linalg.norm(position - track.x[:2])
+                        value = distance / c.gate if distance < c.gate else math.inf
+                    cost[row, col] = value if value < miss else miss * (len(tier) + 2)
+            rows, cols = linear_sum_assignment(cost)
+            for row, col in zip(rows, cols):
+                if col < len(available) and cost[row, col] < miss:
+                    matches[tier[row].track_id] = available[col]
+                    used.add(available[col])
+        return matches
+
     def update_position(self, track, position):
         H = np.zeros((2, 4))
         H[0, 0] = H[1, 1] = 1
@@ -294,15 +368,12 @@ class MovingObjectTracker:
         for track in self.tracks:
             self.predict(track, stamp)
         measurements = self.measurements(mover_xyz, mover_speed)
-        # Greedy nearest-neighbour association, confirmed tracks first.
+        # Confirmed tracks retain priority in both association modes.
         order = sorted(self.tracks, key=lambda t: (not t.confirmed, t.track_id))
+        matches = self.associate(order, measurements)
         used = set()
         for track in order:
-            best, best_distance = None, c.gate
-            for i, (position, _, _) in enumerate(measurements):
-                distance = np.linalg.norm(position - track.x[:2])
-                if i not in used and distance < best_distance:
-                    best, best_distance = i, distance
+            best = matches.get(track.track_id)
             hit = best is not None
             evidence = -1.
             if hit:

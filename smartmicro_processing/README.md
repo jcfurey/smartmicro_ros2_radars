@@ -70,6 +70,49 @@ and range (`ros2 param describe`), and floating-point parameters accept integer
 values such as `max_range: 120`. Copy [the YAML](config/umrr96_processing.yaml) to compare settings
 in separate runs. Run one publisher for these output names at a time.
 
+### Opt-in tracker experiments
+
+These independent startup options default to **false** in Python and the shipped
+YAML. They can be combined; `/diagnostics` reports the selected settings.
+
+| Parameter / launch argument | When enabled |
+| --- | --- |
+| `evidence_confirmation` | Six sufficiently consistent position/Doppler hits can confirm early; the existing 8-of-10 fallback remains. |
+| `standing_support` | Current static returns outside a saved background can support an anchored stopped mover, up to `standing_hold` (30 s). Requires a warmed background in a fixed scene frame; sensor movement resets it. |
+| `joint_association` | Match tracks to measurements jointly by distance, one-to-one, with confirmed-track priority and the existing distance gate. |
+
+For example, enable standing support with the live view:
+
+```bash
+ros2 launch smartmicro_processing umrr96_tracking.launch.py standing_support:=true
+```
+
+Or enable all three for a processing-only run:
+
+```bash
+ros2 launch smartmicro_processing umrr96_processing.launch.py \
+  evidence_confirmation:=true standing_support:=true joint_association:=true
+```
+
+Both launch files accept each switch as `true`, `false`, or `config` (the launch
+default). `config` inherits the parameter file; an explicit boolean overrides
+it. The same ROS parameters work with `ros2 run ... --ros-args -p name:=true`.
+They are read-only after startup, so restart processing to change them.
+
+These options affect track confirmation, support and assignment; they do not
+create extra radar detections. The current-scan RViz cloud still has zero point
+decay. Standing support needs current returns to renew a track; internal
+coasting remains bounded by the existing `max_coast` (1 s).
+
+`association_uncertainty` is a separate, default-off research submode requiring
+`joint_association`. It **regressed on the recorded walk**; leave it false for
+the distance-assignment experiment. `association_doppler` (default true) has an
+effect only when both association switches are enabled. SciPy supplies the
+assignment solver and is declared as a package dependency.
+
+See the [original experiment comparison](../docs/umrr96-worktree-comparison-20260928.md)
+and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
+
 | Output under `/umrr96_processing/` | Meaning |
 | --- | --- |
 | `detection_audit` | `umrr_ros2_msgs/DetectionAudit`: one decision per original point, raw indices, quality/ghost reason flags, and current track association |

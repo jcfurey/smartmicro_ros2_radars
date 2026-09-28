@@ -11,6 +11,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+from smartmicro_processing.experiment_launch import experiment_arguments, EXPERIMENTS
 
 
 def generate_launch_description():
@@ -49,6 +50,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_time', default_value='false', choices=['true', 'false'],
             description='Use /clock (for replay)'),
+        *experiment_arguments(),
         GroupAction(scoped=True, actions=[IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 driver_share, 'launch', 'umrr96_live.launch.py'])),
@@ -64,6 +66,7 @@ def generate_launch_description():
             launch_arguments={
                 'params_file': LaunchConfiguration('processing_params'),
                 'use_sim_time': LaunchConfiguration('use_sim_time'),
+                **{name: LaunchConfiguration(name) for name in EXPERIMENTS},
             }.items())]),
         rviz,
         RegisterEventHandler(OnProcessExit(

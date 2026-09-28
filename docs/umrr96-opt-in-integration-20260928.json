@@ -1,0 +1,478 @@
+{
+  "scope": "Default-off integration of three previously isolated tracker experiments; no live radar trial.",
+  "premerge_commit": "0349cc3",
+  "experiment_commits": {
+    "confirmation": "5969945",
+    "standing": "160a1da",
+    "association": "d9a264f"
+  },
+  "totals": {
+    "scans": 3436,
+    "raw_points": 98443,
+    "valid_fits": 3432
+  },
+  "option_bit_order": [
+    "evidence_confirmation",
+    "standing_support",
+    "joint_association"
+  ],
+  "equivalent_at_every_scan": {
+    "options_000": "premerge",
+    "options_100": "confirmation_reference",
+    "options_010": "standing_reference",
+    "options_001": "association_reference"
+  },
+  "track_fields_compared": {
+    "options_000": [
+      "track_id",
+      "x",
+      "P",
+      "stamp",
+      "last_moving",
+      "last_support",
+      "history",
+      "confirmed",
+      "hits",
+      "first_stamp",
+      "radial_speed",
+      "ghost"
+    ],
+    "options_100": [
+      "track_id",
+      "x",
+      "P",
+      "stamp",
+      "last_moving",
+      "last_support",
+      "history",
+      "confirmed",
+      "hits",
+      "first_stamp",
+      "radial_speed",
+      "ghost",
+      "confirmation_evidence"
+    ],
+    "options_010": [
+      "track_id",
+      "x",
+      "P",
+      "stamp",
+      "last_moving",
+      "last_support",
+      "history",
+      "confirmed",
+      "hits",
+      "first_stamp",
+      "radial_speed",
+      "ghost",
+      "standing_background",
+      "standing_anchor",
+      "standing_history",
+      "standing_verified"
+    ],
+    "options_001": [
+      "track_id",
+      "x",
+      "P",
+      "stamp",
+      "last_moving",
+      "last_support",
+      "history",
+      "confirmed",
+      "hits",
+      "first_stamp",
+      "radial_speed",
+      "ghost"
+    ]
+  },
+  "other_state_compared": [
+    "next_id",
+    "last_step",
+    "static_novel",
+    "background.weight",
+    "background.start",
+    "background.stamp",
+    "background.occupancy"
+  ],
+  "equivalence_limit": "Reference fields only; new fields absent from the reference class are excluded.",
+  "pytest": {
+    "passed": 153,
+    "by_suite": {
+      "test_accumulation.xunit": 17,
+      "test_accumulation_runtime.xunit": 2,
+      "test_classification.xunit": 5,
+      "test_cloud.xunit": 9,
+      "test_doppler.xunit": 19,
+      "test_ghost_candidates.xunit": 9,
+      "test_ghosts.xunit": 8,
+      "test_node_logic.xunit": 21,
+      "test_obstacles.xunit": 4,
+      "test_processing_runtime.xunit": 2,
+      "test_tracker.xunit": 34,
+      "test_vectorized_equivalence.xunit": 23
+    }
+  },
+  "package_lint": "Passed; four initial flake8 findings fixed and flake8 rerun.",
+  "ros_test_domains": [
+    178,
+    177
+  ],
+  "source_hashes": {
+    "smartmicro_processing/smartmicro_processing/tracker.py": "e6f1d80a053f2f319fde8f7759cc1f79f1a7365b59e1a3e4a8c0af53e502339b",
+    "smartmicro_processing/config/umrr96_processing.yaml": "d0d77e550dabca70bfb41eeb31120cf421e296f54bebb036b4d4001497ff0f55",
+    "tools/assessment/compare_tracker_worktrees.py": "40e1f2e86345e5644b1a6fdd242f7f489d6fc30884b6509a8e1c531675bf66b9"
+  },
+  "replay_reports": {
+    "walk": {
+      "path": "/home/jcfurey/robotics/resple_test_ws/results/umrr96-opt-in-integration-20260928/walk.json",
+      "sha256": "3c876b1768730ae2c24e5562cff6d6b585e893a50343422372dc1ee7de6a8b5a",
+      "totals": {
+        "scans": 1845,
+        "raw_points": 60251,
+        "valid_fits": 1841
+      },
+      "input_sha256": {
+        "results/umrr96-filtering-20260924/walk/0_walk_2026_09_24-22_45_08.mcap": "c220f795719b2c73c3a251704b0f7e6cdf2c95e01c6d3c11f3ef29c3008fab6c"
+      }
+    },
+    "static": {
+      "path": "/home/jcfurey/robotics/resple_test_ws/results/umrr96-opt-in-integration-20260928/static.json",
+      "sha256": "963aca5e3dbe98110e71b9070d7fdc22fe86b8278ab8db3edb249ee9cdc36252",
+      "totals": {
+        "scans": 1117,
+        "raw_points": 29503,
+        "valid_fits": 1117
+      },
+      "input_sha256": {
+        "results/umrr96-filtering-20260924/static/0_static_2026_09_24-22_40_23.mcap": "94438d55f3e7834845f25b90f005ed61d502591650e9440637ae4f3502d63953"
+      }
+    },
+    "quiet": {
+      "path": "/home/jcfurey/robotics/resple_test_ws/results/umrr96-opt-in-integration-20260928/quiet.json",
+      "sha256": "e289e3affc5b6339afb67a587265dd97b65cb4e305c96f5e78f8baa81cf2a054",
+      "totals": {
+        "scans": 474,
+        "raw_points": 8689,
+        "valid_fits": 474
+      },
+      "input_sha256": {
+        "results/umrr96-ingest-research-20260928/recovered/0_live_2026_09_28-09_54_56.mcap": "fc23672b3b94a24f9c92dce5325a8d5d9f9b991b1116723c5cb88fb2b0970676"
+      }
+    }
+  },
+  "variants": {
+    "options_000": {
+      "enabled": {
+        "evidence_confirmation": false,
+        "standing_support": false,
+        "joint_association": false
+      },
+      "walk_state_digest": "dbc6ab954b09ccdeeca81bffac337096027affc3083a4c5f45b4d74ef8cfdd86",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 591,
+          "near_track_present": 591,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 531
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 88,
+          "near_track_present": 88,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 53
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 63,
+          "near_track_present": 63,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 48
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    },
+    "options_001": {
+      "enabled": {
+        "evidence_confirmation": false,
+        "standing_support": false,
+        "joint_association": true
+      },
+      "walk_state_digest": "34bbbdab66cdf2957c4fdd4a5a2fa1307cfefc2cf2d47df863037bcd9b915e57",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 591,
+          "near_track_present": 591,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 531
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 88,
+          "near_track_present": 88,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 53
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 63,
+          "near_track_present": 63,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 48
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    },
+    "options_010": {
+      "enabled": {
+        "evidence_confirmation": false,
+        "standing_support": true,
+        "joint_association": false
+      },
+      "walk_state_digest": "e80124e60cd3fd84d4fcb2aed3a03973deb4258f24f29339ce2cd39047815977",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 591,
+          "near_track_present": 591,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 531
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 145,
+          "near_track_present": 145,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 98
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 108,
+          "near_track_present": 108,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 80
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    },
+    "options_011": {
+      "enabled": {
+        "evidence_confirmation": false,
+        "standing_support": true,
+        "joint_association": true
+      },
+      "walk_state_digest": "5030c3782b68a4d97016105d3f0b695e867ef77fc7ef98854e9f62976af5aa5d",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 591,
+          "near_track_present": 591,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 531
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 145,
+          "near_track_present": 145,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 98
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 108,
+          "near_track_present": 108,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 80
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    },
+    "options_100": {
+      "enabled": {
+        "evidence_confirmation": true,
+        "standing_support": false,
+        "joint_association": false
+      },
+      "walk_state_digest": "854012daf3931544b34b697ff3fd781df3bafdd8d4cb642e75bee7599fe9a225",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 593,
+          "near_track_present": 593,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 533
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 88,
+          "near_track_present": 88,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 53
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 64,
+          "near_track_present": 64,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 49
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    },
+    "options_101": {
+      "enabled": {
+        "evidence_confirmation": true,
+        "standing_support": false,
+        "joint_association": true
+      },
+      "walk_state_digest": "54a637905f6dd469c5942b7cc6274d5391e464bd6512da55150b184ea2f25e60",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 593,
+          "near_track_present": 593,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 533
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 88,
+          "near_track_present": 88,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 53
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 64,
+          "near_track_present": 64,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 49
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    },
+    "options_110": {
+      "enabled": {
+        "evidence_confirmation": true,
+        "standing_support": true,
+        "joint_association": false
+      },
+      "walk_state_digest": "bc870832808ff7b1bcf4fedf65e848bd8ed80e3c312a5670b7ce218242e25c4a",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 593,
+          "near_track_present": 593,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 533
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 145,
+          "near_track_present": 145,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 98
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 108,
+          "near_track_present": 108,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 80
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    },
+    "options_111": {
+      "enabled": {
+        "evidence_confirmation": true,
+        "standing_support": true,
+        "joint_association": true
+      },
+      "walk_state_digest": "58e393673afcc702922b72724d51df18155a52c76e67ea20a356110a8de2f7fe",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 593,
+          "near_track_present": 593,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 533
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 145,
+          "near_track_present": 145,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 98
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 108,
+          "near_track_present": 108,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 80
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        }
+      },
+      "quiet_visible_track_instances": 0
+    }
+  },
+  "limits": "Previously examined room recordings and range proxies, not independent labels. No physical trial or obstacle-layer evaluation. Current scan display stays unaccumulated. Uncertainty association remains off."
+}

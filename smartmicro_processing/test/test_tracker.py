@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+from itertools import product
+
 import numpy as np
 import pytest
 
@@ -121,6 +123,27 @@ def test_data_gap_longer_than_max_coast_drops_tracks():
 def test_invalid_config():
     with pytest.raises(ValueError):
         TrackerConfig(confirm_hits=6, confirm_window=5)
+
+
+@pytest.mark.parametrize('evidence,standing,joint', product((False, True), repeat=3))
+def test_options_compose_across_confirmation_stop_and_departure(evidence, standing, joint):
+    tracker = MovingObjectTracker(TrackerConfig(
+        evidence_confirmation=evidence, standing_support=standing, joint_association=joint))
+    wall = [[4., 0., 0.]]
+    for k in range(100):
+        tracker.step(k * DT, [], [], wall)
+    for k in range(100, 108):
+        stop = [1. + .5 * (k - 100) * DT, 0., 0.]
+        visible = tracker.step(k * DT, [stop], [.5], wall)
+        assert bool(visible) == (k >= (105 if evidence else 107))
+    for k in range(108, 348):
+        visible = tracker.step(k * DT, [], [], wall + [stop])
+        if standing:
+            assert len(visible) == 1 and visible[0].last_support == k * DT
+    assert bool(visible) == standing
+    for k in range(348, 373):
+        visible = tracker.step(k * DT, [], [], wall)
+    assert not visible
 
 
 def test_evidence_confirms_consistent_motion_in_six_scans_without_more_points():
@@ -255,3 +278,52 @@ def test_a_static_point_cannot_support_two_standing_tracks():
                                     0., 0., 0., confirmed=True, standing_background=frozenset()))
     selected = tracker.standing_observations(.5, np.array([[2., .05]]), False)
     assert len(selected[1]) == 0 and len(selected[2]) == 1
+
+
+def association_track(track_id, x, velocity=(0., 0.)):
+    return Track(track_id, np.r_[x, velocity], np.diag([.04, .04, 1., 1.]),
+                 0., 0., 0., [True] * 10, confirmed=True, hits=10)
+
+
+def test_joint_assignment_preserves_both_feasible_updates():
+    tracker = MovingObjectTracker(TrackerConfig(joint_association=True))
+    tracker.tracks = [association_track(1, [2., 0.]), association_track(2, [3., 0.])]
+    tracker.next_id = 3
+    tracker.step(DT, [[2.4, 0., 0.], [1.4, 0., 0.]], [-.5, -.5])
+    assert len(tracker.tracks) == 2
+    assert all(t.last_moving == DT for t in tracker.tracks)
+
+
+def test_signed_velocity_breaks_an_ambiguous_position_match():
+    tracker = MovingObjectTracker(
+        TrackerConfig(joint_association=True, association_uncertainty=True))
+    tracks = [association_track(1, [3., -.2], (.5, 0.)),
+              association_track(2, [3., .2], (-.5, 0.))]
+    for t in tracks:
+        t.P[2:, 2:] *= .01
+    # Positions slightly favor the opposite identity; Doppler favors continuity.
+    obs = [(np.array([3., .1]), .5, 1), (np.array([3., -.1]), -.5, 1)]
+    assert tracker.associate(tracks, obs) == {1: 0, 2: 1}
+    tracker.config.association_doppler = False
+    assert tracker.associate(tracks, obs) == {1: 1, 2: 0}
+
+
+def test_joint_assignment_allows_misses_and_never_reuses_an_observation():
+    tracker = MovingObjectTracker(TrackerConfig(joint_association=True))
+    tracks = [association_track(1, [2., 0.]), association_track(2, [2.1, 0.])]
+    assert len(tracker.associate(tracks, [(np.array([2.05, 0.]), 0., 1)])) == 1
+    assert tracker.associate(tracks, [(np.array([10., 0.]), 0., 1)]) == {}
+    assert tracker.associate(tracks, []) == {}
+    assert tracker.associate([], [(np.array([2., 0.]), 0., 1)]) == {}
+
+
+def test_joint_assignment_preserves_confirmed_priority_and_observation_permutation():
+    tracker = MovingObjectTracker(TrackerConfig(joint_association=True))
+    tracks = [association_track(1, [2., 0.]), association_track(2, [3., 0.])]
+    obs = [(np.array([2.4, 0.]), 0., 1), (np.array([1.4, 0.]), 0., 1)]
+    before = tracker.associate(tracks, obs)
+    after = tracker.associate(tracks[::-1], obs[::-1])
+    assert before == {k: 1-v for k, v in after.items()}
+    tracks[1].confirmed = False
+    tracks[1].x[:2] = [2.2, 0.]
+    assert tracker.associate(tracks, [(np.array([2.2, 0.]), 0., 1)]) == {1: 0}

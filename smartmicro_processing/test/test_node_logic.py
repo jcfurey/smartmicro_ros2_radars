@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """In-process node checks: parameters, empty clouds, pose steps, stamps and diagnostics."""
+from itertools import product
 import math
 import time
 
@@ -68,18 +69,23 @@ def test_integer_overrides_are_accepted_for_float_parameters(ros):
         node.destroy_node()
 
 
-def test_consistent_confirmation_uses_only_current_scan_positions(ros):
-    ros('evidence_confirmation:=true')
+@pytest.mark.parametrize('evidence,standing,joint', product((False, True), repeat=3))
+def test_tracker_options_use_only_current_scan_positions(ros, evidence, standing, joint):
+    options = {'evidence_confirmation': evidence, 'standing_support': standing,
+               'joint_association': joint}
+    ros(*(key + ':=' + str(value).lower() for key, value in options.items()))
     node = RadarProcessing()
     try:
-        assert node.tracker.config.evidence_confirmation
+        for key, value in options.items():
+            assert getattr(node.tracker.config, key) == value
+        node.diagnostics_pub = Recorder()
         node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
         node.audit_pub = Recorder()
         static = np.array([[3, 0, 0], [2, 1, 0], [2, -1, 0], [2, 0, 1], [2, 0, -1],
                            [3, 1, 1], [3, -1, -1], [2, 1, -1], [2, -1, 1]])
         rows = np.column_stack((static, np.zeros(9), np.full(9, 30)))
         start = node.get_clock().now().nanoseconds
-        for k in range(6):
+        for k in range(6 if evidence else 8):
             now = start + k * 55_000_000
             node.now_ns = lambda: now
             node.receive(cloud(now, np.vstack((rows, [1. + .5*k*.055, 0., 0., .5, 30.]))))
@@ -89,6 +95,10 @@ def test_consistent_confirmation_uses_only_current_scan_positions(ros):
         node.receive(cloud(now, rows))
         assert node.cloud_publishers['classified_targets'].messages[-1].width == 9
         assert node.cloud_publishers['tracked_targets'].messages[-1].width == 0
+        diagnostics = {v.key: v.value
+                       for v in node.diagnostics_pub.messages[-1].status[0].values}
+        for key, value in options.items():
+            assert diagnostics[key] == str(value)
     finally:
         node.destroy_node()
 
@@ -100,6 +110,18 @@ def test_standing_support_parameters_reach_the_tracker(ros):
         assert node.tracker.config.standing_support
         assert node.tracker.config.standing_hold == 30.
         assert node.describe_parameter('standing_support').read_only
+    finally:
+        node.destroy_node()
+
+
+def test_association_parameters_reach_the_tracker(ros):
+    ros('joint_association:=true', 'association_uncertainty:=false', 'association_doppler:=true')
+    node = RadarProcessing()
+    try:
+        assert node.tracker.config.joint_association
+        assert not node.tracker.config.association_uncertainty
+        assert node.tracker.config.association_doppler
+        assert node.describe_parameter('joint_association').read_only
     finally:
         node.destroy_node()
 

@@ -31,6 +31,10 @@
     # while the fitted sensor speed exceeds sensor_moving_speed for 3 scans.
     cluster_radius: 0.6
     gate: 1.2
+    # Independent opt-ins; launch arguments with the same names can override these.
+    joint_association: false  # one-to-one distance assignment, confirmed tracks first
+    association_uncertainty: false  # innovation gates regressed on the recorded walk
+    association_doppler: true  # only used if joint_association AND association_uncertainty
     confirm_hits: 8
     confirm_window: 10
     evidence_confirmation: false  # opt-in: six consistent hits can confirm

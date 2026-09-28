@@ -1,5 +1,8 @@
 # Experiment: standing support from a saved background
 
+> Historical isolated-worktree results. The merged implementation defaults off;
+> see [current launch options](../smartmicro_processing/README.md#opt-in-tracker-experiments).
+
 Branch `experiment/umrr96-standing`, based on shared checkpoint `3aee7a7`.
 The worktree YAML enables `standing_support` with a 30-second absolute hold cap;
 the Python feature default is false. Moving-point rejection and association are

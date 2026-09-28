@@ -8,15 +8,18 @@ controlled assignment failure, but the wider tests show no accuracy gain yet.
 
 All worktrees branch from **`3aee7a7`**, which checkpoints the preceding criteria
 and tracker audits. Each has its own implementation, active experimental YAML,
-build/install tree, tests and evidence. The main `cam_wip` processing defaults
-remain the shared baseline; none of the experiment branches is merged there.
+build/install tree, tests and evidence. At the time of this isolated comparison,
+the main `cam_wip` processing defaults remained the shared baseline and the
+experiment branches were unmerged. They have since been merged as independent,
+default-off options; see [integration validation](umrr96-opt-in-integration-20260928.md)
+and [launch switches](../smartmicro_processing/README.md#opt-in-tracker-experiments).
 The radar remained powered off, and no hardware commands were sent.
 
 | Worktree under workspace `worktrees/` | Branch | Commit | Report |
 |---|---|---|---|
-| `smartmicro-confirmation` | `experiment/umrr96-confirmation` | `5969945` | [Confirmation](../../../worktrees/smartmicro-confirmation/docs/experiment-confirmation.md) |
-| `smartmicro-standing` | `experiment/umrr96-standing` | `160a1da` | [Standing support](../../../worktrees/smartmicro-standing/docs/experiment-standing.md) |
-| `smartmicro-association` | `experiment/umrr96-association` | `d9a264f` | [Joint association](../../../worktrees/smartmicro-association/docs/experiment-association.md) |
+| `smartmicro-confirmation` | `experiment/umrr96-confirmation` | `5969945` | [Confirmation](experiment-confirmation.md) |
+| `smartmicro-standing` | `experiment/umrr96-standing` | `160a1da` | [Standing support](experiment-standing.md) |
+| `smartmicro-association` | `experiment/umrr96-association` | `d9a264f` | [Joint association](experiment-association.md) |
 
 ## Same-recording comparison
 

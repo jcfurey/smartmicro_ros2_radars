@@ -15,6 +15,7 @@ from rclpy.qos import qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py.point_cloud2 import create_cloud, read_points
+from smartmicro_processing.experiment_launch import EXPERIMENTS
 from std_msgs.msg import Header
 from umrr_ros2_msgs.msg import DetectionAudit
 import yaml
@@ -102,11 +103,27 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
         wait_for(lambda: any(s['state'] == state for s in statuses[start:]))
 
     try:
+        # The ordinary run checks shipped defaults. Replay checks YAML inheritance,
+        # explicit enable and explicit disable through the installed launch file.
+        experiment_args = []
+        expected_options = dict.fromkeys(EXPERIMENTS, False)
+        if sim_time:
+            config_path = tmp_path / 'processing.yaml'
+            with open(os.path.join(get_package_share_directory('smartmicro_processing'),
+                                   'config', 'umrr96_processing.yaml')) as stream:
+                config = yaml.safe_load(stream)
+            config['/**/umrr96_processing']['ros__parameters'].update(
+                standing_support=True, joint_association=True)
+            config_path.write_text(yaml.safe_dump(config))
+            experiment_args = ['params_file:=' + str(config_path),
+                               'evidence_confirmation:=true', 'joint_association:=false']
+            expected_options.update(evidence_confirmation=True, standing_support=True)
         with log_path.open('w') as log:
             child = subprocess.Popen([
                 'ros2', 'launch', 'smartmicro_processing', 'umrr96_processing.launch.py',
                 'input_topic:=/test_radar/targets', 'expected_frame_id:=test_sensor',
                 'use_sim_time:=' + str(sim_time).lower(),
+                *experiment_args,
             ], stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             wait_for(lambda: publisher.get_subscription_count() == 1
                      and node.count_publishers('/umrr96_processing/experimental_velocity') == 1
@@ -135,6 +152,8 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
             shown = read_points(outputs['classified_targets'][-1])
             np.testing.assert_array_equal(shown['x'], read_points(first)['x'])
             assert statuses[-1]['calibrated'] == 'False'
+            for key, value in expected_options.items():
+                assert statuses[-1][key] == str(value)
             count = len(velocities)
             send_expect(first, 'nonmonotonic_stamp')
             malformed = cloud()

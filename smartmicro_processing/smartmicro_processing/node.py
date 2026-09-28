@@ -56,6 +56,12 @@ TRACKER_PARAMETERS = {
                          'confirmed mover stopped; requires current static returns.',),
     'standing_hold': ('Absolute maximum static-only age under experimental standing support (s).',
                       .01, 600),
+    'joint_association': ('Experimental one-to-one global assignment '
+                          'within confirmed and tentative priority tiers.',),
+    'association_uncertainty': ('Use EKF innovation costs and gates instead of distance '
+                                'in joint assignment; requires covariance validation.',),
+    'association_doppler': ('Include signed radial-speed innovation when joint_association '
+                            'and association_uncertainty are both enabled.',),
     'cluster_radius': ('Moving targets closer than this form one measurement (m).', .05, 10),
     'gate': ('Association distance from a predicted track position (m).', .05, 20),
     'confirm_hits': ('Hits within confirm_window scans needed to confirm a track.', 1, 64, 1),
@@ -411,6 +417,11 @@ class RadarProcessing(Node):
                       velocity_reference='radar_measurement_origin',
                       time_basis='input_header_receive_time',
                       doppler_sign=self.fit_config.doppler_sign,
+                      evidence_confirmation=self.tracker.config.evidence_confirmation,
+                      standing_support=self.tracker.config.standing_support,
+                      joint_association=self.tracker.config.joint_association,
+                      association_uncertainty=self.tracker.config.association_uncertainty,
+                      association_doppler=self.tracker.config.association_doppler,
                       received=self.received, valid_fits=self.valid_fits,
                       rejected_inputs=self.rejected_inputs, last_velocity_age_seconds=age,
                       **self.stats)
