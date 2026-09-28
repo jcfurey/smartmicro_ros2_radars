@@ -68,6 +68,40 @@ def test_integer_overrides_are_accepted_for_float_parameters(ros):
         node.destroy_node()
 
 
+@pytest.mark.parametrize('reject_static', [True, False])
+def test_static_only_policy_agrees_across_clouds_audit_and_diagnostics(ros, reject_static):
+    ros('reject_static_only:=' + str(reject_static).lower())
+    node = RadarProcessing()
+    try:
+        node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
+        node.audit_pub = Recorder()
+        static = np.array([[3, 0, 0], [2, 1, 0], [2, -1, 0], [2, 0, 1], [2, 0, -1],
+                           [3, 1, 1], [3, -1, -1], [2, 1, -1], [2, -1, 1]])
+        points = np.vstack((np.column_stack((static, np.zeros(9), np.full(9, 30))),
+                            [6, 0, 0, 1, 30]))
+        now = node.get_clock().now().nanoseconds
+        message = cloud(now, points)
+        original = bytes(message.data)
+        node.receive(message)
+        assert node.state == 'valid'
+        assert bytes(message.data) == original
+        assert node.cloud_publishers['moving_targets'].messages[-1].width == int(not reject_static)
+        assert node.cloud_publishers['moving_ghosts'].messages[-1].width == int(reject_static)
+        audit = node.audit_pub.messages[-1]
+        assert audit.header == message.header
+        assert audit.source_index[-1] == 9
+        assert audit.reason_flags[-1] == DetectionAudit.GHOST_BEHIND_STATIC
+        expected = DetectionAudit.SUSPECTED_GHOST if reject_static else DetectionAudit.MOVING
+        assert audit.classification[-1] == expected
+        assert node.stats['static_only_advisory'] == int(not reject_static)
+        assert node.stats['reject_static_only'] == reject_static
+        node.receive(cloud(now + 1_000_000, points[:-1]))
+        assert node.cloud_publishers['moving_targets'].messages[-1].width == 0
+        assert node.cloud_publishers['classified_targets'].messages[-1].width == 9
+    finally:
+        node.destroy_node()
+
+
 def test_accumulation_integer_rate_and_non_numeric_rejection(ros):
     ros('publish_hz:=5', 'voxel_size:=1', 'mode:=stationary_preview')
     node = RadarAccumulation()

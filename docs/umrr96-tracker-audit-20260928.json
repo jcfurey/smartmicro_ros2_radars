@@ -1,0 +1,329 @@
+{
+  "scope": "Unmodified tracker, current YAML point policy; no live sensor, DDS or obstacle evaluation.",
+  "limits": "Room-range proxies only in documented present phases; joint matches are one-step possibilities, not evaluated trajectories or identities.",
+  "phases_s": {
+    "walking": [
+      6,
+      40
+    ],
+    "standing": [
+      42,
+      50
+    ],
+    "swaying": [
+      50,
+      56
+    ]
+  },
+  "counts": {
+    "walking": {
+      "scans": 618,
+      "raw_points": 22226,
+      "quality_points": 22226,
+      "movers": 4027,
+      "point_ghosts": 2658,
+      "retained_movers": 1369,
+      "direct_proxy_movers": 1244,
+      "direct_proxy_point_rejected": 54,
+      "ghost_proxy_movers": 2610,
+      "ghost_proxy_point_rejected": 2484,
+      "greedy_hits": 723,
+      "joint_one_step_hits": 724,
+      "frames_with_multiple_existing_tracks": 509,
+      "frames_with_joint_extra_hit": 1,
+      "frames_with_different_assignment": 9,
+      "person_proxy_track_present": 591,
+      "far_track_present": 10,
+      "direct_proxy_retained_tentative": 180,
+      "ghost_proxy_retained_tentative": 122,
+      "direct_proxy_retained_visible_confirmed": 1003,
+      "failed_fits": 4,
+      "direct_proxy_retained_no_nearby_track": 7,
+      "ghost_proxy_retained_visible_confirmed": 3,
+      "hidden_track_instances": 46,
+      "hidden_track_instances_with_current_moving_hit": 2,
+      "ghost_proxy_retained_ghost_hidden": 1
+    },
+    "standing": {
+      "scans": 145,
+      "raw_points": 4482,
+      "quality_points": 4482,
+      "movers": 0,
+      "point_ghosts": 0,
+      "retained_movers": 0,
+      "direct_proxy_movers": 0,
+      "direct_proxy_point_rejected": 0,
+      "ghost_proxy_movers": 0,
+      "ghost_proxy_point_rejected": 0,
+      "greedy_hits": 0,
+      "joint_one_step_hits": 0,
+      "frames_with_multiple_existing_tracks": 0,
+      "frames_with_joint_extra_hit": 0,
+      "frames_with_different_assignment": 0,
+      "person_proxy_track_present": 88,
+      "far_track_present": 0
+    },
+    "swaying": {
+      "scans": 108,
+      "raw_points": 3401,
+      "quality_points": 3401,
+      "movers": 107,
+      "point_ghosts": 30,
+      "retained_movers": 77,
+      "direct_proxy_movers": 34,
+      "direct_proxy_point_rejected": 0,
+      "ghost_proxy_movers": 72,
+      "ghost_proxy_point_rejected": 29,
+      "greedy_hits": 53,
+      "joint_one_step_hits": 53,
+      "frames_with_multiple_existing_tracks": 65,
+      "frames_with_joint_extra_hit": 0,
+      "frames_with_different_assignment": 1,
+      "person_proxy_track_present": 63,
+      "far_track_present": 0,
+      "direct_proxy_retained_tentative": 19,
+      "direct_proxy_retained_no_nearby_track": 3,
+      "ghost_proxy_retained_tentative": 21,
+      "direct_proxy_retained_visible_confirmed": 12,
+      "ghost_proxy_retained_ghost_hidden": 22,
+      "hidden_track_instances": 32,
+      "hidden_track_instances_with_current_moving_hit": 17
+    },
+    "whole_bag_unlabeled": {
+      "scans": 1845,
+      "raw_points": 60251,
+      "quality_points": 60251,
+      "movers": 4904,
+      "point_ghosts": 3008,
+      "retained_movers": 1896,
+      "greedy_hits": 1052,
+      "joint_one_step_hits": 1053,
+      "frames_with_multiple_existing_tracks": 770,
+      "frames_with_joint_extra_hit": 1,
+      "frames_with_different_assignment": 17,
+      "failed_fits": 4,
+      "hidden_track_instances": 100,
+      "hidden_track_instances_with_current_moving_hit": 24
+    }
+  },
+  "confirmation_exploration": {
+    "protocol": "Exploratory shorter windows on the same opened bag; all other settings, inputs and point decisions fixed; no new holdout.",
+    "variants": {
+      "current": {
+        "confirm_hits": 8,
+        "confirm_window": 10,
+        "phases": {
+          "walking": {
+            "scans": 618,
+            "person_proxy_track_present": 591,
+            "far_track_present": 10,
+            "direct_proxy_retained_on_track": 1003,
+            "ghost_proxy_retained_on_track": 3
+          },
+          "standing": {
+            "scans": 145,
+            "person_proxy_track_present": 88,
+            "far_track_present": 0,
+            "direct_proxy_retained_on_track": 0,
+            "ghost_proxy_retained_on_track": 0
+          },
+          "swaying": {
+            "scans": 108,
+            "person_proxy_track_present": 63,
+            "far_track_present": 0,
+            "direct_proxy_retained_on_track": 12,
+            "ghost_proxy_retained_on_track": 0
+          }
+        }
+      },
+      "six_of_eight": {
+        "confirm_hits": 6,
+        "confirm_window": 8,
+        "phases": {
+          "walking": {
+            "scans": 618,
+            "person_proxy_track_present": 595,
+            "far_track_present": 20,
+            "direct_proxy_retained_on_track": 1038,
+            "ghost_proxy_retained_on_track": 7
+          },
+          "standing": {
+            "scans": 145,
+            "person_proxy_track_present": 88,
+            "far_track_present": 0,
+            "direct_proxy_retained_on_track": 0,
+            "ghost_proxy_retained_on_track": 0
+          },
+          "swaying": {
+            "scans": 108,
+            "person_proxy_track_present": 65,
+            "far_track_present": 13,
+            "direct_proxy_retained_on_track": 20,
+            "ghost_proxy_retained_on_track": 1
+          }
+        }
+      },
+      "four_of_five": {
+        "confirm_hits": 4,
+        "confirm_window": 5,
+        "phases": {
+          "walking": {
+            "scans": 618,
+            "person_proxy_track_present": 607,
+            "far_track_present": 28,
+            "direct_proxy_retained_on_track": 1067,
+            "ghost_proxy_retained_on_track": 14
+          },
+          "standing": {
+            "scans": 145,
+            "person_proxy_track_present": 88,
+            "far_track_present": 0,
+            "direct_proxy_retained_on_track": 0,
+            "ghost_proxy_retained_on_track": 0
+          },
+          "swaying": {
+            "scans": 108,
+            "person_proxy_track_present": 67,
+            "far_track_present": 14,
+            "direct_proxy_retained_on_track": 23,
+            "ghost_proxy_retained_on_track": 3
+          }
+        }
+      }
+    }
+  },
+  "config": {
+    "gate": {
+      "min_range": 0.15,
+      "max_range": 120.0,
+      "min_snr_db": 6.0
+    },
+    "fit": {
+      "doppler_sign": 1,
+      "residual_threshold": 0.05,
+      "min_inliers": 8,
+      "min_inlier_fraction": 0.6,
+      "max_condition": 30.0,
+      "ransac_trials": 128,
+      "noise_floor": 0.02,
+      "velocity_std_floor": 0.05,
+      "max_velocity_std": 1.0,
+      "max_speed": 15.0
+    },
+    "ghost": {
+      "range_gap": 1.5,
+      "speed_tolerance": 0.25,
+      "wall_azimuth_deg": 4.0
+    },
+    "tracker": {
+      "cluster_radius": 0.6,
+      "gate": 1.2,
+      "position_std": 0.15,
+      "radial_speed_std": 0.1,
+      "accel_std": 2.0,
+      "confirm_hits": 8,
+      "confirm_window": 10,
+      "max_coast": 1.0,
+      "static_hold": 5.0,
+      "static_gate": 0.5,
+      "ghost_range_gap": 1.5,
+      "ghost_speed_tolerance": 0.25,
+      "background_range_bin": 0.5,
+      "background_azimuth_bin_deg": 3.0,
+      "background_time_constant": 30.0,
+      "background_threshold": 0.3,
+      "background_warmup": 3.0
+    },
+    "reject_static_only": true,
+    "track_radius": 0.8,
+    "sensor_moving_speed": 0.05
+  },
+  "counterexamples": {
+    "greedy_assignment": {
+      "predicted_xy": [
+        [
+          2.0,
+          0.0
+        ],
+        [
+          3.0,
+          0.0
+        ]
+      ],
+      "measurement_xy": [
+        [
+          2.4,
+          0.0
+        ],
+        [
+          1.4,
+          0.0
+        ]
+      ],
+      "gate_m": 1.2,
+      "greedy": {
+        "1": 0
+      },
+      "joint": {
+        "1": 1,
+        "2": 0
+      },
+      "extra_tentative_tracks_after_actual_step": 1
+    },
+    "opposite_motion_ghost": {
+      "near_xy": [
+        2.0,
+        0.0
+      ],
+      "far_xy": [
+        4.0,
+        4.0
+      ],
+      "radial_speeds": [
+        0.5,
+        -0.5
+      ],
+      "bearing_separation_deg": 45.0,
+      "confirmed_far_track_hidden": true,
+      "scope": "Track-stage counterexample with supplied detections, not end-to-end retained data."
+    },
+    "cluster_cancellation": {
+      "two_measurements_apart_m": 0.4,
+      "input_radial_speeds": [
+        0.5,
+        -0.5
+      ],
+      "cluster_count": 1,
+      "mean_radial_speed": 0.0
+    },
+    "limit": "Synthetic isolated mechanisms, not measured multi-person accuracy."
+  },
+  "source_sha256": {
+    "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/tools/assessment/audit_tracker_losses.py": "2198059164ee40461bd3a406181f9be96c2f1f4c1eaa7b0d2cbb7f2f7c50bfdd",
+    "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/config/umrr96_processing.yaml": "7bb7ed8af702b4a18aff2fc91405818db18540763a3e612de76985b7691f1f69",
+    "results/umrr96-filtering-20260924/walk/0_walk_2026_09_24-22_45_08.mcap": "c220f795719b2c73c3a251704b0f7e6cdf2c95e01c6d3c11f3ef29c3008fab6c",
+    "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/tracker.py": "bef1689287e9edfc1be5e6ff6a0bde9b1e4a2b3766bb784c982de097f721b1f2",
+    "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/ghosts.py": "44ed4e7514e9ffb4426dba77395517372ffcb001b47bc28fbb65d1b32b6329c2",
+    "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/doppler.py": "3a0ba7296d376a17ad566ae9c83edb0e3a8ee38f95084d10c0c8d8bdecec75d8",
+    "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/cloud.py": "5b91a6b09b2596b74d0a479842ef1b5e17f6a4b3d25c887bdda5901f52d0ea76",
+    "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/obstacles.py": "6eb7b92deb7ba37437c759fbd92f383946d6f0637accf16fa0556ab84a4ed569"
+  },
+  "validation": {
+    "baseline_phase_track_and_point_counts_match_previous_criteria_replay": true,
+    "retained_point_categories_partition_all_scored_retained_movers": true,
+    "diagnostic_greedy_matches_verified_against_actual_updates_every_scan": 1845,
+    "single_tier_joint_assignment_matches_exhaustive_optima": {
+      "seed": 20260928,
+      "random_graphs": 100,
+      "max_tracks": 4,
+      "max_measurements": 4,
+      "gate_m": 1.2
+    },
+    "synthetic_counterexamples_assertions_passed": 3,
+    "source_hashes_verified": true
+  },
+  "full_report": {
+    "path": "results/umrr96-tracker-audit-20260928/walk-final.json",
+    "sha256": "47d2d89cc1a736336878f708b7293aa011b2a6b2456cfbc59f414f2d0ff9d673"
+  }
+}

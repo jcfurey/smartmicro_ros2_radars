@@ -25,7 +25,8 @@ COLORS = np.array([0x888888, 0xFFC94A, 0xEBEBEB, 0xFFAA96, 0x5A8CFF], dtype=np.u
 TRACK_COLOR = 0xFF3C28
 
 
-def classify(header, values, gate_config, fit, indices, mover_reasons, tracked_indices):
+def classify(header, values, gate_config, fit, indices, mover_reasons, tracked_indices,
+             ghost_rejected=None):
     """Classify every original row, keeping independent ghost triggers and raw indices."""
     labels = np.full(len(values), DetectionAudit.REJECTED, dtype=np.uint8)
     reasons = np.zeros(len(values), dtype=np.uint16)
@@ -36,7 +37,11 @@ def classify(header, values, gate_config, fit, indices, mover_reasons, tracked_i
     if fit.valid:
         labels[indices[fit.inliers]] = DetectionAudit.STATIC
         movers = indices[~fit.inliers]
-        labels[movers] = np.where(mover_reasons != 0, DetectionAudit.SUSPECTED_GHOST,
+        rejected = (mover_reasons != 0 if ghost_rejected is None
+                    else np.asarray(ghost_rejected, dtype=bool))
+        if rejected.shape != (len(movers),):
+            raise ValueError('Ghost rejection decisions must match the moving detections')
+        labels[movers] = np.where(rejected, DetectionAudit.SUSPECTED_GHOST,
                                   DetectionAudit.MOVING)
         for flag, code in ((GhostReason.SAME_SPEED, DetectionAudit.GHOST_SAME_SPEED),
                            (GhostReason.DOUBLE_SPEED, DetectionAudit.GHOST_DOUBLE_SPEED),

@@ -15,6 +15,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_classification test/test_classification.py TIMEOUT 30)
   ament_add_pytest_test(test_accumulation test/test_accumulation.py TIMEOUT 30)
   ament_add_pytest_test(test_ghosts test/test_ghosts.py TIMEOUT 30)
+  ament_add_pytest_test(test_ghost_candidates test/test_ghost_candidates.py TIMEOUT 30)
   ament_add_pytest_test(test_tracker test/test_tracker.py TIMEOUT 30)
   ament_add_pytest_test(test_obstacles test/test_obstacles.py TIMEOUT 30)
   ament_add_pytest_test(test_vectorized_equivalence test/test_vectorized_equivalence.py

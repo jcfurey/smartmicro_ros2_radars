@@ -219,6 +219,12 @@ adopted from its abstract. See the
 
 ## Next experiment
 
+The [rejection-criteria follow-up](umrr96-rejection-criteria-20260928.md) now covers
+53 recordings from the other 18 source scenes and replays the recorded UMRR walk.
+It tests signed-speed/direction/support hypotheses and adds an optional
+static-only advisory policy, retaining the original live default. The broader
+association and reflector-model experiments below remain future work.
+
 Preserve all current-scan measurements and keep a suspected/ambiguous label when
 path evidence is weak. First compare covariance-aware global association with
 the current association, holding clustering fixed. Separately compare optional

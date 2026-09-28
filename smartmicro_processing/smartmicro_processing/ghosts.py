@@ -48,7 +48,7 @@ def ghost_reasons(mover_xyz, mover_speed, static_xyz, config=GhostConfig()):
     ranges = np.linalg.norm(mover_xyz, axis=1)
     farther = ranges[:, None] - ranges[None, :] > config.range_gap
     same_speed = np.abs(speed[:, None] - speed[None, :]) < config.speed_tolerance
-    # A second-order bounce (radar-target-wall-target-radar) roughly doubles the speed.
+    # Historical doubled-speed heuristic, not a general physical bounce-order model.
     double_speed = np.abs(speed[:, None] - 2 * speed[None, :]) < 2 * config.speed_tolerance
     reasons = np.zeros(len(mover_xyz), dtype=np.uint8)
     reasons[np.any(farther & same_speed, axis=1)] |= int(GhostReason.SAME_SPEED)
@@ -63,6 +63,27 @@ def ghost_reasons(mover_xyz, mover_speed, static_xyz, config=GhostConfig()):
     return reasons
 
 
-def ghost_mask(mover_xyz, mover_speed, static_xyz, config=GhostConfig()):
-    """Return True for movers classified as multipath ghosts."""
-    return ghost_reasons(mover_xyz, mover_speed, static_xyz, config) != 0
+def ghost_rejection_mask(reasons, *, reject_static_only=True):
+    """
+    Separate recorded hypotheses from the policy that suppresses a return.
+
+    With reject_static_only=False, a nearer static detection is an advisory
+    reason. Same/double-speed triggers still suppress the return. The default
+    preserves the established behavior for existing callers and recordings.
+    """
+    if not isinstance(reject_static_only, (bool, np.bool_)):
+        raise ValueError('reject_static_only must be a boolean')
+    reasons = np.asarray(reasons, dtype=np.uint8)
+    if reasons.ndim != 1:
+        raise ValueError('Ghost reasons must be a vector')
+    allowed = int(GhostReason.SAME_SPEED | GhostReason.DOUBLE_SPEED)
+    if reject_static_only:
+        allowed |= int(GhostReason.BEHIND_STATIC)
+    return (reasons & allowed) != 0
+
+
+def ghost_mask(mover_xyz, mover_speed, static_xyz, config=GhostConfig(), *,
+               reject_static_only=True):
+    """Return rejection decisions, optionally treating static-only evidence as advisory."""
+    return ghost_rejection_mask(ghost_reasons(mover_xyz, mover_speed, static_xyz, config),
+                                reject_static_only=reject_static_only)

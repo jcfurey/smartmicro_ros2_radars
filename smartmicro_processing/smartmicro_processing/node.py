@@ -22,7 +22,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from .classification import classified_cloud, classify, cleared_audit
 from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
 from .doppler import fit_velocity, FitConfig
-from .ghosts import ghost_reasons, GhostConfig, GhostReason
+from .ghosts import ghost_reasons, ghost_rejection_mask, GhostConfig, GhostReason
 from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter
 from .ros_support import declare, DiagnosticsRateLimiter
 from .tracker import MovingObjectTracker, TrackerConfig
@@ -45,8 +45,7 @@ FIT_PARAMETERS = {
     'max_speed': ('Reject fits faster than this sensor speed (m/s).', .01, 300),
 }
 GHOST_PARAMETERS = {
-    'range_gap': ('A mover this much farther than a nearer same-speed mover or a static '
-                  'return at its bearing is a multipath ghost (m).', .1, 20),
+    'range_gap': ('Minimum extra range for speed-copy or behind-static hypotheses (m).', .1, 20),
     'speed_tolerance': ('Compensated-speed match for the same-speed ghost rule (m/s).', .01, 5),
     'wall_azimuth_deg': ('Bearing match for the behind-static-return ghost rule (deg).', .1, 30),
 }
@@ -127,6 +126,10 @@ class RadarProcessing(Node):
         self.fit_config = _declare_config(self, FitConfig, FIT_PARAMETERS)
         self.gate_config = _declare_config(self, GateConfig, GATE_PARAMETERS)
         self.ghost_config = _declare_config(self, GhostConfig, GHOST_PARAMETERS)
+        self.reject_static_only = declare(
+            self, 'reject_static_only', True,
+            'Reject on a nearer static return alone; false keeps that reason advisory '
+            'while preserving the same/double-speed rejection rules.')
         self.tracker_config = _declare_config(self, TrackerConfig, TRACKER_PARAMETERS)
         self.tracker = MovingObjectTracker(self.tracker_config)
         self.sensor_moving_speed = declare(
@@ -255,7 +258,8 @@ class RadarProcessing(Node):
             movers = ~result.inliers
             mover_reasons = ghost_reasons(selected[movers, :3], result.residuals[movers],
                                           selected[result.inliers, :3], self.ghost_config)
-            ghosts = mover_reasons != 0
+            ghosts = ghost_rejection_mask(mover_reasons,
+                                          reject_static_only=self.reject_static_only)
             moving = indices[movers][~ghosts]
             local = np.flatnonzero(movers)[~ghosts]
             speed = float(np.linalg.norm(result.velocity))
@@ -302,6 +306,7 @@ class RadarProcessing(Node):
                                ('ghost_double_speed', GhostReason.DOUBLE_SPEED),
                                ('ghost_behind_static', GhostReason.BEHIND_STATIC)):
                 stats[name] = int(((mover_reasons & flag) != 0).sum())
+            stats['static_only_advisory'] = int(((mover_reasons != 0) & ~ghosts).sum())
         else:
             # No valid static/moving split: tracks coast (a recorded miss) and stay marked;
             # fail conservative and pass every quality target through persistence alone
@@ -318,12 +323,14 @@ class RadarProcessing(Node):
                           'unclassified_targets': indices}
             stats.update(inliers=0, outliers=0, moving=0, ghosts=0, tracks=len(tracks),
                          obstacles=len(obstacles), unclassified=len(indices),
-                         ghost_same_speed=0, ghost_double_speed=0, ghost_behind_static=0)
+                         ghost_same_speed=0, ghost_double_speed=0, ghost_behind_static=0,
+                         static_only_advisory=0)
             mover_reasons = np.empty(0, dtype=np.uint8)
         for name, subset in partitions.items():
             self.cloud_publishers[name].publish(subset_cloud(cloud, subset))
         audit = classify(cloud.header, values, self.gate_config, result, indices,
-                         mover_reasons, partitions['tracked_targets'])
+                         mover_reasons, partitions['tracked_targets'],
+                         ghost_rejected=ghosts if result.valid else None)
         display = classified_cloud(cloud.header, values, audit)
         self.audit_pub.publish(audit)
         self.cloud_publishers['classified_targets'].publish(display)
@@ -331,6 +338,7 @@ class RadarProcessing(Node):
         self.outputs_hold_data = True
         self.state = result.reason
         stats.update(stamp_ns=stamp, receive_age_seconds=age, sensor_moving=self.sensor_moving,
+                     reject_static_only=self.reject_static_only,
                      background_ready=self.tracker.background.ready,
                      processing_ms=1000 * (time.monotonic() - start))
         self.stats = stats

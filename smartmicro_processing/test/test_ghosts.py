@@ -4,7 +4,7 @@ import math
 import numpy as np
 import pytest
 
-from smartmicro_processing.ghosts import ghost_mask, GhostConfig
+from smartmicro_processing.ghosts import ghost_mask, ghost_rejection_mask, GhostConfig
 
 
 def polar(r, az_deg):
@@ -42,3 +42,19 @@ def test_empty_inputs():
 def test_invalid_config():
     with pytest.raises(ValueError):
         GhostConfig(range_gap=0)
+
+
+def test_static_only_policy_preserves_all_other_rejection_triggers():
+    reasons = np.arange(8, dtype=np.uint8)
+    assert ghost_rejection_mask(reasons).tolist() == [False] + [True] * 7
+    assert ghost_rejection_mask(reasons, reject_static_only=False).tolist() == [
+        False, True, True, True, False, True, True, True]
+    np.testing.assert_array_equal(reasons, np.arange(8, dtype=np.uint8))
+    with pytest.raises(ValueError):
+        ghost_rejection_mask(reasons, reject_static_only='false')
+
+
+def test_static_only_advisory_does_not_disable_speed_copy_rejection():
+    assert not ghost_mask([[6, 0, 0]], [1.], [[3, 0, 0]], reject_static_only=False)[0]
+    assert ghost_mask([[2, 0, 0], [6, 0, 0]], [1., 1.], [[3, 0, 0]],
+                      reject_static_only=False).tolist() == [False, True]

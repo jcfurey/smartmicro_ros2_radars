@@ -1,0 +1,2669 @@
+{
+  "date": "2026-09-28",
+  "checkpoint_commit": "c22535e",
+  "dataset_root": "/run/media/jcfurey/Bulk-Storage/RadarGhostDataset/v1.1",
+  "scope": "Offline criteria comparison and optional static-only advisory implementation; radar powered off; live default unchanged.",
+  "decision": {
+    "runtime_parameter": "reject_static_only",
+    "default": true,
+    "experimental_value": false,
+    "candidate_variants_wired_to_runtime": false,
+    "tracker_changed": false,
+    "point_history_added": false
+  },
+  "protocol": {
+    "development_scenes": [
+      11,
+      13,
+      21
+    ],
+    "larger_comparison_scenes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      12,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "selection": "Smallest compressed original member per class and virtual member per scene, independent of labels; no original pedestrian recording exists for scene 09.",
+    "original_recordings": 35,
+    "virtual_recordings": 18,
+    "frozen_before_larger_comparison": [
+      "signed_pair",
+      "aligned_pair",
+      "supported_copy"
+    ],
+    "exploratory_followup": "no_static_only added after inspecting the initial larger comparison; the same 53 files are not a new holdout.",
+    "label_contract": "Confident direct labels ending in 11; specified ghosts order 2/4/6; generic order 0 separate; direct-ambiguous order 3, groups, negative/uncertain, background, noise, ignore and invalid labels excluded.",
+    "adaptation_limits": "Public dataset uses 2D XYZ, fixed zero ego velocity and no SNR gate, ego fit, tracker or accumulation. Amplitude is not SNR. Virtual recordings are constructed overlays.",
+    "sampling_limits": "Detection-weighted descriptive rates; correlated frames/points; selected short/small recordings are not representative of the full release or UMRR hardware.",
+    "dataset_compute_environment": {
+      "python": "3.14",
+      "numpy": "2.3.5",
+      "h5py": "3.16.0",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "full_reports": {
+    "pilot-final.json": {
+      "path": "results/umrr96-rejection-20260928/pilot-final.json",
+      "sha256": "dcc46e3779e79f039faa1beb1b253e662e654d38fcdf8e566fc60ce5c3bed8ce"
+    },
+    "pilot-final.selection.json": {
+      "path": "results/umrr96-rejection-20260928/pilot-final.selection.json",
+      "sha256": "7f4aca1907dee4526d582280e7cb0d37d7092ab5f2387d61e416bdf44782f0e8"
+    },
+    "held-out.json": {
+      "path": "results/umrr96-rejection-20260928/held-out.json",
+      "sha256": "a558093fe848f3fe01373d867d11e61b69f894697d3eafc58b15fd5b87d5cac9"
+    },
+    "held-out.selection.json": {
+      "path": "results/umrr96-rejection-20260928/held-out.selection.json",
+      "sha256": "80d26a5e37cc5d422384763a66e9fd1417b108c38ec048fc5ffeff746cd36db7"
+    },
+    "held-out-followup.json": {
+      "path": "results/umrr96-rejection-20260928/held-out-followup.json",
+      "sha256": "c916fbe2bd567c913ea53a668eca0e5f7e759207ba8a5c4f7dcc4a5a11d487a1"
+    },
+    "held-out-followup.selection.json": {
+      "path": "results/umrr96-rejection-20260928/held-out-followup.selection.json",
+      "sha256": "80d26a5e37cc5d422384763a66e9fd1417b108c38ec048fc5ffeff746cd36db7"
+    },
+    "walk-final.json": {
+      "path": "results/umrr96-rejection-20260928/walk-final.json",
+      "sha256": "bfb02b43d379423ba3cedbba7a8c3c664fb89618d46b83e7fa08a9d8f8475bcd"
+    },
+    "default-replay.json": {
+      "path": "results/umrr96-rejection-20260928/default-replay.json",
+      "sha256": "48e17376882930a11a7fbb7ae35937ea33fec8d7da2f0b7c7b3a084a9142cf34"
+    }
+  },
+  "source_equivalence": {
+    "smartmicro_processing/smartmicro_processing/ghosts.py": {
+      "evaluated_sha256": "5261d67989dde0659ea7f187686c79f838d3f98f3d43ecb72f55d29fd055252d",
+      "current_sha256": "44ed4e7514e9ffb4426dba77395517372ffcb001b47bc28fbb65d1b32b6329c2",
+      "normalized_ast_equal_after_removing_docstrings": true,
+      "snapshot": "results/umrr96-rejection-20260928/evaluated-source/ghosts.py"
+    },
+    "smartmicro_processing/smartmicro_processing/ghost_candidates.py": {
+      "evaluated_sha256": "43e69fafbe97fbb944cc32ae68ffa7a36f4b57c2985fb0516aa8e3e70efe1e32",
+      "current_sha256": "0e0cd26919dd6fe1950b5e1493bfdc95214c4dc12ea7534ab8e36038881be172",
+      "normalized_ast_equal_after_removing_docstrings": true,
+      "snapshot": "results/umrr96-rejection-20260928/evaluated-source/ghost_candidates.py"
+    }
+  },
+  "source_equivalence_note": "Held-out follow-up hashes are preserved. Subsequent docstring/lint formatting and comments change source bytes only; evaluated snapshots match those hashes and normalized Python ASTs match current code. Final pilot/walk hashes match current source exactly.",
+  "pilot": {
+    "adaptation": {
+      "range_m": [
+        0.15,
+        120
+      ],
+      "stationary_speed_max_m_s": 0.05
+    },
+    "legacy_config": {
+      "range_gap": 1.5,
+      "speed_tolerance": 0.25,
+      "wall_azimuth_deg": 4.0
+    },
+    "candidate_config": {
+      "range_gap": 1.5,
+      "speed_tolerance": 0.25,
+      "direction_deg": 4.0,
+      "support_radius": 0.6
+    },
+    "scope": "Current-scan point stage only; no SNR gate, ego fit, tracker or accumulation",
+    "source_sha256": {
+      "tools/assessment/compare_ghost_criteria.py": "f5a5279c953b9a991b207e481db3e912a0e9c96b379d35cc05232587b9cfa885",
+      "smartmicro_processing/smartmicro_processing/ghost_candidates.py": "0e0cd26919dd6fe1950b5e1493bfdc95214c4dc12ea7534ab8e36038881be172",
+      "smartmicro_processing/smartmicro_processing/ghosts.py": "44ed4e7514e9ffb4426dba77395517372ffcb001b47bc28fbb65d1b32b6329c2",
+      "tools/assessment/assess_ghost_dataset.py": "bab9fa832a96817c25a63bc7f43361377b1ccce4d822beb3113ce8568e5ca4d4"
+    },
+    "timing_ms": {
+      "legacy": {
+        "p50": 2.6947125,
+        "p95": 5.501978449999999,
+        "p99": 5.9408221,
+        "max": 10.076394
+      },
+      "candidate_three_ablations": {
+        "p50": 3.348883,
+        "p95": 7.030782449999999,
+        "p99": 7.7280438,
+        "max": 10.612114
+      }
+    },
+    "recordings": 6,
+    "rows": 672986,
+    "sensor_frame_groups": 1300,
+    "sources": [
+      {
+        "name": "virtual/test/scenario-11_sequences-02-02-03_start-frames-143-037-118_cycl-cycl-ped_test.h5",
+        "bytes": 10413075,
+        "compressed_bytes": 4826525,
+        "crc32": "c41e06f8",
+        "archive": "virtual.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+        "archive_bytes": 8313881790,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "eaf1aed6498be78451d582c2fa8135a8d9c066f6cdae49d2ced5a4b474e58dc8",
+        "member_crc_verified": true,
+        "rows": 14978,
+        "sensor_frames": 24
+      },
+      {
+        "name": "virtual/train/scenario-13_sequences-01-05-05-06_start-frames-013-123-166-019_cycl-ped-ped-ped_train.h5",
+        "bytes": 32082225,
+        "compressed_bytes": 15621324,
+        "crc32": "0cc076f2",
+        "archive": "virtual.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+        "archive_bytes": 8313881790,
+        "reason": "Exact sequence named in MPET-GLMB paper; virtual overlay",
+        "sha256": "164e0e9476dcc348e35b02701bac915071826358393984d06e079dc880f3b57c",
+        "member_crc_verified": true,
+        "rows": 31012,
+        "sensor_frames": 56
+      },
+      {
+        "name": "virtual/train/scenario-21_sequences-03-06-06_start-frames-001-074-006_cycl-ped-ped_train.h5",
+        "bytes": 7302467,
+        "compressed_bytes": 3289747,
+        "crc32": "1f2d8745",
+        "archive": "virtual.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/virtual.zip/content",
+        "archive_bytes": 8313881790,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "e5a739ac8aec69e3446779f56597458d563b6f6d94fb9293f2016990fa7fb047",
+        "member_crc_verified": true,
+        "rows": 11757,
+        "sensor_frames": 24
+      },
+      {
+        "name": "original/test/scenario-11_sequence-02_cycl_test.h5",
+        "bytes": 74428620,
+        "compressed_bytes": 27414502,
+        "crc32": "2688aa02",
+        "archive": "original.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+        "archive_bytes": 5818814597,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "4e15fb417f1d7e2405093e61809c6375ce4b2b1bd586a327f2d01e4ad773cdc9",
+        "member_crc_verified": true,
+        "rows": 194219,
+        "sensor_frames": 325
+      },
+      {
+        "name": "original/train/scenario-13_sequence-02_cycl_train.h5",
+        "bytes": 109241051,
+        "compressed_bytes": 42364711,
+        "crc32": "8cd31182",
+        "archive": "original.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+        "archive_bytes": 5818814597,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "35aa9ae1a403070d6794b18cd8ed4b0280727d9540ec1733f839edf42550d10f",
+        "member_crc_verified": true,
+        "rows": 251967,
+        "sensor_frames": 504
+      },
+      {
+        "name": "original/train/scenario-21_sequence-02_cycl_train.h5",
+        "bytes": 59627351,
+        "compressed_bytes": 20918327,
+        "crc32": "6fe7f358",
+        "archive": "original.zip",
+        "url": "https://zenodo.org/api/records/6676246/files/original.zip/content",
+        "archive_bytes": 5818814597,
+        "reason": "Smallest compressed member in preselected reflector scenario",
+        "sha256": "042d7c8b01f7086022ea6457f848c45c1ece83b2265d6c758ecca648ca1e93a3",
+        "member_crc_verified": true,
+        "rows": 169053,
+        "sensor_frames": 367
+      }
+    ],
+    "archive_and_class_aggregates": {
+      "virtual.zip": {
+        "moving": {
+          "none": {
+            "direct_total": 4595,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 4595,
+            "direct_rejected": 3441,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 1230,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 213,
+            "direct_retention": 0.2511425462459195,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          },
+          "no_static_only": {
+            "direct_total": 4595,
+            "direct_rejected": 3022,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 1205,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 212,
+            "direct_retention": 0.3423286180631121,
+            "specific_ghost_rejection": 0.9796747967479674,
+            "generic_ghost_rejection": 0.9953051643192489
+          },
+          "signed_pair": {
+            "direct_total": 4595,
+            "direct_rejected": 1575,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 1120,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 199,
+            "direct_retention": 0.6572361262241567,
+            "specific_ghost_rejection": 0.9105691056910569,
+            "generic_ghost_rejection": 0.9342723004694836
+          },
+          "aligned_pair": {
+            "direct_total": 4595,
+            "direct_rejected": 209,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 546,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 130,
+            "direct_retention": 0.9545157780195865,
+            "specific_ghost_rejection": 0.44390243902439025,
+            "generic_ghost_rejection": 0.6103286384976526
+          },
+          "supported_copy": {
+            "direct_total": 4595,
+            "direct_rejected": 115,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 452,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 108,
+            "direct_retention": 0.9749727965179543,
+            "specific_ghost_rejection": 0.367479674796748,
+            "generic_ghost_rejection": 0.5070422535211268
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 4951,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 4951,
+            "direct_rejected": 3441,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 1230,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 213,
+            "direct_retention": 0.3049888911331044,
+            "specific_ghost_rejection": 0.9505409582689336,
+            "generic_ghost_rejection": 0.9551569506726457
+          },
+          "no_static_only": {
+            "direct_total": 4951,
+            "direct_rejected": 3022,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 1205,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 212,
+            "direct_retention": 0.3896182589375884,
+            "specific_ghost_rejection": 0.9312210200927357,
+            "generic_ghost_rejection": 0.9506726457399103
+          },
+          "signed_pair": {
+            "direct_total": 4951,
+            "direct_rejected": 1575,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 1120,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 199,
+            "direct_retention": 0.681882447990305,
+            "specific_ghost_rejection": 0.865533230293663,
+            "generic_ghost_rejection": 0.8923766816143498
+          },
+          "aligned_pair": {
+            "direct_total": 4951,
+            "direct_rejected": 209,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 546,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 130,
+            "direct_retention": 0.9577863057968087,
+            "specific_ghost_rejection": 0.42194744976816073,
+            "generic_ghost_rejection": 0.5829596412556054
+          },
+          "supported_copy": {
+            "direct_total": 4951,
+            "direct_rejected": 115,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 452,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 108,
+            "direct_retention": 0.9767723692183398,
+            "specific_ghost_rejection": 0.34930448222565685,
+            "generic_ghost_rejection": 0.484304932735426
+          }
+        }
+      },
+      "virtual.zip/mixed": {
+        "moving": {
+          "none": {
+            "direct_total": 4595,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 4595,
+            "direct_rejected": 3441,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 1230,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 213,
+            "direct_retention": 0.2511425462459195,
+            "specific_ghost_rejection": 1.0,
+            "generic_ghost_rejection": 1.0
+          },
+          "no_static_only": {
+            "direct_total": 4595,
+            "direct_rejected": 3022,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 1205,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 212,
+            "direct_retention": 0.3423286180631121,
+            "specific_ghost_rejection": 0.9796747967479674,
+            "generic_ghost_rejection": 0.9953051643192489
+          },
+          "signed_pair": {
+            "direct_total": 4595,
+            "direct_rejected": 1575,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 1120,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 199,
+            "direct_retention": 0.6572361262241567,
+            "specific_ghost_rejection": 0.9105691056910569,
+            "generic_ghost_rejection": 0.9342723004694836
+          },
+          "aligned_pair": {
+            "direct_total": 4595,
+            "direct_rejected": 209,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 546,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 130,
+            "direct_retention": 0.9545157780195865,
+            "specific_ghost_rejection": 0.44390243902439025,
+            "generic_ghost_rejection": 0.6103286384976526
+          },
+          "supported_copy": {
+            "direct_total": 4595,
+            "direct_rejected": 115,
+            "specific_ghost_total": 1230,
+            "specific_ghost_rejected": 452,
+            "generic_ghost_total": 213,
+            "generic_ghost_rejected": 108,
+            "direct_retention": 0.9749727965179543,
+            "specific_ghost_rejection": 0.367479674796748,
+            "generic_ghost_rejection": 0.5070422535211268
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 4951,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 4951,
+            "direct_rejected": 3441,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 1230,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 213,
+            "direct_retention": 0.3049888911331044,
+            "specific_ghost_rejection": 0.9505409582689336,
+            "generic_ghost_rejection": 0.9551569506726457
+          },
+          "no_static_only": {
+            "direct_total": 4951,
+            "direct_rejected": 3022,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 1205,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 212,
+            "direct_retention": 0.3896182589375884,
+            "specific_ghost_rejection": 0.9312210200927357,
+            "generic_ghost_rejection": 0.9506726457399103
+          },
+          "signed_pair": {
+            "direct_total": 4951,
+            "direct_rejected": 1575,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 1120,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 199,
+            "direct_retention": 0.681882447990305,
+            "specific_ghost_rejection": 0.865533230293663,
+            "generic_ghost_rejection": 0.8923766816143498
+          },
+          "aligned_pair": {
+            "direct_total": 4951,
+            "direct_rejected": 209,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 546,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 130,
+            "direct_retention": 0.9577863057968087,
+            "specific_ghost_rejection": 0.42194744976816073,
+            "generic_ghost_rejection": 0.5829596412556054
+          },
+          "supported_copy": {
+            "direct_total": 4951,
+            "direct_rejected": 115,
+            "specific_ghost_total": 1294,
+            "specific_ghost_rejected": 452,
+            "generic_ghost_total": 223,
+            "generic_ghost_rejected": 108,
+            "direct_retention": 0.9767723692183398,
+            "specific_ghost_rejection": 0.34930448222565685,
+            "generic_ghost_rejection": 0.484304932735426
+          }
+        }
+      },
+      "original.zip": {
+        "moving": {
+          "none": {
+            "direct_total": 13524,
+            "direct_rejected": 0,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 13524,
+            "direct_rejected": 8127,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 4905,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 724,
+            "direct_retention": 0.39906832298136646,
+            "specific_ghost_rejection": 0.9503972098430536,
+            "generic_ghost_rejection": 0.9917808219178083
+          },
+          "no_static_only": {
+            "direct_total": 13524,
+            "direct_rejected": 3391,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 3415,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 592,
+            "direct_retention": 0.7492605737947353,
+            "specific_ghost_rejection": 0.661693470257702,
+            "generic_ghost_rejection": 0.810958904109589
+          },
+          "signed_pair": {
+            "direct_total": 13524,
+            "direct_rejected": 1802,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 3001,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 449,
+            "direct_retention": 0.8667553978112984,
+            "specific_ghost_rejection": 0.5814764580507653,
+            "generic_ghost_rejection": 0.6150684931506849
+          },
+          "aligned_pair": {
+            "direct_total": 13524,
+            "direct_rejected": 378,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 1579,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 236,
+            "direct_retention": 0.9720496894409938,
+            "specific_ghost_rejection": 0.30594845960085254,
+            "generic_ghost_rejection": 0.3232876712328767
+          },
+          "supported_copy": {
+            "direct_total": 13524,
+            "direct_rejected": 29,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 1182,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 175,
+            "direct_retention": 0.9978556640047324,
+            "specific_ghost_rejection": 0.2290253826777756,
+            "generic_ghost_rejection": 0.23972602739726026
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 14019,
+            "direct_rejected": 0,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 14019,
+            "direct_rejected": 8127,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 4905,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 724,
+            "direct_retention": 0.42028675369141877,
+            "specific_ghost_rejection": 0.9309166824824445,
+            "generic_ghost_rejection": 0.9679144385026738
+          },
+          "no_static_only": {
+            "direct_total": 14019,
+            "direct_rejected": 3391,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 3415,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 592,
+            "direct_retention": 0.7581139881589272,
+            "specific_ghost_rejection": 0.6481305750616815,
+            "generic_ghost_rejection": 0.7914438502673797
+          },
+          "signed_pair": {
+            "direct_total": 14019,
+            "direct_rejected": 1802,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 3001,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 449,
+            "direct_retention": 0.8714601612097868,
+            "specific_ghost_rejection": 0.5695577908521541,
+            "generic_ghost_rejection": 0.6002673796791443
+          },
+          "aligned_pair": {
+            "direct_total": 14019,
+            "direct_rejected": 378,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 1579,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 236,
+            "direct_retention": 0.9730365931949497,
+            "specific_ghost_rejection": 0.299677358132473,
+            "generic_ghost_rejection": 0.3155080213903743
+          },
+          "supported_copy": {
+            "direct_total": 14019,
+            "direct_rejected": 29,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 1182,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 175,
+            "direct_retention": 0.9979313788429988,
+            "specific_ghost_rejection": 0.22433099259821598,
+            "generic_ghost_rejection": 0.2339572192513369
+          }
+        }
+      },
+      "original.zip/cycl": {
+        "moving": {
+          "none": {
+            "direct_total": 13524,
+            "direct_rejected": 0,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 13524,
+            "direct_rejected": 8127,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 4905,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 724,
+            "direct_retention": 0.39906832298136646,
+            "specific_ghost_rejection": 0.9503972098430536,
+            "generic_ghost_rejection": 0.9917808219178083
+          },
+          "no_static_only": {
+            "direct_total": 13524,
+            "direct_rejected": 3391,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 3415,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 592,
+            "direct_retention": 0.7492605737947353,
+            "specific_ghost_rejection": 0.661693470257702,
+            "generic_ghost_rejection": 0.810958904109589
+          },
+          "signed_pair": {
+            "direct_total": 13524,
+            "direct_rejected": 1802,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 3001,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 449,
+            "direct_retention": 0.8667553978112984,
+            "specific_ghost_rejection": 0.5814764580507653,
+            "generic_ghost_rejection": 0.6150684931506849
+          },
+          "aligned_pair": {
+            "direct_total": 13524,
+            "direct_rejected": 378,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 1579,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 236,
+            "direct_retention": 0.9720496894409938,
+            "specific_ghost_rejection": 0.30594845960085254,
+            "generic_ghost_rejection": 0.3232876712328767
+          },
+          "supported_copy": {
+            "direct_total": 13524,
+            "direct_rejected": 29,
+            "specific_ghost_total": 5161,
+            "specific_ghost_rejected": 1182,
+            "generic_ghost_total": 730,
+            "generic_ghost_rejected": 175,
+            "direct_retention": 0.9978556640047324,
+            "specific_ghost_rejection": 0.2290253826777756,
+            "generic_ghost_rejection": 0.23972602739726026
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 14019,
+            "direct_rejected": 0,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 14019,
+            "direct_rejected": 8127,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 4905,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 724,
+            "direct_retention": 0.42028675369141877,
+            "specific_ghost_rejection": 0.9309166824824445,
+            "generic_ghost_rejection": 0.9679144385026738
+          },
+          "no_static_only": {
+            "direct_total": 14019,
+            "direct_rejected": 3391,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 3415,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 592,
+            "direct_retention": 0.7581139881589272,
+            "specific_ghost_rejection": 0.6481305750616815,
+            "generic_ghost_rejection": 0.7914438502673797
+          },
+          "signed_pair": {
+            "direct_total": 14019,
+            "direct_rejected": 1802,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 3001,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 449,
+            "direct_retention": 0.8714601612097868,
+            "specific_ghost_rejection": 0.5695577908521541,
+            "generic_ghost_rejection": 0.6002673796791443
+          },
+          "aligned_pair": {
+            "direct_total": 14019,
+            "direct_rejected": 378,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 1579,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 236,
+            "direct_retention": 0.9730365931949497,
+            "specific_ghost_rejection": 0.299677358132473,
+            "generic_ghost_rejection": 0.3155080213903743
+          },
+          "supported_copy": {
+            "direct_total": 14019,
+            "direct_rejected": 29,
+            "specific_ghost_total": 5269,
+            "specific_ghost_rejected": 1182,
+            "generic_ghost_total": 748,
+            "generic_ghost_rejected": 175,
+            "direct_retention": 0.9979313788429988,
+            "specific_ghost_rejection": 0.22433099259821598,
+            "generic_ghost_rejection": 0.2339572192513369
+          }
+        }
+      }
+    }
+  },
+  "larger_comparison": {
+    "adaptation": {
+      "range_m": [
+        0.15,
+        120
+      ],
+      "stationary_speed_max_m_s": 0.05
+    },
+    "legacy_config": {
+      "range_gap": 1.5,
+      "speed_tolerance": 0.25,
+      "wall_azimuth_deg": 4.0
+    },
+    "candidate_config": {
+      "range_gap": 1.5,
+      "speed_tolerance": 0.25,
+      "direction_deg": 4.0,
+      "support_radius": 0.6
+    },
+    "scope": "Current-scan point stage only; no SNR gate, ego fit, tracker or accumulation",
+    "source_sha256": {
+      "tools/assessment/compare_ghost_criteria.py": "f5a5279c953b9a991b207e481db3e912a0e9c96b379d35cc05232587b9cfa885",
+      "smartmicro_processing/smartmicro_processing/ghost_candidates.py": "43e69fafbe97fbb944cc32ae68ffa7a36f4b57c2985fb0516aa8e3e70efe1e32",
+      "smartmicro_processing/smartmicro_processing/ghosts.py": "5261d67989dde0659ea7f187686c79f838d3f98f3d43ecb72f55d29fd055252d",
+      "tools/assessment/assess_ghost_dataset.py": "bab9fa832a96817c25a63bc7f43361377b1ccce4d822beb3113ce8568e5ca4d4"
+    },
+    "timing_ms": {
+      "legacy": {
+        "p50": 1.184297,
+        "p95": 5.906434499999993,
+        "p99": 9.149683099999997,
+        "max": 12.756336
+      },
+      "candidate_three_ablations": {
+        "p50": 1.5546929999999999,
+        "p95": 7.3160054999999975,
+        "p99": 12.554166109999997,
+        "max": 29.93716
+      }
+    },
+    "recordings": 53,
+    "rows": 10923422,
+    "sensor_frame_groups": 26232,
+    "sources": [
+      {
+        "name": "original/train/scenario-01_sequence-02_cycl_train.h5",
+        "bytes": 47558577,
+        "compressed_bytes": 19478183,
+        "crc32": "e70fa836",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 113332,
+        "sensor_frames": 448
+      },
+      {
+        "name": "original/train/scenario-01_sequence-04_ped_train.h5",
+        "bytes": 75619362,
+        "compressed_bytes": 30726591,
+        "crc32": "c9092f00",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 183123,
+        "sensor_frames": 732
+      },
+      {
+        "name": "original/train/scenario-02_sequence-01_cycl_train.h5",
+        "bytes": 139447897,
+        "compressed_bytes": 60131447,
+        "crc32": "5810c619",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 250342,
+        "sensor_frames": 865
+      },
+      {
+        "name": "original/train/scenario-02_sequence-05_ped_train.h5",
+        "bytes": 219049970,
+        "compressed_bytes": 95304388,
+        "crc32": "48a4fc7c",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 380461,
+        "sensor_frames": 1352
+      },
+      {
+        "name": "original/train/scenario-03_sequence-03_cycl_train.h5",
+        "bytes": 86743102,
+        "compressed_bytes": 30744644,
+        "crc32": "b6f65ecd",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 264780,
+        "sensor_frames": 679
+      },
+      {
+        "name": "original/train/scenario-03_sequence-06_ped_train.h5",
+        "bytes": 149823987,
+        "compressed_bytes": 53376304,
+        "crc32": "1e3289cd",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 453514,
+        "sensor_frames": 1146
+      },
+      {
+        "name": "original/val/scenario-04_sequence-04_cycl_val.h5",
+        "bytes": 115753546,
+        "compressed_bytes": 48174342,
+        "crc32": "d1e47896",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 250324,
+        "sensor_frames": 768
+      },
+      {
+        "name": "original/train/scenario-04_sequence-06_ped_train.h5",
+        "bytes": 110780225,
+        "compressed_bytes": 46178603,
+        "crc32": "cbccf2b6",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 233824,
+        "sensor_frames": 716
+      },
+      {
+        "name": "original/train/scenario-05_sequence-02_cycl_train.h5",
+        "bytes": 149104002,
+        "compressed_bytes": 56852179,
+        "crc32": "2a292132",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 363520,
+        "sensor_frames": 626
+      },
+      {
+        "name": "original/train/scenario-05_sequence-05_ped_train.h5",
+        "bytes": 217760562,
+        "compressed_bytes": 82288254,
+        "crc32": "21e720ae",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 538831,
+        "sensor_frames": 912
+      },
+      {
+        "name": "original/val/scenario-06_sequence-03_cycl_val.h5",
+        "bytes": 163778257,
+        "compressed_bytes": 63915368,
+        "crc32": "a12239cc",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 383317,
+        "sensor_frames": 764
+      },
+      {
+        "name": "original/train/scenario-06_sequence-06_ped_train.h5",
+        "bytes": 295355495,
+        "compressed_bytes": 116135970,
+        "crc32": "5633c84b",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 676362,
+        "sensor_frames": 1358
+      },
+      {
+        "name": "original/train/scenario-07_sequence-01_cycl_train.h5",
+        "bytes": 152910263,
+        "compressed_bytes": 58443444,
+        "crc32": "c1806ac7",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 373240,
+        "sensor_frames": 726
+      },
+      {
+        "name": "original/train/scenario-07_sequence-05_ped_train.h5",
+        "bytes": 236053574,
+        "compressed_bytes": 90265431,
+        "crc32": "d2d0cfcc",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 568924,
+        "sensor_frames": 1108
+      },
+      {
+        "name": "original/train/scenario-08_sequence-02_cycl_train.h5",
+        "bytes": 176059226,
+        "compressed_bytes": 65503554,
+        "crc32": "0106469d",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 453854,
+        "sensor_frames": 737
+      },
+      {
+        "name": "original/train/scenario-08_sequence-07_ped_train.h5",
+        "bytes": 151337293,
+        "compressed_bytes": 56719839,
+        "crc32": "48e0018b",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 382878,
+        "sensor_frames": 647
+      },
+      {
+        "name": "original/train/scenario-09_sequence-02_cycl_train.h5",
+        "bytes": 124821694,
+        "compressed_bytes": 48274111,
+        "crc32": "cf1adbd3",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 291497,
+        "sensor_frames": 552
+      },
+      {
+        "name": "original/train/scenario-10_sequence-01_cycl_train.h5",
+        "bytes": 126793368,
+        "compressed_bytes": 44560325,
+        "crc32": "c48d418a",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 373859,
+        "sensor_frames": 447
+      },
+      {
+        "name": "original/train/scenario-10_sequence-04_ped_train.h5",
+        "bytes": 173253442,
+        "compressed_bytes": 61123173,
+        "crc32": "3ad953f8",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 507147,
+        "sensor_frames": 612
+      },
+      {
+        "name": "original/train/scenario-12_sequence-02_cycl_train.h5",
+        "bytes": 92957643,
+        "compressed_bytes": 34527702,
+        "crc32": "be503f18",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 238313,
+        "sensor_frames": 350
+      },
+      {
+        "name": "original/train/scenario-12_sequence-06_ped_train.h5",
+        "bytes": 174860779,
+        "compressed_bytes": 64870397,
+        "crc32": "c945f731",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 447501,
+        "sensor_frames": 658
+      },
+      {
+        "name": "original/test/scenario-14_sequence-02_cycl_test.h5",
+        "bytes": 108716824,
+        "compressed_bytes": 47025936,
+        "crc32": "e7bd5bbc",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 187470,
+        "sensor_frames": 671
+      },
+      {
+        "name": "original/test/scenario-14_sequence-06_ped_test.h5",
+        "bytes": 182891858,
+        "compressed_bytes": 79519804,
+        "crc32": "a0d0f0d1",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 306035,
+        "sensor_frames": 1134
+      },
+      {
+        "name": "original/val/scenario-15_sequence-03_cycl_val.h5",
+        "bytes": 93846240,
+        "compressed_bytes": 40483903,
+        "crc32": "d716dbd0",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 144174,
+        "sensor_frames": 492
+      },
+      {
+        "name": "original/train/scenario-15_sequence-05_ped_train.h5",
+        "bytes": 175714470,
+        "compressed_bytes": 75730190,
+        "crc32": "10c54143",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 269962,
+        "sensor_frames": 921
+      },
+      {
+        "name": "original/train/scenario-16_sequence-01_cycl_train.h5",
+        "bytes": 79816338,
+        "compressed_bytes": 36395342,
+        "crc32": "eee8ccd1",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 101348,
+        "sensor_frames": 546
+      },
+      {
+        "name": "original/train/scenario-16_sequence-05_ped_train.h5",
+        "bytes": 167367495,
+        "compressed_bytes": 74777473,
+        "crc32": "8c517468",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 232292,
+        "sensor_frames": 1049
+      },
+      {
+        "name": "original/test/scenario-17_sequence-02_cycl_test.h5",
+        "bytes": 69121365,
+        "compressed_bytes": 29789524,
+        "crc32": "5fd7aca4",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 127847,
+        "sensor_frames": 423
+      },
+      {
+        "name": "original/test/scenario-17_sequence-05_ped_test.h5",
+        "bytes": 106689243,
+        "compressed_bytes": 45970455,
+        "crc32": "b69a42f0",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 195630,
+        "sensor_frames": 648
+      },
+      {
+        "name": "original/test/scenario-18_sequence-04_cycl_test.h5",
+        "bytes": 52660740,
+        "compressed_bytes": 20090798,
+        "crc32": "c4c9c4cc",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 132787,
+        "sensor_frames": 380
+      },
+      {
+        "name": "original/test/scenario-18_sequence-06_ped_test.h5",
+        "bytes": 91568795,
+        "compressed_bytes": 35238054,
+        "crc32": "b851a50f",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 225837,
+        "sensor_frames": 654
+      },
+      {
+        "name": "original/test/scenario-19_sequence-02_cycl_test.h5",
+        "bytes": 59493583,
+        "compressed_bytes": 22533960,
+        "crc32": "d95518bf",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 152731,
+        "sensor_frames": 432
+      },
+      {
+        "name": "original/test/scenario-19_sequence-05_ped_test.h5",
+        "bytes": 104655300,
+        "compressed_bytes": 39500950,
+        "crc32": "c7bfbd83",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 270548,
+        "sensor_frames": 766
+      },
+      {
+        "name": "original/train/scenario-20_sequence-01_cycl_train.h5",
+        "bytes": 66204472,
+        "compressed_bytes": 20941012,
+        "crc32": "849983b0",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 232978,
+        "sensor_frames": 516
+      },
+      {
+        "name": "original/train/scenario-20_sequence-07_ped_train.h5",
+        "bytes": 119390405,
+        "compressed_bytes": 38023168,
+        "crc32": "3912bba6",
+        "archive": "original.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 417417,
+        "sensor_frames": 955
+      },
+      {
+        "name": "virtual/train/scenario-01_sequences-03-04-04-04_start-frames-269-085-223-248_ped-ped-ped-ped_train.h5",
+        "bytes": 4590869,
+        "compressed_bytes": 2363321,
+        "crc32": "04bf95b7",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 5061,
+        "sensor_frames": 20
+      },
+      {
+        "name": "virtual/train/scenario-02_sequences-01-04-04-04_start-frames-305-419-036-650_cycl-ped-ped-ped_train.h5",
+        "bytes": 9031195,
+        "compressed_bytes": 4657554,
+        "crc32": "c93e751f",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 6163,
+        "sensor_frames": 20
+      },
+      {
+        "name": "virtual/train/scenario-03_sequences-03-04_start-frames-327-243_cycl-ped_train.h5",
+        "bytes": 4649495,
+        "compressed_bytes": 2029905,
+        "crc32": "4bd2e77c",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 10475,
+        "sensor_frames": 26
+      },
+      {
+        "name": "virtual/val/scenario-04_sequences-04-04_start-frames-182-299_cycl-cycl_val.h5",
+        "bytes": 5978820,
+        "compressed_bytes": 2882398,
+        "crc32": "f2f76bea",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 8583,
+        "sensor_frames": 26
+      },
+      {
+        "name": "virtual/train/scenario-05_sequences-02-03-03_start-frames-303-150-291_cycl-ped-ped_train.h5",
+        "bytes": 9531661,
+        "compressed_bytes": 4550053,
+        "crc32": "b013d221",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 11995,
+        "sensor_frames": 20
+      },
+      {
+        "name": "virtual/train/scenario-06_sequences-01-01-01_start-frames-235-126-428_cycl-cycl-cycl_train.h5",
+        "bytes": 9359265,
+        "compressed_bytes": 4474231,
+        "crc32": "4d0898a6",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 11833,
+        "sensor_frames": 22
+      },
+      {
+        "name": "virtual/train/scenario-07_sequences-01-01-03-05_start-frames-232-045-255-411_cycl-cycl-cycl-ped_train.h5",
+        "bytes": 10188452,
+        "compressed_bytes": 4926205,
+        "crc32": "db02b5fa",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 10963,
+        "sensor_frames": 20
+      },
+      {
+        "name": "virtual/train/scenario-08_sequences-02-02-05_start-frames-157-141-479_cycl-cycl-ped_train.h5",
+        "bytes": 9216524,
+        "compressed_bytes": 4337041,
+        "crc32": "f3246113",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 12554,
+        "sensor_frames": 20
+      },
+      {
+        "name": "virtual/train/scenario-09_sequences-01-01-02_start-frames-019-310-106_cycl-cycl-cycl_train.h5",
+        "bytes": 9921650,
+        "compressed_bytes": 4728817,
+        "crc32": "d88cdca5",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 12310,
+        "sensor_frames": 22
+      },
+      {
+        "name": "virtual/train/scenario-10_sequences-01-04_start-frames-033-094_cycl-ped_train.h5",
+        "bytes": 13207655,
+        "compressed_bytes": 5804836,
+        "crc32": "43ad7e24",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 27070,
+        "sensor_frames": 32
+      },
+      {
+        "name": "virtual/train/scenario-12_sequences-05-05-05_start-frames-328-294-305_ped-ped-ped_train.h5",
+        "bytes": 14149746,
+        "compressed_bytes": 6658093,
+        "crc32": "1c2bad75",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 18417,
+        "sensor_frames": 28
+      },
+      {
+        "name": "virtual/test/scenario-14_sequences-01-06-06-07_start-frames-238-271-358-547_cycl-ped-ped-ped_test.h5",
+        "bytes": 10711589,
+        "compressed_bytes": 5436960,
+        "crc32": "867d2d23",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 6866,
+        "sensor_frames": 24
+      },
+      {
+        "name": "virtual/train/scenario-15_sequences-01-01-01-02-06_start-frames-038-062-154-135-268_cycl-cycl-cycl-cycl-ped_train.h5",
+        "bytes": 13197684,
+        "compressed_bytes": 6647530,
+        "crc32": "55d78652",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 6260,
+        "sensor_frames": 20
+      },
+      {
+        "name": "virtual/train/scenario-16_sequences-06-06_start-frames-161-177_ped-ped_train.h5",
+        "bytes": 7506296,
+        "compressed_bytes": 3678500,
+        "crc32": "ea5bf594",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 6553,
+        "sensor_frames": 28
+      },
+      {
+        "name": "virtual/test/scenario-17_sequences-02-05_start-frames-037-306_cycl-ped_test.h5",
+        "bytes": 9657471,
+        "compressed_bytes": 4729552,
+        "crc32": "1b5f3e53",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 11475,
+        "sensor_frames": 36
+      },
+      {
+        "name": "virtual/test/scenario-18_sequences-01-04-08_start-frames-130-140-061_cycl-cycl-ped_test.h5",
+        "bytes": 6998847,
+        "compressed_bytes": 3330681,
+        "crc32": "5b7432cb",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 9187,
+        "sensor_frames": 26
+      },
+      {
+        "name": "virtual/test/scenario-19_sequences-01-02-07_start-frames-221-153-123_cycl-cycl-ped_test.h5",
+        "bytes": 7001624,
+        "compressed_bytes": 3323632,
+        "crc32": "5d272b96",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 9714,
+        "sensor_frames": 26
+      },
+      {
+        "name": "virtual/train/scenario-20_sequences-01-02-03-04_start-frames-149-258-123-030_cycl-cycl-cycl-cycl_train.h5",
+        "bytes": 6154115,
+        "compressed_bytes": 2808796,
+        "crc32": "00051542",
+        "archive": "virtual.zip",
+        "selection": "Smallest available member per original class or virtual scene",
+        "rows": 11944,
+        "sensor_frames": 26
+      }
+    ],
+    "archive_and_class_aggregates": {
+      "original.zip": {
+        "moving": {
+          "none": {
+            "direct_total": 185634,
+            "direct_rejected": 0,
+            "specific_ghost_total": 36851,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 4598,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 185634,
+            "direct_rejected": 105132,
+            "specific_ghost_total": 36851,
+            "specific_ghost_rejected": 32804,
+            "generic_ghost_total": 4598,
+            "generic_ghost_rejected": 4443,
+            "direct_retention": 0.4336597821519765,
+            "specific_ghost_rejection": 0.8901793709804348,
+            "generic_ghost_rejection": 0.9662896911700739
+          },
+          "no_static_only": {
+            "direct_total": 185634,
+            "direct_rejected": 56742,
+            "specific_ghost_total": 36851,
+            "specific_ghost_rejected": 19922,
+            "generic_ghost_total": 4598,
+            "generic_ghost_rejected": 3629,
+            "direct_retention": 0.6943340120883028,
+            "specific_ghost_rejection": 0.5406094814251988,
+            "generic_ghost_rejection": 0.7892561983471075
+          },
+          "signed_pair": {
+            "direct_total": 185634,
+            "direct_rejected": 34953,
+            "specific_ghost_total": 36851,
+            "specific_ghost_rejected": 16324,
+            "generic_ghost_total": 4598,
+            "generic_ghost_rejected": 2542,
+            "direct_retention": 0.811710139306377,
+            "specific_ghost_rejection": 0.4429730536484763,
+            "generic_ghost_rejection": 0.5528490648107873
+          },
+          "aligned_pair": {
+            "direct_total": 185634,
+            "direct_rejected": 6163,
+            "specific_ghost_total": 36851,
+            "specific_ghost_rejected": 8691,
+            "generic_ghost_total": 4598,
+            "generic_ghost_rejected": 1399,
+            "direct_retention": 0.966800262882877,
+            "specific_ghost_rejection": 0.2358416325201487,
+            "generic_ghost_rejection": 0.30426272292301
+          },
+          "supported_copy": {
+            "direct_total": 185634,
+            "direct_rejected": 1806,
+            "specific_ghost_total": 36851,
+            "specific_ghost_rejected": 6325,
+            "generic_ghost_total": 4598,
+            "generic_ghost_rejected": 1097,
+            "direct_retention": 0.9902711787711302,
+            "specific_ghost_rejection": 0.1716371333206697,
+            "generic_ghost_rejection": 0.2385819921705089
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 199052,
+            "direct_rejected": 0,
+            "specific_ghost_total": 37537,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 4746,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 199052,
+            "direct_rejected": 105132,
+            "specific_ghost_total": 37537,
+            "specific_ghost_rejected": 32804,
+            "generic_ghost_total": 4746,
+            "generic_ghost_rejected": 4443,
+            "direct_retention": 0.4718365050338605,
+            "specific_ghost_rejection": 0.8739110744065856,
+            "generic_ghost_rejection": 0.9361567635903919
+          },
+          "no_static_only": {
+            "direct_total": 199052,
+            "direct_rejected": 56742,
+            "specific_ghost_total": 37537,
+            "specific_ghost_rejected": 19922,
+            "generic_ghost_total": 4746,
+            "generic_ghost_rejected": 3629,
+            "direct_retention": 0.7149388099592067,
+            "specific_ghost_rejection": 0.5307296800490183,
+            "generic_ghost_rejection": 0.7646439106616097
+          },
+          "signed_pair": {
+            "direct_total": 199052,
+            "direct_rejected": 34953,
+            "specific_ghost_total": 37537,
+            "specific_ghost_rejected": 16324,
+            "generic_ghost_total": 4746,
+            "generic_ghost_rejected": 2542,
+            "direct_retention": 0.8244026686493982,
+            "specific_ghost_rejection": 0.43487758744705224,
+            "generic_ghost_rejection": 0.5356089338390223
+          },
+          "aligned_pair": {
+            "direct_total": 199052,
+            "direct_rejected": 6163,
+            "specific_ghost_total": 37537,
+            "specific_ghost_rejected": 8691,
+            "generic_ghost_total": 4746,
+            "generic_ghost_rejected": 1399,
+            "direct_retention": 0.9690382412635894,
+            "specific_ghost_rejection": 0.2315315555318752,
+            "generic_ghost_rejection": 0.2947745469869364
+          },
+          "supported_copy": {
+            "direct_total": 199052,
+            "direct_rejected": 1806,
+            "specific_ghost_total": 37537,
+            "specific_ghost_rejected": 6325,
+            "generic_ghost_total": 4746,
+            "generic_ghost_rejected": 1097,
+            "direct_retention": 0.9909269939513293,
+            "specific_ghost_rejection": 0.1685004129259131,
+            "generic_ghost_rejection": 0.23114201432785503
+          }
+        }
+      },
+      "original.zip/cycl": {
+        "moving": {
+          "none": {
+            "direct_total": 87830,
+            "direct_rejected": 0,
+            "specific_ghost_total": 14281,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 2128,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 87830,
+            "direct_rejected": 42906,
+            "specific_ghost_total": 14281,
+            "specific_ghost_rejected": 12725,
+            "generic_ghost_total": 2128,
+            "generic_ghost_rejected": 2048,
+            "direct_retention": 0.5114881020152567,
+            "specific_ghost_rejection": 0.8910440445346964,
+            "generic_ghost_rejection": 0.9624060150375939
+          },
+          "no_static_only": {
+            "direct_total": 87830,
+            "direct_rejected": 19625,
+            "specific_ghost_total": 14281,
+            "specific_ghost_rejected": 7824,
+            "generic_ghost_total": 2128,
+            "generic_ghost_rejected": 1652,
+            "direct_retention": 0.776556985084823,
+            "specific_ghost_rejection": 0.5478607940620405,
+            "generic_ghost_rejection": 0.7763157894736842
+          },
+          "signed_pair": {
+            "direct_total": 87830,
+            "direct_rejected": 11648,
+            "specific_ghost_total": 14281,
+            "specific_ghost_rejected": 7111,
+            "generic_ghost_total": 2128,
+            "generic_ghost_rejected": 1231,
+            "direct_retention": 0.8673801662302175,
+            "specific_ghost_rejection": 0.49793431832504725,
+            "generic_ghost_rejection": 0.5784774436090225
+          },
+          "aligned_pair": {
+            "direct_total": 87830,
+            "direct_rejected": 2953,
+            "specific_ghost_total": 14281,
+            "specific_ghost_rejected": 3883,
+            "generic_ghost_total": 2128,
+            "generic_ghost_rejected": 663,
+            "direct_retention": 0.9663782306728909,
+            "specific_ghost_rejection": 0.27189972690988023,
+            "generic_ghost_rejection": 0.31156015037593987
+          },
+          "supported_copy": {
+            "direct_total": 87830,
+            "direct_rejected": 895,
+            "specific_ghost_total": 14281,
+            "specific_ghost_rejected": 2931,
+            "generic_ghost_total": 2128,
+            "generic_ghost_rejected": 504,
+            "direct_retention": 0.9898098599567347,
+            "specific_ghost_rejection": 0.20523772845038862,
+            "generic_ghost_rejection": 0.23684210526315788
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 92536,
+            "direct_rejected": 0,
+            "specific_ghost_total": 14455,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 2224,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 92536,
+            "direct_rejected": 42906,
+            "specific_ghost_total": 14455,
+            "specific_ghost_rejected": 12725,
+            "generic_ghost_total": 2224,
+            "generic_ghost_rejected": 2048,
+            "direct_retention": 0.5363318059998271,
+            "specific_ghost_rejection": 0.8803182289865099,
+            "generic_ghost_rejection": 0.920863309352518
+          },
+          "no_static_only": {
+            "direct_total": 92536,
+            "direct_rejected": 19625,
+            "specific_ghost_total": 14455,
+            "specific_ghost_rejected": 7824,
+            "generic_ghost_total": 2224,
+            "generic_ghost_rejected": 1652,
+            "direct_retention": 0.7879203769343823,
+            "specific_ghost_rejection": 0.5412659979245935,
+            "generic_ghost_rejection": 0.7428057553956835
+          },
+          "signed_pair": {
+            "direct_total": 92536,
+            "direct_rejected": 11648,
+            "specific_ghost_total": 14455,
+            "specific_ghost_rejected": 7111,
+            "generic_ghost_total": 2224,
+            "generic_ghost_rejected": 1231,
+            "direct_retention": 0.8741246649952451,
+            "specific_ghost_rejection": 0.4919405050155655,
+            "generic_ghost_rejection": 0.5535071942446043
+          },
+          "aligned_pair": {
+            "direct_total": 92536,
+            "direct_rejected": 2953,
+            "specific_ghost_total": 14455,
+            "specific_ghost_rejected": 3883,
+            "generic_ghost_total": 2224,
+            "generic_ghost_rejected": 663,
+            "direct_retention": 0.9680880954439354,
+            "specific_ghost_rejection": 0.2686267727429955,
+            "generic_ghost_rejection": 0.2981115107913669
+          },
+          "supported_copy": {
+            "direct_total": 92536,
+            "direct_rejected": 895,
+            "specific_ghost_total": 14455,
+            "specific_ghost_rejected": 2931,
+            "generic_ghost_total": 2224,
+            "generic_ghost_rejected": 504,
+            "direct_retention": 0.9903280885277082,
+            "specific_ghost_rejection": 0.2027672085783466,
+            "generic_ghost_rejection": 0.22661870503597123
+          }
+        }
+      },
+      "original.zip/ped": {
+        "moving": {
+          "none": {
+            "direct_total": 97804,
+            "direct_rejected": 0,
+            "specific_ghost_total": 22570,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 2470,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 97804,
+            "direct_rejected": 62226,
+            "specific_ghost_total": 22570,
+            "specific_ghost_rejected": 20079,
+            "generic_ghost_total": 2470,
+            "generic_ghost_rejected": 2395,
+            "direct_retention": 0.3637683530325958,
+            "specific_ghost_rejection": 0.8896322552060257,
+            "generic_ghost_rejection": 0.9696356275303644
+          },
+          "no_static_only": {
+            "direct_total": 97804,
+            "direct_rejected": 37117,
+            "specific_ghost_total": 22570,
+            "specific_ghost_rejected": 12098,
+            "generic_ghost_total": 2470,
+            "generic_ghost_rejected": 1977,
+            "direct_retention": 0.6204960942292749,
+            "specific_ghost_rejection": 0.5360212671688082,
+            "generic_ghost_rejection": 0.8004048582995952
+          },
+          "signed_pair": {
+            "direct_total": 97804,
+            "direct_rejected": 23305,
+            "specific_ghost_total": 22570,
+            "specific_ghost_rejected": 9213,
+            "generic_ghost_total": 2470,
+            "generic_ghost_rejected": 1311,
+            "direct_retention": 0.7617173121753712,
+            "specific_ghost_rejection": 0.4081967213114754,
+            "generic_ghost_rejection": 0.5307692307692308
+          },
+          "aligned_pair": {
+            "direct_total": 97804,
+            "direct_rejected": 3210,
+            "specific_ghost_total": 22570,
+            "specific_ghost_rejected": 4808,
+            "generic_ghost_total": 2470,
+            "generic_ghost_rejected": 736,
+            "direct_retention": 0.9671792564721279,
+            "specific_ghost_rejection": 0.21302614089499336,
+            "generic_ghost_rejection": 0.2979757085020243
+          },
+          "supported_copy": {
+            "direct_total": 97804,
+            "direct_rejected": 911,
+            "specific_ghost_total": 22570,
+            "specific_ghost_rejected": 3394,
+            "generic_ghost_total": 2470,
+            "generic_ghost_rejected": 593,
+            "direct_retention": 0.9906854525377286,
+            "specific_ghost_rejection": 0.15037660611431103,
+            "generic_ghost_rejection": 0.24008097165991904
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 106516,
+            "direct_rejected": 0,
+            "specific_ghost_total": 23082,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 2522,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 106516,
+            "direct_rejected": 62226,
+            "specific_ghost_total": 23082,
+            "specific_ghost_rejected": 20079,
+            "generic_ghost_total": 2522,
+            "generic_ghost_rejected": 2395,
+            "direct_retention": 0.4158060760824665,
+            "specific_ghost_rejection": 0.8698986223030933,
+            "generic_ghost_rejection": 0.9496431403647898
+          },
+          "no_static_only": {
+            "direct_total": 106516,
+            "direct_rejected": 37117,
+            "specific_ghost_total": 23082,
+            "specific_ghost_rejected": 12098,
+            "generic_ghost_total": 2522,
+            "generic_ghost_rejected": 1977,
+            "direct_retention": 0.6515359194862743,
+            "specific_ghost_rejection": 0.5241313577679577,
+            "generic_ghost_rejection": 0.7839016653449643
+          },
+          "signed_pair": {
+            "direct_total": 106516,
+            "direct_rejected": 23305,
+            "specific_ghost_total": 23082,
+            "specific_ghost_rejected": 9213,
+            "generic_ghost_total": 2522,
+            "generic_ghost_rejected": 1311,
+            "direct_retention": 0.7812065792932518,
+            "specific_ghost_rejection": 0.39914218871848195,
+            "generic_ghost_rejection": 0.5198255352894529
+          },
+          "aligned_pair": {
+            "direct_total": 106516,
+            "direct_rejected": 3210,
+            "specific_ghost_total": 23082,
+            "specific_ghost_rejected": 4808,
+            "generic_ghost_total": 2522,
+            "generic_ghost_rejected": 736,
+            "direct_retention": 0.9698636824514627,
+            "specific_ghost_rejection": 0.20830084048176067,
+            "generic_ghost_rejection": 0.29183187946074546
+          },
+          "supported_copy": {
+            "direct_total": 106516,
+            "direct_rejected": 911,
+            "specific_ghost_total": 23082,
+            "specific_ghost_rejected": 3394,
+            "generic_ghost_total": 2522,
+            "generic_ghost_rejected": 593,
+            "direct_retention": 0.9914472943032032,
+            "specific_ghost_rejection": 0.14704098431678364,
+            "generic_ghost_rejection": 0.23513084853291039
+          }
+        }
+      },
+      "virtual.zip": {
+        "moving": {
+          "none": {
+            "direct_total": 9868,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 9868,
+            "direct_rejected": 5414,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 1265,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 247,
+            "direct_retention": 0.45135792460478313,
+            "specific_ghost_rejection": 0.959059893858984,
+            "generic_ghost_rejection": 1.0
+          },
+          "no_static_only": {
+            "direct_total": 9868,
+            "direct_rejected": 3901,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 1057,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 239,
+            "direct_retention": 0.6046817997567896,
+            "specific_ghost_rejection": 0.8013646702047005,
+            "generic_ghost_rejection": 0.9676113360323887
+          },
+          "signed_pair": {
+            "direct_total": 9868,
+            "direct_rejected": 1738,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 748,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 141,
+            "direct_retention": 0.8238751520064856,
+            "specific_ghost_rejection": 0.5670962850644428,
+            "generic_ghost_rejection": 0.5708502024291497
+          },
+          "aligned_pair": {
+            "direct_total": 9868,
+            "direct_rejected": 419,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 371,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 102,
+            "direct_retention": 0.9575395216862587,
+            "specific_ghost_rejection": 0.2812736921910538,
+            "generic_ghost_rejection": 0.41295546558704455
+          },
+          "supported_copy": {
+            "direct_total": 9868,
+            "direct_rejected": 289,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 293,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 89,
+            "direct_retention": 0.9707134171057965,
+            "specific_ghost_rejection": 0.2221379833206975,
+            "generic_ghost_rejection": 0.3603238866396761
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 10335,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 10335,
+            "direct_rejected": 5414,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 1265,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 247,
+            "direct_retention": 0.4761490082244799,
+            "specific_ghost_rejection": 0.9525602409638554,
+            "generic_ghost_rejection": 0.9919678714859438
+          },
+          "no_static_only": {
+            "direct_total": 10335,
+            "direct_rejected": 3901,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 1057,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 239,
+            "direct_retention": 0.6225447508466376,
+            "specific_ghost_rejection": 0.795933734939759,
+            "generic_ghost_rejection": 0.9598393574297188
+          },
+          "signed_pair": {
+            "direct_total": 10335,
+            "direct_rejected": 1738,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 748,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 141,
+            "direct_retention": 0.8318335752298016,
+            "specific_ghost_rejection": 0.5632530120481928,
+            "generic_ghost_rejection": 0.5662650602409639
+          },
+          "aligned_pair": {
+            "direct_total": 10335,
+            "direct_rejected": 419,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 371,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 102,
+            "direct_retention": 0.959458151910982,
+            "specific_ghost_rejection": 0.27936746987951805,
+            "generic_ghost_rejection": 0.40963855421686746
+          },
+          "supported_copy": {
+            "direct_total": 10335,
+            "direct_rejected": 289,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 293,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 89,
+            "direct_retention": 0.9720367682631833,
+            "specific_ghost_rejection": 0.22063253012048192,
+            "generic_ghost_rejection": 0.357429718875502
+          }
+        }
+      },
+      "virtual.zip/mixed": {
+        "moving": {
+          "none": {
+            "direct_total": 9868,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 9868,
+            "direct_rejected": 5414,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 1265,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 247,
+            "direct_retention": 0.45135792460478313,
+            "specific_ghost_rejection": 0.959059893858984,
+            "generic_ghost_rejection": 1.0
+          },
+          "no_static_only": {
+            "direct_total": 9868,
+            "direct_rejected": 3901,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 1057,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 239,
+            "direct_retention": 0.6046817997567896,
+            "specific_ghost_rejection": 0.8013646702047005,
+            "generic_ghost_rejection": 0.9676113360323887
+          },
+          "signed_pair": {
+            "direct_total": 9868,
+            "direct_rejected": 1738,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 748,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 141,
+            "direct_retention": 0.8238751520064856,
+            "specific_ghost_rejection": 0.5670962850644428,
+            "generic_ghost_rejection": 0.5708502024291497
+          },
+          "aligned_pair": {
+            "direct_total": 9868,
+            "direct_rejected": 419,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 371,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 102,
+            "direct_retention": 0.9575395216862587,
+            "specific_ghost_rejection": 0.2812736921910538,
+            "generic_ghost_rejection": 0.41295546558704455
+          },
+          "supported_copy": {
+            "direct_total": 9868,
+            "direct_rejected": 289,
+            "specific_ghost_total": 1319,
+            "specific_ghost_rejected": 293,
+            "generic_ghost_total": 247,
+            "generic_ghost_rejected": 89,
+            "direct_retention": 0.9707134171057965,
+            "specific_ghost_rejection": 0.2221379833206975,
+            "generic_ghost_rejection": 0.3603238866396761
+          }
+        },
+        "all_valid": {
+          "none": {
+            "direct_total": 10335,
+            "direct_rejected": 0,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 0,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 0,
+            "direct_retention": 1.0,
+            "specific_ghost_rejection": 0.0,
+            "generic_ghost_rejection": 0.0
+          },
+          "legacy": {
+            "direct_total": 10335,
+            "direct_rejected": 5414,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 1265,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 247,
+            "direct_retention": 0.4761490082244799,
+            "specific_ghost_rejection": 0.9525602409638554,
+            "generic_ghost_rejection": 0.9919678714859438
+          },
+          "no_static_only": {
+            "direct_total": 10335,
+            "direct_rejected": 3901,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 1057,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 239,
+            "direct_retention": 0.6225447508466376,
+            "specific_ghost_rejection": 0.795933734939759,
+            "generic_ghost_rejection": 0.9598393574297188
+          },
+          "signed_pair": {
+            "direct_total": 10335,
+            "direct_rejected": 1738,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 748,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 141,
+            "direct_retention": 0.8318335752298016,
+            "specific_ghost_rejection": 0.5632530120481928,
+            "generic_ghost_rejection": 0.5662650602409639
+          },
+          "aligned_pair": {
+            "direct_total": 10335,
+            "direct_rejected": 419,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 371,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 102,
+            "direct_retention": 0.959458151910982,
+            "specific_ghost_rejection": 0.27936746987951805,
+            "generic_ghost_rejection": 0.40963855421686746
+          },
+          "supported_copy": {
+            "direct_total": 10335,
+            "direct_rejected": 289,
+            "specific_ghost_total": 1328,
+            "specific_ghost_rejected": 293,
+            "generic_ghost_total": 249,
+            "generic_ghost_rejected": 89,
+            "direct_retention": 0.9720367682631833,
+            "specific_ghost_rejection": 0.22063253012048192,
+            "generic_ghost_rejection": 0.357429718875502
+          }
+        }
+      }
+    }
+  },
+  "recorded_umrr_walk": {
+    "scope": "Recorded UMRR point/track computation, no DDS, freshness or obstacle-layer evaluation",
+    "labels": "Room proxy: direct <3m; ghost >3.4m, only documented person-present phases; not independent annotation",
+    "phases_s": {
+      "walking": [
+        6,
+        40
+      ],
+      "standing": [
+        42,
+        50
+      ],
+      "swaying": [
+        50,
+        56
+      ]
+    },
+    "stats": {
+      "scans": 1845,
+      "raw_points": 60251
+    },
+    "fit_reasons": {
+      "valid": 1841,
+      "insufficient_consensus": 4
+    },
+    "fit_config": {
+      "doppler_sign": 1,
+      "residual_threshold": 0.05,
+      "min_inliers": 8,
+      "min_inlier_fraction": 0.6,
+      "max_condition": 30.0,
+      "ransac_trials": 128,
+      "noise_floor": 0.02,
+      "velocity_std_floor": 0.05,
+      "max_velocity_std": 1.0,
+      "max_speed": 15.0
+    },
+    "gate_config": {
+      "min_range": 0.15,
+      "max_range": 120.0,
+      "min_snr_db": 6.0
+    },
+    "tracker_config": {
+      "cluster_radius": 0.6,
+      "gate": 1.2,
+      "position_std": 0.15,
+      "radial_speed_std": 0.1,
+      "accel_std": 2.0,
+      "confirm_hits": 8,
+      "confirm_window": 10,
+      "max_coast": 1.0,
+      "static_hold": 5.0,
+      "static_gate": 0.5,
+      "ghost_range_gap": 1.5,
+      "ghost_speed_tolerance": 0.25,
+      "background_range_bin": 0.5,
+      "background_azimuth_bin_deg": 3.0,
+      "background_time_constant": 30.0,
+      "background_threshold": 0.3,
+      "background_warmup": 3.0
+    },
+    "legacy_config": {
+      "range_gap": 1.5,
+      "speed_tolerance": 0.25,
+      "wall_azimuth_deg": 4.0
+    },
+    "candidate_config": {
+      "range_gap": 1.5,
+      "speed_tolerance": 0.25,
+      "direction_deg": 4.0,
+      "support_radius": 0.6
+    },
+    "point_metrics": {
+      "walking": {
+        "none": {
+          "direct_total": 1244,
+          "direct_rejected": 0,
+          "specific_ghost_total": 2610,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": null
+        },
+        "legacy": {
+          "direct_total": 1244,
+          "direct_rejected": 54,
+          "specific_ghost_total": 2610,
+          "specific_ghost_rejected": 2484,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9565916398713826,
+          "specific_ghost_rejection": 0.9517241379310345,
+          "generic_ghost_rejection": null
+        },
+        "no_static_only": {
+          "direct_total": 1244,
+          "direct_rejected": 45,
+          "specific_ghost_total": 2610,
+          "specific_ghost_rejected": 2461,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9638263665594855,
+          "specific_ghost_rejection": 0.942911877394636,
+          "generic_ghost_rejection": null
+        },
+        "signed_pair": {
+          "direct_total": 1244,
+          "direct_rejected": 33,
+          "specific_ghost_total": 2610,
+          "specific_ghost_rejected": 1933,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9734726688102894,
+          "specific_ghost_rejection": 0.7406130268199234,
+          "generic_ghost_rejection": null
+        },
+        "aligned_pair": {
+          "direct_total": 1244,
+          "direct_rejected": 1,
+          "specific_ghost_total": 2610,
+          "specific_ghost_rejected": 310,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9991961414790996,
+          "specific_ghost_rejection": 0.11877394636015326,
+          "generic_ghost_rejection": null
+        },
+        "supported_copy": {
+          "direct_total": 1244,
+          "direct_rejected": 0,
+          "specific_ghost_total": 2610,
+          "specific_ghost_rejected": 11,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.00421455938697318,
+          "generic_ghost_rejection": null
+        }
+      },
+      "standing": {
+        "none": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "legacy": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "no_static_only": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "signed_pair": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "aligned_pair": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        },
+        "supported_copy": {
+          "direct_total": 0,
+          "direct_rejected": 0,
+          "specific_ghost_total": 0,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": null,
+          "specific_ghost_rejection": null,
+          "generic_ghost_rejection": null
+        }
+      },
+      "swaying": {
+        "none": {
+          "direct_total": 34,
+          "direct_rejected": 0,
+          "specific_ghost_total": 72,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": null
+        },
+        "legacy": {
+          "direct_total": 34,
+          "direct_rejected": 0,
+          "specific_ghost_total": 72,
+          "specific_ghost_rejected": 29,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.4027777777777778,
+          "generic_ghost_rejection": null
+        },
+        "no_static_only": {
+          "direct_total": 34,
+          "direct_rejected": 0,
+          "specific_ghost_total": 72,
+          "specific_ghost_rejected": 27,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.375,
+          "generic_ghost_rejection": null
+        },
+        "signed_pair": {
+          "direct_total": 34,
+          "direct_rejected": 0,
+          "specific_ghost_total": 72,
+          "specific_ghost_rejected": 19,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.2638888888888889,
+          "generic_ghost_rejection": null
+        },
+        "aligned_pair": {
+          "direct_total": 34,
+          "direct_rejected": 0,
+          "specific_ghost_total": 72,
+          "specific_ghost_rejected": 2,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.027777777777777776,
+          "generic_ghost_rejection": null
+        },
+        "supported_copy": {
+          "direct_total": 34,
+          "direct_rejected": 0,
+          "specific_ghost_total": 72,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": null
+        }
+      },
+      "all_scored": {
+        "none": {
+          "direct_total": 1278,
+          "direct_rejected": 0,
+          "specific_ghost_total": 2682,
+          "specific_ghost_rejected": 0,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.0,
+          "generic_ghost_rejection": null
+        },
+        "legacy": {
+          "direct_total": 1278,
+          "direct_rejected": 54,
+          "specific_ghost_total": 2682,
+          "specific_ghost_rejected": 2513,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9577464788732394,
+          "specific_ghost_rejection": 0.9369873228933632,
+          "generic_ghost_rejection": null
+        },
+        "no_static_only": {
+          "direct_total": 1278,
+          "direct_rejected": 45,
+          "specific_ghost_total": 2682,
+          "specific_ghost_rejected": 2488,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9647887323943662,
+          "specific_ghost_rejection": 0.9276659209545116,
+          "generic_ghost_rejection": null
+        },
+        "signed_pair": {
+          "direct_total": 1278,
+          "direct_rejected": 33,
+          "specific_ghost_total": 2682,
+          "specific_ghost_rejected": 1952,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9741784037558685,
+          "specific_ghost_rejection": 0.7278150633855331,
+          "generic_ghost_rejection": null
+        },
+        "aligned_pair": {
+          "direct_total": 1278,
+          "direct_rejected": 1,
+          "specific_ghost_total": 2682,
+          "specific_ghost_rejected": 312,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 0.9992175273865415,
+          "specific_ghost_rejection": 0.116331096196868,
+          "generic_ghost_rejection": null
+        },
+        "supported_copy": {
+          "direct_total": 1278,
+          "direct_rejected": 0,
+          "specific_ghost_total": 2682,
+          "specific_ghost_rejected": 11,
+          "generic_ghost_total": 0,
+          "generic_ghost_rejected": 0,
+          "direct_retention": 1.0,
+          "specific_ghost_rejection": 0.004101416853094705,
+          "generic_ghost_rejection": null
+        }
+      }
+    },
+    "unchanged_tracker_counts": {
+      "walking": {
+        "none": {
+          "scans": 618,
+          "person_present": 591,
+          "far_track_present": 101
+        },
+        "legacy": {
+          "scans": 618,
+          "person_present": 591,
+          "far_track_present": 10
+        },
+        "no_static_only": {
+          "scans": 618,
+          "person_present": 591,
+          "far_track_present": 10
+        },
+        "signed_pair": {
+          "scans": 618,
+          "person_present": 591,
+          "far_track_present": 134
+        },
+        "aligned_pair": {
+          "scans": 618,
+          "person_present": 591,
+          "far_track_present": 117
+        },
+        "supported_copy": {
+          "scans": 618,
+          "person_present": 591,
+          "far_track_present": 103
+        }
+      },
+      "standing": {
+        "none": {
+          "scans": 145,
+          "person_present": 88,
+          "far_track_present": 0
+        },
+        "legacy": {
+          "scans": 145,
+          "person_present": 88,
+          "far_track_present": 0
+        },
+        "no_static_only": {
+          "scans": 145,
+          "person_present": 88,
+          "far_track_present": 0
+        },
+        "signed_pair": {
+          "scans": 145,
+          "person_present": 88,
+          "far_track_present": 0
+        },
+        "aligned_pair": {
+          "scans": 145,
+          "person_present": 88,
+          "far_track_present": 0
+        },
+        "supported_copy": {
+          "scans": 145,
+          "person_present": 88,
+          "far_track_present": 0
+        }
+      },
+      "swaying": {
+        "none": {
+          "scans": 108,
+          "person_present": 63,
+          "far_track_present": 0
+        },
+        "legacy": {
+          "scans": 108,
+          "person_present": 63,
+          "far_track_present": 0
+        },
+        "no_static_only": {
+          "scans": 108,
+          "person_present": 63,
+          "far_track_present": 0
+        },
+        "signed_pair": {
+          "scans": 108,
+          "person_present": 63,
+          "far_track_present": 0
+        },
+        "aligned_pair": {
+          "scans": 108,
+          "person_present": 63,
+          "far_track_present": 0
+        },
+        "supported_copy": {
+          "scans": 108,
+          "person_present": 63,
+          "far_track_present": 0
+        }
+      }
+    },
+    "timing_ms": {
+      "legacy": {
+        "p50": 0.071688,
+        "p95": 0.105937,
+        "p99": 0.11889399999999997,
+        "max": 0.156715
+      },
+      "candidate_three_ablations": {
+        "p50": 0.072017,
+        "p95": 0.096736,
+        "p99": 0.11321399999999998,
+        "max": 0.174113
+      }
+    },
+    "source_sha256": {
+      "../../results/umrr96-filtering-20260924/walk/0_walk_2026_09_24-22_45_08.mcap": "c220f795719b2c73c3a251704b0f7e6cdf2c95e01c6d3c11f3ef29c3008fab6c",
+      "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/tools/assessment/compare_ghost_walk.py": "457bcfbe4ecfcd73fba98efc764836df1fcafefcccc80d57d9bc31037d4ec94e",
+      "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/config/umrr96_processing.yaml": "7bb7ed8af702b4a18aff2fc91405818db18540763a3e612de76985b7691f1f69",
+      "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/tools/assessment/compare_ghost_criteria.py": "f5a5279c953b9a991b207e481db3e912a0e9c96b379d35cc05232587b9cfa885",
+      "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/ghost_candidates.py": "0e0cd26919dd6fe1950b5e1493bfdc95214c4dc12ea7534ab8e36038881be172",
+      "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/ghosts.py": "44ed4e7514e9ffb4426dba77395517372ffcb001b47bc28fbb65d1b32b6329c2",
+      "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/tracker.py": "bef1689287e9edfc1be5e6ff6a0bde9b1e4a2b3766bb784c982de097f721b1f2"
+    }
+  },
+  "default_preservation": {
+    "scans": 474,
+    "counts": {
+      "raw_points": 8689,
+      "displayed_points": 8689,
+      "audited_points": 8689
+    },
+    "classification_counts": {
+      "2": 8645,
+      "3": 26,
+      "4": 18
+    },
+    "reason_mask_counts": {
+      "0": 8671,
+      "64": 18
+    },
+    "existing_output_mismatches": 0,
+    "current_scan_provenance_errors": 0,
+    "processing_ms": {
+      "before": {
+        "p50": 8.266224000180955,
+        "p95": 8.966580999913276,
+        "p99": 9.781242060107603,
+        "max": 15.831613998670946
+      },
+      "after": {
+        "p50": 8.532349999768485,
+        "p95": 9.649072999491182,
+        "p99": 10.704297000102086,
+        "max": 11.326587999064941
+      }
+    },
+    "comparison": "Prior HEAD node/cloud/ghost implementations versus current code; same recorded inputs and configuration, cold tracker state in each run.",
+    "limits": "Recovered partial capture, unlabeled scene. Publication sinks replace DDS. Historical receive stamps bypass freshness. Timings are offline compute, not end-to-end or acquisition latency.",
+    "sources": {
+      "results/umrr96-ingest-research-20260928/recovered/0_live_2026_09_28-09_54_56.mcap": "fc23672b3b94a24f9c92dce5325a8d5d9f9b991b1116723c5cb88fb2b0970676",
+      "results/umrr96-classification-20260928/before_cloud.py": "2ca69d7cf44baabd12257dcd241d0b0ed4c8698aa8a0ea0014bbd8a805922458",
+      "results/umrr96-classification-20260928/before_ghosts.py": "521e4da6b4d547e9ba508ca8f2d7c0500c28fbb62136e914a978e88d5075740c",
+      "results/umrr96-classification-20260928/before_node.py": "485a1b751ef1e3535ac85d30e0d6130e99fbc9f35cc793df54c5e560716583a4",
+      "results/umrr96-rejection-20260928/default_replay.py": "b5d36cca3320ae29e9ce4f95cfdf6a269432cc8e3902db1454576667983046c5",
+      "src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/node.py": "cb3f0124bf295434ccff1b656ff8a65451c39120f5b4ff40caf5c1561d919598",
+      "src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/classification.py": "68efb665611f0da1f4b8d3426ffdf6929dd2b62ee3b348d89ffb9d263dad7562"
+    },
+    "comparison_clarification": "Saved pre-audit node/cloud/ghost reference from the prior classification study versus current default; publication sinks, not live DDS. The legacy comparison string is retained above as originally emitted."
+  },
+  "validation": {
+    "processing_pytest_cases": 119,
+    "processing_pytest_failures": 0,
+    "processing_pytest_errors": 0,
+    "colcon_reported_results_including_wrappers_lint_and_messages": 159,
+    "colcon_reported_errors": 0,
+    "colcon_reported_failures": 0,
+    "colcon_reported_skipped": 0,
+    "pytest_suites": {
+      "test_accumulation.xunit.xml": {
+        "sha256": "220a608fad38820e4612b5fe3ad6a440dbcf4691420801a2c53e9a17a13a7f2c",
+        "tests": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_accumulation_runtime.xunit.xml": {
+        "sha256": "7aed2541a1703818bc2d766b715e6afdcd5da26b1b0ad71b5eb0e192e26200a8",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_classification.xunit.xml": {
+        "sha256": "59e34af34c6b8fdbc76a65bde61faa66c5d6374ef6632fae5f124910dc880074",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_cloud.xunit.xml": {
+        "sha256": "a48b30491cb2dd5bb58d96f300816c3f59bdcce1db4e75c834e19af8d4eaf179",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_doppler.xunit.xml": {
+        "sha256": "bc46eac1d5a960a4c785854d7995985c501487222943e06704998b833ead213f",
+        "tests": 19,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_ghost_candidates.xunit.xml": {
+        "sha256": "c1a73d8d3f3b81458ce454f41f6462688a12e4210fe8d690bfa5fc1330cf6143",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_ghosts.xunit.xml": {
+        "sha256": "0f25b9ff8f7db1d804120d3964029b47af93d94d3a7e7d4b53fed92188c9a244",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_node_logic.xunit.xml": {
+        "sha256": "41c71a16dca061a4512c1b21c6f605eddb976027ff4eb18bd83b97ba4ef31a9e",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_obstacles.xunit.xml": {
+        "sha256": "b4842d95c76cbf524433013585ba85c3295d261491c5cda2cfdc9367585bec9a",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_processing_runtime.xunit.xml": {
+        "sha256": "aaf3d5adeb85e22ab7c757f602169d1c5d50b1c73e48224dcc7b0514e5309343",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_tracker.xunit.xml": {
+        "sha256": "35ef2cd3ee36eec2ae67bedb6f675bcc51590caa9f79f1ea9a22387397a67f01",
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "test_vectorized_equivalence.xunit.xml": {
+        "sha256": "374d2078c408db294fc10c66b17e51466ba9eb0645c66e9ad21bb3a68179cd03",
+        "tests": 23,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "coverage": "Existing regression/launch checks plus copy-evidence counterexamples, advisory policy with overlapping flags, audit/render decisions, both ROS node policy settings, byte preservation and next-scan clearing."
+  }
+}

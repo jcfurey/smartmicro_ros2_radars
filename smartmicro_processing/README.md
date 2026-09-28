@@ -77,8 +77,8 @@ in separate runs. Run one publisher for these output names at a time.
 | `quality_targets` | Finite XYZ/Doppler/SNR, range and modest SNR gates; keeps both static and moving returns |
 | `doppler_inliers` | Quality targets compatible with the fitted static-scene Doppler model |
 | `doppler_outliers` | Quality targets outside that model's residual gate; not automatically moving objects |
-| `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`) |
-| `moving_ghosts` | Doppler outliers rejected as ghosts: a nearer same-speed mover, or a nearer static return at the same bearing. On a 2026-09-24 walk-through (stationary sensor, one person, 3 m room) the rules removed 85% of ghosts and kept 97% of real returns; about 23% of `moving_targets` remained ghosts. The same-speed rule ignores bearing and Doppler sign: of two real movers with similar \|speed\| (or one about twice the other), at any bearing and more than `range_gap` apart in range, the farther one is rejected. |
+| `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`, `reject_static_only`) |
+| `moving_ghosts` | Doppler outliers rejected by the active ghost policy. By default, any same-absolute-speed, double-absolute-speed or behind-static trigger rejects. Speed-copy rules ignore bearing and Doppler sign, so two independent movers more than `range_gap` apart in range can suppress the farther one. See the [criteria comparison](../docs/umrr96-rejection-criteria-20260928.md) for recorded tradeoffs. |
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
 | `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id, age (sensor frame) |
 | `track_markers` | RViz markers for the tracks (built only with subscribers) |
@@ -117,6 +117,46 @@ and behind-static-return rules; multiple bits can be set. Diagnostic ghost-reaso
 counts can therefore overlap. Track association is a separate boolean and does
 not claim a unique object identity. The underlying quality, Doppler, ghost,
 tracker and obstacle decisions are unchanged by this audit feature.
+
+### Comparing static-only rejection
+
+The experimental `reject_static_only` parameter defaults to `true`, preserving
+the established rejection policy. With `false`, a nearer static return alone
+leaves a mover in `moving_targets`; same-speed or double-speed evidence still
+rejects it. A single static detection does not establish an opaque wall.
+
+To compare this option, copy the **complete** [parameter YAML](config/umrr96_processing.yaml),
+change `reject_static_only: true` to `reject_static_only: false` in that copy,
+and select it at startup:
+
+```bash
+ros2 launch smartmicro_processing umrr96_processing.launch.py \
+  params_file:=/absolute/path/to/umrr96_processing_comparison.yaml
+```
+
+The parameter is read-only during a run. Retained points still carry
+`GHOST_BEHIND_STATIC` in their audit, but their classification is `MOVING` and
+their display color reflects retention. Consumers must use `classification`
+for the decision, rather than testing `reason_flags != 0`. Diagnostics report
+the active `reject_static_only` policy and the count `static_only_advisory`;
+`ghost_behind_static` includes both advisory and rejected hypotheses.
+
+In the [recorded comparison](../docs/umrr96-rejection-criteria-20260928.md), this
+option retained nine additional person-proxy points and admitted 25 additional
+ghost-proxy points; confirmed far-track presence was unchanged. The public
+dataset showed a much larger loss of ghost suppression. This is an optional
+tradeoff, not a validated replacement default. The tracker retains its separate
+absolute-speed ghost rule. Stronger signed-speed, direction and two-return
+support candidates remain offline experiments because they missed most ghosts
+in the sparse UMRR recording. All variants use current-scan points; no point
+history or RViz decay is added.
+
+The criteria changes passed 119 processing pytest cases and package lint.
+A separate default-policy replay preserved all existing outputs and current-scan
+provenance over 474 scans / 8,689 detections. These offline checks do not establish
+live latency, crossing-person accuracy or obstacle-layer safety.
+
+### Scan lifecycle and measurement contract
 
 An actual empty scan has `event=SCAN` and empty arrays. After previously published
 data is cleared due to stale/rejected input or a clock reset, the audit sends one
@@ -195,6 +235,8 @@ Run the synthetic and ROS integration checks:
 
 ```bash
 colcon --log-base .colcon/umrr96-processing/log test \
+  --base-paths src/smartmicro_ros2_radars/smartmicro_processing \
+    src/smartmicro_ros2_radars/umrr_ros2_msgs \
   --build-base .colcon/umrr96-processing/build \
   --install-base .colcon/umrr96-processing/install \
   --packages-select smartmicro_processing --event-handlers console_direct+

@@ -22,6 +22,9 @@
     range_gap: 1.5
     speed_tolerance: 0.25
     wall_azimuth_deg: 4.0
+    # Experimental alternative: false keeps static-only hypotheses advisory.
+    # Same/double-speed rejection remains enabled. See the 2026-09-28 criteria study.
+    reject_static_only: true
     # Moving-object tracker (walk-through: person tracked in 96% of walking scans,
     # ghost tracks in 0.7% of labelled scans). The background model assumes the
     # radar is fixed in the scene: it restarts (and the obstacle shadow rule is off)

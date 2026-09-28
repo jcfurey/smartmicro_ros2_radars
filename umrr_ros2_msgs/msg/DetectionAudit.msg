@@ -19,6 +19,8 @@ uint8 SUSPECTED_GHOST=4
 
 # Quality reasons use first-failure precedence: nonfinite, range, SNR.
 # Multiple ghost reasons may be set together. No flags means no rejection.
+# GHOST_BEHIND_STATIC may be advisory on MOVING when reject_static_only=false.
+# Use classification for the decision, not reason_flags != 0.
 uint16 NONFINITE=1
 uint16 OUT_OF_RANGE=2
 uint16 LOW_SNR=4

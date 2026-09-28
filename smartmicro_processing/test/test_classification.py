@@ -87,3 +87,18 @@ def test_ghost_reason_overlap_and_independent_mover_counterexample_are_explained
     independent = [[2, 0, 0], [2.5, 5 * np.sin(np.pi / 3), 0]]
     reasons = ghost_reasons(independent, [.5, -.5], [])
     assert reasons.tolist() == [0, int(GhostReason.SAME_SPEED)]
+
+
+def test_advisory_reason_survives_without_labeling_retained_point_as_rejected():
+    values = np.array([[3., 0, 0, 0, 30], [6, 0, 0, 1, 30]])
+    fit = FitResult(True, 'valid', inliers=np.array([True, False]))
+    audit = classify(Header(frame_id='umrr96'), values, GateConfig(), fit,
+                     np.array([0, 1]), np.array([GhostReason.BEHIND_STATIC], np.uint8),
+                     [1], ghost_rejected=np.array([False]))
+    assert list(audit.classification) == [Audit.STATIC, Audit.MOVING]
+    assert list(audit.reason_flags) == [0, Audit.GHOST_BEHIND_STATIC]
+    assert list(audit.track_associated) == [False, True]
+    shown = read_points(classified_cloud(audit.header, values, audit))
+    assert shown['source_index'].tolist() == [0, 1]
+    assert shown['classification'].tolist() == [Audit.STATIC, Audit.MOVING]
+    assert shown['reason_flags'].tolist() == [0, Audit.GHOST_BEHIND_STATIC]

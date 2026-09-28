@@ -44,6 +44,83 @@ It reports both moving-only scores and scores over a fixed set of all valid
 labeled detections, so changing the motion gate does not silently change the
 denominator in that second comparison. Neither threshold is optimized here.
 
+## Comparing rejection criteria
+
+The [criteria follow-up](../../docs/umrr96-rejection-criteria-20260928.md) compares
+the existing rules, static-only advisory behavior, and three increasingly
+restrictive signed-speed copy hypotheses. The latter are offline experiments;
+they are not connected to the ROS node. Dataset gates are frozen at 0.15–120 m
+and 0.05 m/s, and both rule configurations are recorded in each report.
+
+From the repository, using the research Python environment described above:
+
+```bash
+OPENBLAS_NUM_THREADS=1 python3 tools/assessment/compare_ghost_criteria.py \
+  --dataset-root /run/media/jcfurey/Bulk-Storage/RadarGhostDataset/v1.1 \
+  --phase pilot --output /tmp/ghost-criteria-pilot-repeat.json
+OPENBLAS_NUM_THREADS=1 python3 tools/assessment/compare_ghost_criteria.py \
+  --dataset-root /run/media/jcfurey/Bulk-Storage/RadarGhostDataset/v1.1 \
+  --phase held_out --output /tmp/ghost-criteria-scenes-repeat.json
+```
+
+Each run first writes an adjacent `.selection.json`. `pilot` verifies and reads
+the six extracted members in `sample-manifest.json`. `held_out` excludes scenes
+11, 13 and 21; it chooses the smallest compressed original pedestrian and cyclist
+recording where available, plus the smallest virtual member in each remaining
+scene. This gives 53 members in 18 scenes; scene 09 lacks an original pedestrian
+recording. Members are read one at a time into memory from the verified archives
+on Bulk-Storage, checking index size/CRC and ZIP CRC. No new H5 files are extracted.
+
+The phase name describes the original experimental split. Repeating these now
+examined scenes does not create a fresh holdout. The static-only advisory variant
+was added as an exploratory follow-up after the first larger comparison.
+Originals and constructed overlays are reported separately, with moving and
+fixed all-valid label cohorts, class/scene breakdowns, and source hashes.
+
+To replay the documented UMRR walk, from the **workspace root**, use the ROS Python
+environment with `h5py` and `yaml` available:
+
+```bash
+source /opt/ros/lyrical/setup.bash
+source .colcon/umrr96-processing/install/local_setup.bash
+OPENBLAS_NUM_THREADS=1 python3 \
+  src/smartmicro_ros2_radars/tools/assessment/compare_ghost_walk.py \
+  results/umrr96-filtering-20260924/walk \
+  --output /tmp/umrr96-criteria-walk-repeat.json
+```
+
+This reader calls the actual measurement adapter, Doppler fitter and unchanged
+tracker with the current parameter YAML. It starts each tracker cold and scores
+only documented person-present phases, using room-range proxies rather than
+independent annotations. It publishes nothing and evaluates neither the obstacle
+layer nor DDS/freshness behavior. The recorded source hashes identify the exact
+code/configuration used; changing them creates a new experiment.
+
+## Tracker loss audit
+
+The [tracker follow-up](../../docs/umrr96-tracker-audit-20260928.md) distinguishes
+point rejection, tentative tracks, track-level ghost suppression and association
+opportunities on the documented walk. It also runs three synthetic counterexamples
+and exploratory 6-of-8 / 4-of-5 confirmation replays with otherwise fixed settings.
+
+From the workspace root, with SciPy, NumPy and PyYAML in the ROS Python environment:
+
+```bash
+source /opt/ros/lyrical/setup.bash
+source .colcon/umrr96-processing/install/local_setup.bash
+OPENBLAS_NUM_THREADS=1 python3 \
+  src/smartmicro_ros2_radars/tools/assessment/audit_tracker_losses.py \
+  results/umrr96-filtering-20260924/walk \
+  --output /tmp/umrr96-tracker-audit-repeat.json
+```
+
+Choose a fresh output path. The tool verifies its recorded greedy matches against
+the actual tracker updates on every scan. Joint matching preserves confirmed-first
+priority and is evaluated on baseline predicted states only; it does not produce
+an alternative trajectory replay. Proxy labels are restricted to the documented
+person-present phases. The current-detection view already includes tentative
+points, so association losses must not be presented as missing raw detections.
+
 ## Recorded UMRR-96 bags
 
 These tools inspect recorded detections and reproduce the
