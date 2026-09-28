@@ -1,5 +1,9 @@
 # Experimental UMRR-96 processing
 
+This worktree enables [confirmation from consistent motion](../docs/experiment-confirmation.md).
+Use its isolated build under `.colcon/umrr96-exp-confirmation/` in the parent
+workspace; the build commands below describe the shared baseline layout.
+
 This package provides a detection adapter, robust **3D radar-origin translation
 velocity** and [bounded temporal evidence](ACCUMULATION.md). It builds independently of the proprietary
 SDK and runs alongside the existing driver. It subscribes to raw targets and

@@ -68,6 +68,31 @@ def test_integer_overrides_are_accepted_for_float_parameters(ros):
         node.destroy_node()
 
 
+def test_consistent_confirmation_uses_only_current_scan_positions(ros):
+    ros('evidence_confirmation:=true')
+    node = RadarProcessing()
+    try:
+        assert node.tracker.config.evidence_confirmation
+        node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
+        node.audit_pub = Recorder()
+        static = np.array([[3, 0, 0], [2, 1, 0], [2, -1, 0], [2, 0, 1], [2, 0, -1],
+                           [3, 1, 1], [3, -1, -1], [2, 1, -1], [2, -1, 1]])
+        rows = np.column_stack((static, np.zeros(9), np.full(9, 30)))
+        start = node.get_clock().now().nanoseconds
+        for k in range(6):
+            now = start + k * 55_000_000
+            node.now_ns = lambda: now
+            node.receive(cloud(now, np.vstack((rows, [1. + .5*k*.055, 0., 0., .5, 30.]))))
+        assert node.stats['tracks'] == 1
+        assert node.cloud_publishers['tracked_targets'].messages[-1].width == 1
+        now += 55_000_000
+        node.receive(cloud(now, rows))
+        assert node.cloud_publishers['classified_targets'].messages[-1].width == 9
+        assert node.cloud_publishers['tracked_targets'].messages[-1].width == 0
+    finally:
+        node.destroy_node()
+
+
 @pytest.mark.parametrize('reject_static', [True, False])
 def test_static_only_policy_agrees_across_clouds_audit_and_diagnostics(ros, reject_static):
     ros('reject_static_only:=' + str(reject_static).lower())

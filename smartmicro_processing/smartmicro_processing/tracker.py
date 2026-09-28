@@ -15,6 +15,7 @@ class TrackerConfig:
     accel_std: float = 2.0  # m/s^2, white-acceleration process noise
     confirm_hits: int = 8  # hits within the last confirm_window scans to confirm
     confirm_window: int = 10
+    evidence_confirmation: bool = False  # experimental early confirmation from consistent hits
     max_coast: float = 1.0  # s without any associated detection before deletion
     static_hold: float = 5.0  # s a confirmed track may live on zero-Doppler support only
     static_gate: float = 0.5  # m, zero-Doppler detections this close support a track
@@ -38,6 +39,8 @@ class TrackerConfig:
             raise ValueError('background_threshold must be within (0, 1)')
         if not 1 <= self.confirm_hits <= self.confirm_window <= 64:
             raise ValueError('Need 1 <= confirm_hits <= confirm_window <= 64')
+        if not isinstance(self.evidence_confirmation, bool):
+            raise ValueError('evidence_confirmation must be a boolean')
 
 
 @dataclass
@@ -54,6 +57,7 @@ class Track:
     first_stamp: float = 0.0
     radial_speed: float = 0.0  # last associated cluster speed, for the ghost rule
     ghost: bool = False
+    confirmation_evidence: list = field(default_factory=list)
 
     @property
     def speed(self):
@@ -201,6 +205,28 @@ class MovingObjectTracker:
         track.x = track.x + K @ (z - h)
         track.P = (np.eye(4) - K @ H) @ track.P
 
+    def confirmation_score(self, track, position, radial_speed):
+        """Bounded per-scan consistency, not a calibrated probability."""
+        c = self.config
+        position_error = np.linalg.norm(position - track.x[:2]) / max(
+            2 * c.position_std, c.cluster_radius / 2)
+        radius = np.linalg.norm(track.x[:2])
+        predicted = float(track.x[:2] @ track.x[2:] / radius) if radius > 1e-3 else 0.
+        speed_error = (radial_speed - predicted) / max(
+            3 * c.radial_speed_std, c.ghost_speed_tolerance)
+        return math.exp(-.5 * (position_error ** 2 + speed_error ** 2))
+
+    def ready_to_confirm(self, track):
+        """Preserve M-of-N confirmation; allow an earlier, well-supported path."""
+        c = self.config
+        hits = sum(track.history)
+        if hits >= c.confirm_hits:
+            return True
+        # Six good scans can replace eight ordinary hits. Newborn points get one
+        # vote regardless of cluster population; a missed scan subtracts a vote.
+        return (c.evidence_confirmation and hits >= 6
+                and sum(track.confirmation_evidence) >= 4.5)
+
     def update_position(self, track, position):
         H = np.zeros((2, 4))
         H[0, 0] = H[1, 1] = 1
@@ -241,12 +267,19 @@ class MovingObjectTracker:
                 if i not in used and distance < best_distance:
                     best, best_distance = i, distance
             hit = best is not None
+            evidence = -1.
             if hit:
                 used.add(best)
+                if c.evidence_confirmation:
+                    evidence = self.confirmation_score(
+                        track, measurements[best][0], measurements[best][1])
                 self.update(track, measurements[best][0], measurements[best][1])
                 track.radial_speed = measurements[best][1]
                 track.last_moving = track.last_support = stamp
             track.history = (track.history + [hit])[-c.confirm_window:]
+            if c.evidence_confirmation:
+                track.confirmation_evidence = (track.confirmation_evidence + [evidence])[
+                    -c.confirm_window:]
             track.hits += hit
         if sensor_moving:
             self.background.reset()
@@ -271,7 +304,7 @@ class MovingObjectTracker:
                 if close.any() and stamp - track.last_moving <= c.static_hold:
                     self.update_position(track, static_xy[close].mean(0))
                     track.last_support = stamp
-            if not track.confirmed and sum(track.history) >= c.confirm_hits:
+            if not track.confirmed and self.ready_to_confirm(track):
                 track.confirmed = True
         for track in self.tracks:
             track.ghost = track.confirmed and self.is_ghost(track)
@@ -283,7 +316,8 @@ class MovingObjectTracker:
             self.tracks.append(Track(
                 self.next_id, np.r_[position, velocity],
                 np.diag([c.position_std ** 2] * 2 + [1.0, 1.0]), stamp, stamp, stamp, [True],
-                hits=1, radial_speed=speed, first_stamp=stamp))
+                hits=1, radial_speed=speed, first_stamp=stamp,
+                confirmation_evidence=[1.] if c.evidence_confirmation else []))
             self.next_id += 1
         self.tracks = [t for t in self.tracks if stamp - t.last_support <= c.max_coast
                        and (t.confirmed or len(t.history) < c.confirm_window
