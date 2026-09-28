@@ -1,0 +1,44 @@
+{
+  "scans": 474,
+  "counts": {
+    "raw_points": 8689,
+    "displayed_points": 8689,
+    "audited_points": 8689
+  },
+  "classification_counts": {
+    "2": 8645,
+    "3": 26,
+    "4": 18
+  },
+  "reason_mask_counts": {
+    "0": 8671,
+    "64": 18
+  },
+  "existing_output_mismatches": 0,
+  "current_scan_provenance_errors": 0,
+  "processing_ms": {
+    "before": {
+      "p50": 8.282778499051346,
+      "p95": 9.204217499245715,
+      "p99": 10.087361350651916,
+      "max": 14.516561999698752
+    },
+    "after": {
+      "p50": 8.538549000149942,
+      "p95": 9.934099349266035,
+      "p99": 10.54142178943948,
+      "max": 11.594298999625607
+    }
+  },
+  "comparison": "Prior HEAD node/cloud/ghost implementations versus current code; same recorded inputs and configuration, cold tracker state in each run.",
+  "limits": "Recovered partial capture, unlabeled scene. Publication sinks replace DDS. Historical receive stamps bypass freshness. Timings are offline compute, not end-to-end or acquisition latency.",
+  "sources": {
+    "results/umrr96-ingest-research-20260928/recovered/0_live_2026_09_28-09_54_56.mcap": "fc23672b3b94a24f9c92dce5325a8d5d9f9b991b1116723c5cb88fb2b0970676",
+    "results/umrr96-classification-20260928/before_cloud.py": "2ca69d7cf44baabd12257dcd241d0b0ed4c8698aa8a0ea0014bbd8a805922458",
+    "results/umrr96-classification-20260928/before_ghosts.py": "521e4da6b4d547e9ba508ca8f2d7c0500c28fbb62136e914a978e88d5075740c",
+    "results/umrr96-classification-20260928/before_node.py": "485a1b751ef1e3535ac85d30e0d6130e99fbc9f35cc793df54c5e560716583a4",
+    "results/umrr96-classification-20260928/replay_check.py": "e344d628a2e4efc69dc1b91723b73c22f89121e5dfb1058b4a119ed1c7f495c1",
+    "src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/node.py": "5400970369de0b1125a120026ddf62891631309047f8962ce7053f494699ad80",
+    "src/smartmicro_ros2_radars/smartmicro_processing/smartmicro_processing/classification.py": "5b83a7ae36a81f2f053fc8f4d013a22bc7d08cdaf7fdd98058da2aa308b3d73b"
+  }
+}

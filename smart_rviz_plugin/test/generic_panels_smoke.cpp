@@ -295,7 +295,7 @@ int main(int argc, char ** argv)
     wait([&] {return fault_topic->currentIndex() == 0 && node->count_subscribers(fault_name) == 0;},
       5, "fault unsubscribe after topic vanished");
 
-    // --- Recorder (P8, C14) ---
+    // --- Recorder (P8, C14, C41) ---
     auto recorder = loader.createSharedInstance("smart_rviz_plugin/Smart Recorder");
     wait([&] {return true;}, .5, "");
     check(node->count_subscribers("/ip_camera_front_right/image_raw/compressed") == 0 &&
@@ -323,10 +323,21 @@ int main(int argc, char ** argv)
       "malformed cloud reported");
     child<QSpinBox>(recorder, "max_rows")->setValue(200);
     child<QPushButton>(recorder, "record")->click();
-    wait([&] {
-        cloud_pub->publish(target_cloud(150));
-        return child<QLabel>(recorder, "status")->text().contains("limit");
-      }, 5, "recording cap");
+    // Queue eight frames without processing Qt events, simulating a GUI stall.
+    // Stay below the subscription's depth of ten and wait for reliable delivery
+    // before invoking ticks, so this checks queue draining, not DDS timing.
+    for (int i = 0; i < 8; ++i) {cloud_pub->publish(target_cloud(26));}
+    check(cloud_pub->wait_for_all_acked(std::chrono::seconds(5)),
+      "Recorder burst was not delivered");
+    // Eight frames hold 208 rows. Seven ticks must reach the 200-row cap;
+    // one-message-per-tick processing can only record 182 rows. No Qt events
+    // run here, so the panel's timer cannot supply extra ticks behind our back.
+    for (int i = 0; i < 7; ++i) {
+      check(QMetaObject::invokeMethod(recorder.get(), "check_data", Qt::DirectConnection),
+        "Recorder tick slot missing");
+    }
+    check(child<QLabel>(recorder, "status")->text().contains("limit"),
+      "Recorder did not catch up after a queued burst");
     check(child<QPushButton>(recorder, "save")->isEnabled() &&
       child<QPushButton>(recorder, "record")->text() == "Record",
       "Recording not stopped at the cap");
@@ -337,7 +348,7 @@ int main(int argc, char ** argv)
 
     rclcpp::shutdown();
     std::cout << "PASS: unique node names, strict parsing, async services with deadlines, "
-      "installed tables, lazy subscriptions with discovery, recorder cap" << std::endl;
+      "installed tables, lazy subscriptions with discovery, recorder burst and cap" << std::endl;
     return 0;
   } catch (const std::exception & error) {
     std::cerr << "FAIL: " << error.what() << std::endl;

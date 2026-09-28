@@ -15,6 +15,7 @@ from smartmicro_processing.cloud import empty_cloud
 from smartmicro_processing.node import RadarProcessing
 from smartmicro_processing.ros_support import as_float, DiagnosticsRateLimiter
 from std_msgs.msg import Header
+from umrr_ros2_msgs.msg import DetectionAudit
 
 FIELDS = [PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32, count=1)
           for i, name in enumerate(('x', 'y', 'z', 'radial_speed', 'snr'))]
@@ -158,19 +159,26 @@ def test_processing_clears_once_with_last_accepted_stamp(ros):
     node = RadarProcessing()
     outputs = {name: Recorder() for name in node.cloud_publishers}
     diagnostics = Recorder()
+    audits = Recorder()
     try:
         node.cloud_publishers = outputs
         node.diagnostics_pub = diagnostics
+        node.audit_pub = audits
         now = node.get_clock().now().nanoseconds
         accepted = now - 20_000_000
         node.receive(cloud(accepted, [[2, 1, 0, 0, 30]] * 3))
         assert outputs['quality_targets'].messages[-1].width == 3
+        assert audits.messages[-1].event == DetectionAudit.SCAN
         for _ in range(3):
             node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))
         assert node.rejected_inputs == 3
         clears = [m for m in outputs['quality_targets'].messages if m.width == 0]
         assert len(clears) == 1  # Cleared on the transition only, not per rejection.
         assert Time.from_msg(clears[0].header.stamp).nanoseconds == accepted
+        assert len(audits.messages) == 2
+        assert audits.messages[-1].event == DetectionAudit.CLEAR
+        assert audits.messages[-1].status == 'unexpected_frame'
+        assert audits.messages[-1].header == clears[0].header
         # State changes publish immediately; repeats are rate limited.
         states = [{v.key: v.value for v in m.status[0].values}['state']
                   for m in diagnostics.messages]
@@ -183,7 +191,7 @@ def test_processing_clears_once_with_last_accepted_stamp(ros):
 
 
 def moving_sensor_cloud(ns, velocity):
-    """Static scene seen from a sensor moving at ``velocity`` (positive-receding Doppler)."""
+    """Generate a static scene seen from a moving sensor (positive-receding Doppler)."""
     points = []
     for azimuth in np.radians([-50, -35, -20, -8, 5, 15, 28, 40, 55, 65]):
         for z in (-0.6, 0.0, 0.6):

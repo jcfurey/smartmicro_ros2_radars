@@ -25,6 +25,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
     "srv/GetMode.srv"
     "msg/RadarTiming.msg"
     "msg/Umrr96RawQuality.msg"
+    "msg/DetectionAudit.msg"
     "msg/CanTargetHeader.msg"
     "msg/PortTargetHeader.msg"
     "msg/PortObjectHeader.msg"

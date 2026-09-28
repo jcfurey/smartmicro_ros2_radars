@@ -99,7 +99,8 @@ void SmartRadarService::setup_ros_clients()
 void SmartRadarService::tick()
 {
   if (!rclcpp::ok()) {return;}
-  executor_.spin_some(std::chrono::milliseconds(2));
+  // Recheck ready work so queued replies can catch up within the GUI budget.
+  executor_.spin_all(std::chrono::milliseconds(2));
   if (cancel_request_ && std::chrono::steady_clock::now() > deadline_) {
     cancel_pending();
     report_error("Service request timed out; the sensor state is unknown. Check before retrying.");

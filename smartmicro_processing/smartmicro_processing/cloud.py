@@ -57,16 +57,22 @@ def measurements(cloud):
     return np.column_stack([points[name].reshape(-1) for name in REQUIRED]).astype(float)
 
 
-def select_measurements(values, config=GateConfig()):
+def quality_rejections(values, config=GateConfig()):
+    """Return exclusive nonfinite, range and SNR masks in first-failure order."""
     finite = np.isfinite(values).all(axis=1)
     ranges = np.linalg.norm(values[:, :3], axis=1)
     in_range = np.isfinite(ranges) & (ranges >= config.min_range) & (ranges <= config.max_range)
     enough_snr = values[:, 4] >= config.min_snr_db
-    mask = finite & in_range & enough_snr
+    return ~finite, finite & ~in_range, finite & in_range & ~enough_snr
+
+
+def select_measurements(values, config=GateConfig()):
+    nonfinite, out_of_range, low_snr = quality_rejections(values, config)
+    mask = ~(nonfinite | out_of_range | low_snr)
     stats = {'input': len(values), 'accepted': int(mask.sum()),
-             'rejected_nonfinite': int((~finite).sum()),
-             'rejected_range': int((finite & ~in_range).sum()),
-             'rejected_snr': int((finite & in_range & ~enough_snr).sum())}
+             'rejected_nonfinite': int(nonfinite.sum()),
+             'rejected_range': int(out_of_range.sum()),
+             'rejected_snr': int(low_snr.sum())}
     return np.flatnonzero(mask), stats
 
 

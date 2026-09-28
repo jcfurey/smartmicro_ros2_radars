@@ -265,7 +265,8 @@ void Umrr96Config::cancel_pending()
 void Umrr96Config::tick()
 {
   if (!rclcpp::ok()) {return;}
-  executor_.spin_some(std::chrono::milliseconds(2));
+  // Recheck ready work so queued headers/replies catch up within the GUI budget.
+  executor_.spin_all(std::chrono::milliseconds(2));
   const auto now = Clock::now();
   if (filter_pending_ && now > filter_deadline_) {
     filter_setter_->remove_pending_request(filter_pending_id_);

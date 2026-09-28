@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Start the UMRR-96 driver, Doppler processing/tracking and the tracking RViz view together."""
+"""Start the UMRR-96 driver, processing and current-scan classification RViz view."""
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, EmitEvent, GroupAction,
                             IncludeLaunchDescription, RegisterEventHandler)
@@ -14,7 +14,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    """Closing RViz stops the driver and processing; use rviz:=false for headless runs."""
+    """Stop the driver and processing when RViz closes; use rviz:=false for headless runs."""
     driver_share = FindPackageShare('umrr_ros2_driver')
     processing_share = FindPackageShare('smartmicro_processing')
     rviz = Node(
@@ -39,8 +39,9 @@ def generate_launch_description():
             description='Start the tracking RViz view; closing it stops the launch'),
         DeclareLaunchArgument(
             'rviz_config', default_value=PathJoinSubstitution([
-                processing_share, 'rviz', 'umrr96_moving.rviz']),
-            description='RViz display configuration (absolute topic names, no namespace)'),
+                processing_share, 'rviz', 'umrr96_classified.rviz']),
+            description='RViz configuration; defaults to current-scan classification '
+                        '(absolute topic names, no namespace)'),
         DeclareLaunchArgument(
             'publish_description', default_value='true', choices=['true', 'false'],
             description='Publish the standalone sensor URDF shown in RViz; set false if '

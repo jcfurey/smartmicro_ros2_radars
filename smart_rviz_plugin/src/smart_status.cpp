@@ -275,7 +275,8 @@ void SmartRadarStatus::check_data()
 {
   if (rclcpp::ok())  // Check if ROS2 is still running
   {
-    executor_.spin_some(std::chrono::milliseconds(2));
+    // Recheck ready subscriptions to drain queued frames within the GUI budget.
+    executor_.spin_all(std::chrono::milliseconds(2));
   }
 }
 

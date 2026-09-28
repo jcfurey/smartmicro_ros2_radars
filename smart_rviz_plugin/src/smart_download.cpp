@@ -88,7 +88,8 @@ void SmartDownloadService::report_error(const QString & message)
 void SmartDownloadService::tick()
 {
   if (!rclcpp::ok()) {return;}
-  executor_.spin_some(std::chrono::milliseconds(2));
+  // Recheck ready work so queued replies can catch up within the GUI budget.
+  executor_.spin_all(std::chrono::milliseconds(2));
   if (pending_ && std::chrono::steady_clock::now() > deadline_) {
     download_client_->remove_pending_request(pending_id_);
     finish_request();

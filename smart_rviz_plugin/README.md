@@ -12,6 +12,10 @@ This package provides RViz panels to support day-to-day radar workflows:
 5. Smart Fault Reports (fault report monitoring)
 6. UMRR-96 Configuration (readback, temporary tuning, live measurement rate)
 
+Each panel processes ready ROS callbacks every 50 ms with a 2 ms execution
+budget, revisiting subscriptions to catch up on queued messages after a GUI
+stall. A callback already running finishes before the budget is checked again.
+
 ## Build
 
 From workspace root:
@@ -82,6 +86,8 @@ separate RGB **Radar fan image** display included in the saved RViz configuratio
   topic is subscribed.
 - **Recording limit** (default 1,000,000 rows, saved in the RViz config) bounds
   memory: recording stops at the limit and offers Save/Discard.
+- The subscription holds up to ten pending clouds. Catch-up is limited by
+  callback cost; a long GUI stall can still overflow that queue.
 
 ### Smart Command Configurator
 - Sends commands and mode/config related service calls.

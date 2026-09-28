@@ -7,11 +7,29 @@ The goal is to recover useful sensor information and measure actual detection
 quality. Accumulating hits in a grid does not increase the sensor's resolution.
 The operator reported that the radar itself was moving during this work.
 
+Follow-up: the [September 28 sparsity comparison](umrr96-sparsity-20260928.md)
+completed two PRF comparisons plus antenna/sweep trials on a fixed radar with
+possible moving people. PRF showed no consistent useful gain; antenna 2 raised
+total counts while reducing returns at the wall-distance band. The operator
+rejected one-second display persistence; the live view returned to current scans.
+
+The subsequent [ingest and filtering research](umrr96-ingest-filtering-research-20260928.md)
+maps every UMRR-96 target getter to ROS, verifies current pipeline retention on
+a recovered observational capture, and reproduces multi-mover failure cases.
+It prioritizes per-point filter explanations, preserving ambiguous current-scan
+returns, and offline evaluation of ghost filtering and Doppler-aware association.
+
+The first follow-up is implemented: a typed per-point audit and a current-scan
+classification view expose rejection reasons and failed-fit returns. The new
+default tracking preset uses zero point decay and hides predicted track markers.
+An [offline replay comparison](umrr96-classification-replay-20260928.json) matched
+all existing outputs over 474 scans; ghost and association heuristics are unchanged.
+
 ## Priority status
 
 | Priority | Implemented or established | Remaining evidence needed |
 | --- | --- | --- |
-| 1. Sensor processing controls | Typed PRF and per-sweep velocity-validation writes, an advanced RViz dialog, and a measurement tool with verified restoration | Live float-write/readback and PRF comparison through the working control endpoint; repeatable scene for selecting a setting |
+| 1. Sensor processing controls | Typed PRF and per-sweep velocity-validation writes, an advanced RViz dialog, and a measurement tool with verified restoration; September 28 PRF comparisons found no consistent useful gain | Live float-write/readback; controlled, repeatable scenes for further setting comparisons |
 | 2. Native firmware outputs | Capability inventory below distinguishes existing targets, optional firmware products and unavailable SDK streams | Vendor confirmation for this serial/firmware, optional tracking/grid availability and protocol |
 | 3. Quality semantics | Four existing variance fields and peak index preserved; new raw quality topic retains Pfa/flags without assigning confidence | Field validity, variance units/calibration, flag definitions and acquisition-setup layout |
 | 4. Timing and moving radar | Optional timestamped TF accumulation in a fixed grid frame; bounded TF wait; quality-only filtering; delay-variation diagnostics | Real odometry/TF, calibrated sensor pose and verified acquisition-clock synchronization |
@@ -81,7 +99,8 @@ ros2 run umrr_ros2_driver umrr96_measure \
 # Volatile experiment: interleaved automatic/manual PRF windows and restoration.
 # Use a repeatable scene; do not change settings from another client during it.
 ros2 run umrr_ros2_driver umrr96_measure \
-  --prf-trials --scene stationary --seconds 20 --output /tmp/umrr96-prf.json
+  --prf-trials --scene stationary --seconds 20 --range-band 6 10 \
+  --output /tmp/umrr96-prf.json
 ```
 
 Use `--scene moving` for an exploratory moving run; it is recorded as such, and
@@ -94,6 +113,11 @@ including after partial writes, missing data, exceptions and interruption.
 Unrelated setting changes abort the comparison and are not overwritten during
 restoration. The tool writes its restore values to the JSON report before the
 first write and refuses to overwrite an existing report file.
+
+`--range-band MIN MAX` additionally reports per-frame raw detection counts and
+SNR within `[MIN, MAX)` metres. It includes empty scans in the mean and does
+not filter the overall measurements. Use a band around the surfaces of interest
+so extra nearby detections do not masquerade as better distant-wall coverage.
 
 Loss of power/connectivity can prevent restoration; the report explicitly says
 `failed` in that case. A hard kill cannot run `finally`: use the recorded

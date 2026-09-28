@@ -1,0 +1,99 @@
+{
+  "utc": "2026-09-28T16:05:57.431505+00:00",
+  "window_seconds": 20,
+  "received_scans": {
+    "raw": 364,
+    "audit": 363,
+    "display": 363
+  },
+  "matched_scans": 363,
+  "counts": {
+    "raw_points": 8439,
+    "audited_points": 8439,
+    "displayed_points": 8439,
+    "tracked_measurements": 0
+  },
+  "rate_hz": 18.181458110630267,
+  "mean_detections_per_matched_scan": 23.24793388429752,
+  "classification_counts": {
+    "2": 8439
+  },
+  "reason_mask_counts": {
+    "0": 8439
+  },
+  "fit_states": {
+    "valid": 363
+  },
+  "clear_events": [],
+  "validation_errors": [],
+  "receive_stamp_to_observer_ms": {
+    "raw": {
+      "p50": 0.368816,
+      "p95": 0.4620369,
+      "p99": 0.4922866,
+      "max": 1.120889
+    },
+    "audit": {
+      "p50": 9.470005,
+      "p95": 11.03934,
+      "p99": 12.380388019999998,
+      "max": 13.506148
+    },
+    "display": {
+      "p50": 9.679207,
+      "p95": 11.192877999999999,
+      "p99": 12.618116019999999,
+      "max": 13.786938
+    }
+  },
+  "sampled_processing_ms": {
+    "p50": 8.945759499511041,
+    "p95": 10.348237700600293,
+    "p99": 10.491629940006533,
+    "max": 10.527477999858093
+  },
+  "endpoints": {
+    "raw": {
+      "publishers": [
+        "smart_radar"
+      ],
+      "subscribers": [
+        "umrr96_processing",
+        "current_scan_live_verification",
+        "umrr96_views"
+      ]
+    },
+    "audit": {
+      "publishers": [
+        "umrr96_processing"
+      ],
+      "subscribers": [
+        "current_scan_live_verification"
+      ]
+    },
+    "display": {
+      "publishers": [
+        "umrr96_processing"
+      ],
+      "subscribers": [
+        "current_scan_live_verification",
+        "umrr96_tracking_rviz"
+      ]
+    }
+  },
+  "limits": "Read-only unlabeled live sample; counts cannot establish detection accuracy. Timing starts at host receive stamp, excluding sensor acquisition latency. Observer timestamps do not measure RViz render latency.",
+  "diagnostic_states": [
+    {
+      "name": "/umrr96_processing/doppler",
+      "level": 0,
+      "message": "Experimental fit valid; calibration pending",
+      "samples": 20
+    },
+    {
+      "name": "smart_radar: UDP adapter 0",
+      "level": 0,
+      "message": "No new kernel UDP drops; not a liveness check",
+      "samples": 20
+    }
+  ]
+}

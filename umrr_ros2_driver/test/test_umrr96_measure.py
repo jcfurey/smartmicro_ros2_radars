@@ -38,6 +38,32 @@ def test_capture_statistics_are_json_serializable_and_do_not_invent_missing_qual
     assert len(measure.PARAMETERS) == 29 and len(measure.STATUSES) == 14
 
 
+def test_range_band_counts_include_empty_scans_and_preserve_raw_totals():
+    data = measure.Measurements(range_band=(6, 10))
+    fields = [PointField(name=n, offset=i * 4, datatype=PointField.FLOAT32, count=1)
+              for i, n in enumerate(('range', 'snr', 'radial_speed'))]
+    data.cloud(point_cloud2.create_cloud(Header(), fields, [
+        (5, 90, 0), (6, 20, 0), (9, 30, 0), (10, 90, 0), (float('nan'), 90, 0)]))
+    data.cloud(point_cloud2.create_cloud(Header(), fields, []))
+    report = data.result(1)
+    assert report['range_band_m'] == [6, 10]
+    assert report['detections_in_range_band_per_frame']['mean'] == 1
+    assert report['detections_in_range_band_per_frame']['count'] == 2
+    assert report['range_band_snr_db']['mean'] == 25
+    assert report['detections_per_frame']['mean'] == 2.5
+    json.dumps(report, allow_nan=False)
+    data.reset()
+    assert data.result(1)['range_band_m'] == [6, 10]
+    assert data.result(1)['detections_in_range_band_per_frame']['count'] == 0
+
+
+@pytest.mark.parametrize('band', [
+    (-1, 10), (10, 6), (6, 6), (0, 301), (float('nan'), 10), (6, float('inf')), (6,)])
+def test_invalid_range_band(band):
+    with pytest.raises(ValueError, match='Range band'):
+        measure.Measurements(band)
+
+
 class FakeControl:
     """In-memory radar parameters that can fail on the Nth write."""
 
@@ -145,6 +171,7 @@ def test_read_only_cli_captures_profile_and_raw_data(tmp_path):
     process = subprocess.Popen([sys.executable, str(source), '--seconds', '1',
                                 '--control-prefix', '/measure_fixture',
                                 '--topic-prefix', '/measure_fixture',
+                                '--range-band', '6', '10',
                                 '--scene', 'moving', '--output', str(output)],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
@@ -162,6 +189,8 @@ def test_read_only_cli_captures_profile_and_raw_data(tmp_path):
         assert window['frames'] >= 10
         assert window['detections_per_frame']['mean'] == 2
         assert window['detections_under_5m_per_frame']['mean'] == 1
+        assert window['range_band_m'] == [6, 10]
+        assert window['detections_in_range_band_per_frame']['mean'] == 1
     finally:
         if process.poll() is None:
             process.kill()

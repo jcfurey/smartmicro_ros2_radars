@@ -56,12 +56,18 @@ def distribution(values):
 class Measurements:
     """Bounded window statistics from raw detections, independent of host filtering."""
 
-    def __init__(self):
+    def __init__(self, range_band=None):
+        if range_band is not None and (
+                len(range_band) != 2 or not all(math.isfinite(v) for v in range_band)
+                or not 0 <= range_band[0] < range_band[1] <= 300):
+            raise ValueError('Range band must satisfy 0 <= MIN < MAX <= 300 metres')
+        self.range_band = tuple(range_band) if range_band is not None else None
         self.reset()
 
     def reset(self):
         self.counts, self.near, self.arrivals, self.timestamps = [], [], [], []
         self.ranges, self.snr, self.speed = [], [], []
+        self.band_counts, self.band_snr = [], []
         self.quality = {n: [] for n in (
             'variance_range', 'variance_speed', 'variance_azimuth_angle',
             'variance_elevation_angle', 'false_alarm_probability')}
@@ -77,6 +83,11 @@ class Measurements:
         self.layout = [f.name for f in msg.fields]
         self.near.append(sum(math.isfinite(float(p['range'])) and 0 <= float(p['range']) < 5
                              for p in points))
+        if self.range_band is not None:
+            selected = [p for p in points
+                        if self.range_band[0] <= float(p['range']) < self.range_band[1]]
+            self.band_counts.append(len(selected))
+            self.band_snr.extend(float(p['snr']) for p in selected)
         for p in points:
             self.ranges.append(float(p['range']))
             self.snr.append(float(p['snr']))
@@ -103,22 +114,28 @@ class Measurements:
 
     def result(self, seconds):
         intervals = np.diff(self.timestamps) / 1e6
-        return {'duration_seconds': seconds, 'frames': len(self.counts),
-                'observed_hz': (len(self.arrivals) - 1) / (self.arrivals[-1] - self.arrivals[0])
-                if len(self.arrivals) > 1 else 0,
-                'detections_per_frame': distribution(self.counts),
-                'detections_under_5m_per_frame': distribution(self.near),
-                'range_m': distribution(self.ranges), 'snr_db': distribution(self.snr),
-                'radial_speed_mps': distribution(self.speed),
-                'device_interval_seconds': distribution(intervals),
-                'device_timestamp_nonincreasing': sum(int(v <= 0) for v in intervals),
-                'sensor_cycle_seconds': distribution(self.cycles),
-                'acquisition_setup_counts': dict(self.acquisition),
-                'quality': {n: distribution(v) for n, v in self.quality.items()},
-                'flags_counts': dict(self.flags), 'fields': self.layout,
-                'raw_quality_frames': self.raw_quality_frames,
-                'raw_pfa': distribution(self.raw_pfa), 'raw_flags_counts': dict(self.raw_flags),
-                'raw_quality_semantics': 'unverified'}
+        result = {
+            'duration_seconds': seconds, 'frames': len(self.counts),
+            'observed_hz': (len(self.arrivals) - 1) / (self.arrivals[-1] - self.arrivals[0])
+            if len(self.arrivals) > 1 else 0,
+            'detections_per_frame': distribution(self.counts),
+            'detections_under_5m_per_frame': distribution(self.near),
+            'range_m': distribution(self.ranges), 'snr_db': distribution(self.snr),
+            'radial_speed_mps': distribution(self.speed),
+            'device_interval_seconds': distribution(intervals),
+            'device_timestamp_nonincreasing': sum(int(v <= 0) for v in intervals),
+            'sensor_cycle_seconds': distribution(self.cycles),
+            'acquisition_setup_counts': dict(self.acquisition),
+            'quality': {n: distribution(v) for n, v in self.quality.items()},
+            'flags_counts': dict(self.flags), 'fields': self.layout,
+            'raw_quality_frames': self.raw_quality_frames,
+            'raw_pfa': distribution(self.raw_pfa), 'raw_flags_counts': dict(self.raw_flags),
+            'raw_quality_semantics': 'unverified'}
+        if self.range_band is not None:
+            result.update(range_band_m=list(self.range_band),
+                          detections_in_range_band_per_frame=distribution(self.band_counts),
+                          range_band_snr_db=distribution(self.band_snr))
+        return result
 
 
 class Control:
@@ -235,6 +252,8 @@ def main():
     parser.add_argument('--control-prefix', default='/smart_radar')
     parser.add_argument('--topic-prefix', default='/smart_radar')
     parser.add_argument('--seconds', type=float, default=10)
+    parser.add_argument('--range-band', type=float, nargs=2, metavar=('MIN', 'MAX'),
+                        help='Also measure raw detections in this range band [MIN, MAX), metres')
     parser.add_argument('--scene', choices=('stationary', 'moving', 'unknown'), default='unknown')
     parser.add_argument('--prf-trials', action='store_true',
                         help='Change volatile PRF settings and restore them')
@@ -243,6 +262,10 @@ def main():
     args = parser.parse_args()
     if not math.isfinite(args.seconds) or not 1 <= args.seconds <= 120:
         parser.error('--seconds must be within 1..120')
+    try:
+        measurements = Measurements(args.range_band)
+    except ValueError as error:
+        parser.error(str(error))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('x') as stream:
         stream.write('{}\n')
@@ -258,7 +281,6 @@ def main():
     # Keep the ROS context usable in finally when an experiment is interrupted.
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = rclpy.create_node('umrr96_measure')
-    measurements = Measurements()
     prefix = args.topic_prefix.rstrip('/')
     for message_type, suffix, callback in (
             (PointCloud2, '/port_targets_0', measurements.cloud),
@@ -290,6 +312,8 @@ def main():
             rclpy.spin_once(node, timeout_sec=.05)
         result = measurements.result(time.monotonic() - start)
         summary = ('frames', 'observed_hz', 'detections_per_frame')
+        if args.range_band is not None:
+            summary += ('range_band_m', 'detections_in_range_band_per_frame')
         print(json.dumps({k: result[k] for k in summary}), flush=True)
         return result
 

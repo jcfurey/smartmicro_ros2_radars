@@ -226,7 +226,8 @@ void SmartFaultReports::fault_report_callback(
 void SmartFaultReports::check_data()
 {
   if (rclcpp::ok()) {
-    executor_.spin_some(std::chrono::milliseconds(2));
+    // Recheck ready subscriptions to drain queued frames within the GUI budget.
+    executor_.spin_all(std::chrono::milliseconds(2));
   }
 }
 

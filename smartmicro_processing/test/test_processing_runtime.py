@@ -14,8 +14,9 @@ import rclpy
 from rclpy.qos import qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2, PointField
-from sensor_msgs_py.point_cloud2 import create_cloud
+from sensor_msgs_py.point_cloud2 import create_cloud, read_points
 from std_msgs.msg import Header
+from umrr_ros2_msgs.msg import DetectionAudit
 import yaml
 
 
@@ -35,8 +36,9 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
     child = None
     log_path = tmp_path / 'launch.log'
     outputs = {name: [] for name in ('quality_targets', 'doppler_inliers',
-                                     'doppler_outliers', 'unclassified_targets')}
-    velocities, statuses = [], []
+                                     'doppler_outliers', 'unclassified_targets',
+                                     'classified_targets')}
+    velocities, statuses, audits = [], [], []
     publisher = node.create_publisher(PointCloud2, '/test_radar/targets', qos_profile_sensor_data)
     clock_pub = node.create_publisher(Clock, '/clock', 10)
     for name, messages in outputs.items():
@@ -45,6 +47,8 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
     node.create_subscription(TwistWithCovarianceStamped,
                              '/umrr96_processing/experimental_velocity',
                              velocities.append, 10)
+    node.create_subscription(DetectionAudit, '/umrr96_processing/detection_audit',
+                             audits.append, qos_profile_sensor_data)
 
     def diagnostic(message):
         for status in message.status:
@@ -109,7 +113,8 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
                      and (not sim_time or clock_pub.get_subscription_count() >= 1), 12)
             first = cloud()
             send_expect(first, 'valid')
-            wait_for(lambda: velocities and all(messages for messages in outputs.values()))
+            wait_for(lambda: velocities and audits
+                     and all(messages for messages in outputs.values()))
             velocity = velocities[-1]
             assert velocity.header == first.header
             actual = velocity.twist.twist.linear
@@ -121,6 +126,14 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
             assert outputs['doppler_inliers'][-1].width == 72
             assert outputs['doppler_outliers'][-1].width == 18
             assert outputs['unclassified_targets'][-1].width == 0
+            first_audit = audits[-1]
+            assert first_audit.header == first.header and first_audit.event == DetectionAudit.SCAN
+            assert list(first_audit.source_index) == list(range(90))
+            assert list(first_audit.classification).count(DetectionAudit.STATIC) == 72
+            assert list(first_audit.classification).count(DetectionAudit.MOVING) == 18
+            assert not any(first_audit.track_associated)
+            shown = read_points(outputs['classified_targets'][-1])
+            np.testing.assert_array_equal(shown['x'], read_points(first)['x'])
             assert statuses[-1]['calibrated'] == 'False'
             count = len(velocities)
             send_expect(first, 'nonmonotonic_stamp')
@@ -142,12 +155,22 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
                 np.full(90, np.nan))).astype(np.float32)).data
             send_expect(flat, 'unobservable_geometry')
             wait_for(lambda: outputs['unclassified_targets'][-1].width == 90)
+            wait_for(lambda: audits[-1].header == flat.header
+                     and outputs['classified_targets'][-1].header == flat.header)
+            assert list(audits[-1].classification) == [DetectionAudit.UNCLASSIFIED] * 90
+            assert list(audits[-1].reason_flags) == [DetectionAudit.FIT_REJECTED] * 90
+            # Latest scan replaces the earlier positions, including on failed fits.
+            shown = read_points(outputs['classified_targets'][-1])
+            assert len(shown) == 90 and np.all(shown['x'] == 8) and np.all(shown['y'] == 0)
             assert outputs['doppler_inliers'][-1].width == 0
             assert outputs['doppler_outliers'][-1].width == 0
             assert len(velocities) == count
             # Wall-clock watchdog must work even when /clock has stopped advancing.
             wait_for(lambda: statuses[-1]['state'] == 'input_stale')
             wait_for(lambda: all(messages[-1].width == 0 for messages in outputs.values()))
+            wait_for(lambda: audits[-1].event == DetectionAudit.CLEAR)
+            assert audits[-1].header == flat.header and audits[-1].status == 'input_stale'
+            assert not len(audits[-1].source_index)
             assert len(velocities) == count
             if sim_time:
                 simulated = 10.0  # Backward bag clock jump must permit a new epoch.

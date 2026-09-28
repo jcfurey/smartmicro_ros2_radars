@@ -16,6 +16,7 @@ Build and run from the workspace root:
 source /opt/ros/lyrical/setup.bash
 colcon --log-base .colcon/umrr96-processing/log build \
   --base-paths src/smartmicro_ros2_radars/smartmicro_processing \
+    src/smartmicro_ros2_radars/umrr_ros2_msgs \
   --build-base .colcon/umrr96-processing/build \
   --install-base .colcon/umrr96-processing/install \
   --symlink-install --cmake-args -DBUILD_TESTING=ON
@@ -26,13 +27,36 @@ ros2 launch smartmicro_processing umrr96_processing.launch.py
 ```
 
 To start the driver (with readback, views and the sensor URDF), this node and
-the tracking RViz view in one go — closing RViz stops everything:
+the current-scan RViz view in one go — closing RViz stops everything:
 
 ```bash
 ros2 launch smartmicro_processing umrr96_tracking.launch.py
 # rviz:=false for headless; publish_description:=false if a robot URDF owns the TF;
 # driver_params:=... / processing_params:=... for other hosts or tuning.
 ```
+
+The default view is now `rviz/umrr96_classified.rviz`: one cloud containing only
+the latest scan, colored by the current filter decisions. All point-cloud decay
+times in that preset are zero. Track estimates and the older stage displays are
+available but disabled. The previous view remains selectable with
+`rviz_config:=/absolute/path/to/umrr96_moving.rviz`.
+
+| Current-detection color | Meaning |
+| --- | --- |
+| White | Static-scene Doppler inlier |
+| Pink | Retained Doppler outlier, not associated with a confirmed track |
+| Red | Retained measured point associated with a confirmed track |
+| Blue | Suspected ghost rejected by an existing heuristic |
+| Amber | Quality return whose scan's Doppler fit failed |
+| Gray | Rejected by a required-field, range or SNR gate; position is still drawable |
+
+These are algorithm labels, not ground truth. Blue points remain visible because
+the current ghost rules can also reject independent movers. Every shown position
+comes from the current raw scan; no historical points or predicted track positions
+are inserted. A failed fit still shows its quality returns in amber. Positions
+that are nonfinite or cannot be represented as float32 cannot be drawn but retain
+their audit entries. The display is an XYZ/color adapter; raw and existing subset
+clouds retain their original records and fields.
 
 The default input is the relative name `smart_radar/port_targets_0`
 (`/smart_radar/port_targets_0` without a namespace) with frame `umrr96`. Launch
@@ -48,6 +72,8 @@ in separate runs. Run one publisher for these output names at a time.
 
 | Output under `/umrr96_processing/` | Meaning |
 | --- | --- |
+| `detection_audit` | `umrr_ros2_msgs/DetectionAudit`: one decision per original point, raw indices, quality/ghost reason flags, and current track association |
+| `classified_targets` | Current finite positions, RGB colors and audit fields for RViz; includes drawable quality rejects, suspected ghosts and failed-fit returns |
 | `quality_targets` | Finite XYZ/Doppler/SNR, range and modest SNR gates; keeps both static and moving returns |
 | `doppler_inliers` | Quality targets compatible with the fitted static-scene Doppler model |
 | `doppler_outliers` | Quality targets outside that model's residual gate; not automatically moving objects |
@@ -65,6 +91,52 @@ condition, residual RMSE, computation time, last velocity age and
 `calibrated=False`, `sensor_moving` and `background_ready`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
+
+### Inspecting a filter decision
+
+Select a point in the current-detections RViz cloud to inspect `source_index`,
+`classification`, `reason_flags` and `track_associated`. The typed audit is also
+available without RViz:
+
+```bash
+ros2 topic echo /umrr96_processing/detection_audit --once
+ros2 interface show umrr_ros2_msgs/msg/DetectionAudit
+```
+
+Match the audit to the raw cloud by **header stamp and frame ID**. `source_index`
+is the original row-major point index, and all audit arrays have that raw scan's
+point count, including quality rejects. Use the same raw index to access the
+driver's `umrr96_raw_quality_0` sidecar; a filtered index or `peak_idx` is not a
+substitute. The display's source indices skip undrawable positions but continue
+to refer to the original raw rows.
+
+Quality reasons use the existing first-failure order: nonfinite required fields,
+range, then SNR. A failed fit marks remaining points `UNCLASSIFIED/FIT_REJECTED`.
+Ghost reasons identify the existing same-absolute-speed, doubled-absolute-speed,
+and behind-static-return rules; multiple bits can be set. Diagnostic ghost-reason
+counts can therefore overlap. Track association is a separate boolean and does
+not claim a unique object identity. The underlying quality, Doppler, ghost,
+tracker and obstacle decisions are unchanged by this audit feature.
+
+An actual empty scan has `event=SCAN` and empty arrays. After previously published
+data is cleared due to stale/rejected input or a clock reset, the audit sends one
+`event=CLEAR` with empty arrays, the last accepted scan's stamp and the clearing
+cause in `status`. It is a display invalidation, not another sensor observation.
+Malformed or freshness-rejected inputs do not receive per-point assignments;
+their whole-scan reason remains in diagnostics. The colored cloud clears on the
+same watchdog/rejection transitions as existing outputs.
+
+The September 28 implementation passed 105 processing pytest cases and package
+lint. An [offline comparison](../docs/umrr96-classification-replay-20260928.json)
+matched all existing subset, tracked-object and obstacle outputs over 474 saved
+scans, accounting for all 8,689 current detections. The installed RViz RGB8
+transformer decoded every display color correctly. The radar was powered down;
+this initial check was offline. After power-up, a
+[20-second live check](../docs/umrr96-classification-live-20260928.json) matched
+363 scans and all 8,439 detections to their audit entries and display positions
+at 18.18 Hz. RViz subscribed to the new cloud; receive-stamp-to-observer p95 was
+11.19 ms. The sample contained only static classifications and does not establish
+moving-object accuracy, acquisition latency or RViz render latency.
 
 Only the five required fields affect input eligibility. An optional unknown
 `false_alarm_probability=NaN` does not reject a valid detection. Selected point
@@ -98,7 +170,7 @@ Small residuals and apparent consensus cannot establish truth.
 
 Freshness checks reject unexpected frames, malformed layouts, repeated/backward
 stamps, stamps older than 0.5 s and stamps over 0.05 s in the future. A wall-clock
-watchdog clears the four clouds and reports stale input after 0.5 s without data,
+watchdog clears the output clouds and reports stale input after 0.5 s without data,
 including when simulation time pauses. Clouds are cleared once, on the transition
 from published data, with the last accepted input stamp rather than a newer
 `now()`, so a downstream monotonic-stamp check still accepts the next scan.
@@ -156,11 +228,12 @@ These quiet-motion samples do not test physical dynamic-outlier rejection or
 velocity accuracy. Known-motion and moving-return rejection are exercised by
 synthetic tests only.
 
-The standalone processing launch remains running beside the original driver;
-its PID, log and overlay are recorded in
+During that September 24 check, the standalone processing launch ran beside the
+original driver; its PID, log and overlay were recorded in
 `/tmp/umrr96-processing-live/session.json`. Use the existing publisher for
-inspection; the launch command above is for starting a new session. The original
-radar driver and sensor settings were not changed during this live check.
+inspection only after verifying it is still active; the launch command above is
+for starting a new session. The original radar driver and sensor settings were
+not changed during that live check.
 
 The second iteration adds 19 accumulation checks, bringing the package total to
 48 pytest cases. Its separate [live and replay results](ACCUMULATION.md) quantify

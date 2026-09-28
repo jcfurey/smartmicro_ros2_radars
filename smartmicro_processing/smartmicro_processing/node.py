@@ -16,11 +16,13 @@ from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py.point_cloud2 import create_cloud
 from std_msgs.msg import Header
+from umrr_ros2_msgs.msg import DetectionAudit
 from visualization_msgs.msg import Marker, MarkerArray
 
+from .classification import classified_cloud, classify, cleared_audit
 from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
 from .doppler import fit_velocity, FitConfig
-from .ghosts import ghost_mask, GhostConfig
+from .ghosts import ghost_reasons, GhostConfig, GhostReason
 from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter
 from .ros_support import declare, DiagnosticsRateLimiter
 from .tracker import MovingObjectTracker, TrackerConfig
@@ -28,7 +30,7 @@ from .tracker import MovingObjectTracker, TrackerConfig
 # Relative by default so a namespace moves the input with the node; remap it in launch.
 DEFAULT_INPUT = 'smart_radar/port_targets_0'
 CLOUD_OUTPUTS = ('quality_targets', 'doppler_inliers', 'doppler_outliers', 'unclassified_targets',
-                 'moving_targets', 'moving_ghosts', 'tracked_targets')
+                 'moving_targets', 'moving_ghosts', 'tracked_targets', 'classified_targets')
 FIT_PARAMETERS = {
     'doppler_sign': ('+1: input Doppler is positive receding; -1: positive approaching.',
                      -1, 1, 2),
@@ -142,6 +144,8 @@ class RadarProcessing(Node):
         self.cloud_publishers = {
             name: self.create_publisher(PointCloud2, '~/' + name, qos_profile_sensor_data)
             for name in CLOUD_OUTPUTS}
+        self.audit_pub = self.create_publisher(DetectionAudit, '~/detection_audit',
+                                               qos_profile_sensor_data)
         self.velocity_pub = self.create_publisher(TwistWithCovarianceStamped,
                                                   '~/experimental_velocity', 10)
         self.diagnostics_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
@@ -168,7 +172,7 @@ class RadarProcessing(Node):
     def now_ns(self):
         now = self.get_clock().now().nanoseconds
         if self.last_now is not None and now < self.last_now:
-            self.clear_clouds()
+            self.clear_clouds('clock_reset')
             self.last_stamp = None
             self.last_fit_wall = None
             self.last_receipt_wall = None
@@ -181,7 +185,7 @@ class RadarProcessing(Node):
         self.last_now = now
         return now
 
-    def clear_clouds(self):
+    def clear_clouds(self, reason='cleared'):
         """
         Publish one empty cloud per output after they carried data.
 
@@ -197,8 +201,11 @@ class RadarProcessing(Node):
         stamp = (Time(nanoseconds=self.last_stamp).to_msg() if self.last_stamp is not None
                  else self.get_clock().now().to_msg())
         message = empty_cloud(Header(stamp=stamp, frame_id=self.frame))
-        for publisher in self.cloud_publishers.values():
-            publisher.publish(message)
+        audit = cleared_audit(message.header, reason)
+        for name, publisher in self.cloud_publishers.items():
+            publisher.publish(classified_cloud(message.header, np.empty((0, 5)), audit)
+                              if name == 'classified_targets' else message)
+        self.audit_pub.publish(audit)
         self.track_pub.publish(message)
         self.obstacle_pub.publish(message)
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
@@ -207,7 +214,7 @@ class RadarProcessing(Node):
         self.rejected_inputs += 1
         self.state = reason
         self.stats = {}
-        self.clear_clouds()
+        self.clear_clouds(reason)
         self.get_logger().warning(f'Rejected input ({reason}){detail}', throttle_duration_sec=5.0)
         self.publish_diagnostics()
 
@@ -246,8 +253,9 @@ class RadarProcessing(Node):
         self.cloud_publishers['quality_targets'].publish(subset_cloud(cloud, indices))
         if result.valid:
             movers = ~result.inliers
-            ghosts = ghost_mask(selected[movers, :3], result.residuals[movers],
-                                selected[result.inliers, :3], self.ghost_config)
+            mover_reasons = ghost_reasons(selected[movers, :3], result.residuals[movers],
+                                          selected[result.inliers, :3], self.ghost_config)
+            ghosts = mover_reasons != 0
             moving = indices[movers][~ghosts]
             local = np.flatnonzero(movers)[~ghosts]
             speed = float(np.linalg.norm(result.velocity))
@@ -290,6 +298,10 @@ class RadarProcessing(Node):
                          vz=float(result.velocity[2]),
                          max_velocity_std=float(np.sqrt(np.max(
                              np.linalg.eigvalsh(result.covariance)))))
+            for name, flag in (('ghost_same_speed', GhostReason.SAME_SPEED),
+                               ('ghost_double_speed', GhostReason.DOUBLE_SPEED),
+                               ('ghost_behind_static', GhostReason.BEHIND_STATIC)):
+                stats[name] = int(((mover_reasons & flag) != 0).sum())
         else:
             # No valid static/moving split: tracks coast (a recorded miss) and stay marked;
             # fail conservative and pass every quality target through persistence alone
@@ -305,9 +317,17 @@ class RadarProcessing(Node):
                           'moving_targets': [], 'moving_ghosts': [], 'tracked_targets': [],
                           'unclassified_targets': indices}
             stats.update(inliers=0, outliers=0, moving=0, ghosts=0, tracks=len(tracks),
-                         obstacles=len(obstacles), unclassified=len(indices))
+                         obstacles=len(obstacles), unclassified=len(indices),
+                         ghost_same_speed=0, ghost_double_speed=0, ghost_behind_static=0)
+            mover_reasons = np.empty(0, dtype=np.uint8)
         for name, subset in partitions.items():
             self.cloud_publishers[name].publish(subset_cloud(cloud, subset))
+        audit = classify(cloud.header, values, self.gate_config, result, indices,
+                         mover_reasons, partitions['tracked_targets'])
+        display = classified_cloud(cloud.header, values, audit)
+        self.audit_pub.publish(audit)
+        self.cloud_publishers['classified_targets'].publish(display)
+        stats.update(audited=len(audit.source_index), displayed=display.width)
         self.outputs_hold_data = True
         self.state = result.reason
         stats.update(stamp_ns=stamp, receive_age_seconds=age, sensor_moving=self.sensor_moving,
@@ -361,7 +381,7 @@ class RadarProcessing(Node):
             if self.state != 'input_stale':
                 self.state = 'input_stale'
                 self.stats = {}
-                self.clear_clouds()
+                self.clear_clouds('input_stale')
         self.publish_diagnostics()
 
     def publish_diagnostics(self):

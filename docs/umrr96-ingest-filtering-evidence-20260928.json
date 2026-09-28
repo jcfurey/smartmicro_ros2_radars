@@ -1,0 +1,467 @@
+{
+  "date": "2026-09-28",
+  "assessment_tool": "tools/assessment/assess_bag.py",
+  "observation": {
+    "raw_frames": 474,
+    "detections": 8689,
+    "span_seconds": 26.015430924,
+    "hz": 18.1815170151052,
+    "detections_per_frame": {
+      "count": 474,
+      "finite": 474,
+      "min": 12.0,
+      "p05": 15.0,
+      "median": 18.0,
+      "p95": 22.0,
+      "max": 25.0,
+      "mean": 18.331223628691983
+    },
+    "metadata_matched_to_cloud": {
+      "headers": 474,
+      "filtered": 474,
+      "timing": 473,
+      "raw_quality": 473
+    },
+    "mismatches": {
+      "header_target_count": 0,
+      "filtered_bytes_differ": 0,
+      "quality_array_length": 0
+    },
+    "all_core_fields_finite_detections": 8689,
+    "all_fields_skip_nans_true_retained": 0,
+    "receive_intervals_seconds": {
+      "count": 473,
+      "finite": 473,
+      "min": 0.054826825,
+      "p05": 0.054872902,
+      "median": 0.054989729,
+      "p95": 0.055127981,
+      "max": 0.055176483,
+      "mean": 0.055000911044397464
+    },
+    "recorder_minus_cloud_stamp_seconds": {
+      "count": 474,
+      "finite": 474,
+      "min": 7.1198e-05,
+      "p05": 7.9825e-05,
+      "median": 0.0001222355,
+      "p95": 0.000191261,
+      "max": 0.000240281,
+      "mean": 0.00012809730168776372
+    },
+    "pfa_raw": {
+      "count": 8667,
+      "finite": 8667,
+      "min": 0.0,
+      "p05": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "max": 0.0,
+      "mean": 0.0
+    },
+    "flags_raw": {
+      "0": 8667
+    },
+    "snr_threshold_retention": {
+      "0": 1.0,
+      "6": 1.0,
+      "12": 1.0,
+      "20": 0.9951663022211992,
+      "30": 0.6418460121993325,
+      "40": 0.3605708366900679,
+      "50": 0.21947289676602602
+    },
+    "acquisition_setup_raw": {
+      "49": 474
+    }
+  },
+  "pipeline": {
+    "source": "recovered copy of an unfinalized MCAP; original kept unchanged",
+    "capture_limit": "Recorder exceeded the SIGINT shutdown grace period and was killed. Reindexed the copy; completeness of the capture edges is not asserted.",
+    "raw_frames": 474,
+    "matched_pipeline_frames": 473,
+    "matched_span_seconds": 25.96058126,
+    "stages": {
+      "/smart_radar/port_targets_0": {
+        "received_frames": 474,
+        "matched_frames": 473,
+        "points": 8675,
+        "points_per_scan": 18.340380549682877,
+        "points_6_to_10_m": 1371,
+        "band_points_per_scan": 2.8985200845665964,
+        "empty_frames": 0,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          0.122436,
+          0.191265,
+          0.240281
+        ]
+      },
+      "/umrr96_processing/quality_targets": {
+        "received_frames": 474,
+        "matched_frames": 473,
+        "points": 8675,
+        "points_per_scan": 18.340380549682877,
+        "points_6_to_10_m": 1371,
+        "band_points_per_scan": 2.8985200845665964,
+        "empty_frames": 0,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          7.748958,
+          9.454059999999997,
+          12.908431
+        ]
+      },
+      "/umrr96_processing/doppler_inliers": {
+        "received_frames": 473,
+        "matched_frames": 473,
+        "points": 8631,
+        "points_per_scan": 18.247357293868923,
+        "points_6_to_10_m": 1334,
+        "band_points_per_scan": 2.8202959830866807,
+        "empty_frames": 0,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          8.727692,
+          10.505223599999999,
+          13.828097
+        ]
+      },
+      "/umrr96_processing/doppler_outliers": {
+        "received_frames": 473,
+        "matched_frames": 473,
+        "points": 44,
+        "points_per_scan": 0.09302325581395349,
+        "points_6_to_10_m": 37,
+        "band_points_per_scan": 0.07822410147991543,
+        "empty_frames": 430,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          8.915915,
+          10.6947026,
+          14.004911
+        ]
+      },
+      "/umrr96_processing/unclassified_targets": {
+        "received_frames": 473,
+        "matched_frames": 473,
+        "points": 0,
+        "points_per_scan": 0.0,
+        "points_6_to_10_m": 0,
+        "band_points_per_scan": 0.0,
+        "empty_frames": 473,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          9.114838,
+          10.880568,
+          14.202504
+        ]
+      },
+      "/umrr96_processing/moving_targets": {
+        "received_frames": 473,
+        "matched_frames": 473,
+        "points": 26,
+        "points_per_scan": 0.05496828752642706,
+        "points_6_to_10_m": 22,
+        "band_points_per_scan": 0.046511627906976744,
+        "empty_frames": 448,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          9.306312,
+          11.070795,
+          14.384167
+        ]
+      },
+      "/umrr96_processing/moving_ghosts": {
+        "received_frames": 473,
+        "matched_frames": 473,
+        "points": 18,
+        "points_per_scan": 0.03805496828752643,
+        "points_6_to_10_m": 15,
+        "band_points_per_scan": 0.03171247357293869,
+        "empty_frames": 455,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          9.695477,
+          11.456845,
+          14.755913
+        ]
+      },
+      "/umrr96_processing/tracked_targets": {
+        "received_frames": 473,
+        "matched_frames": 473,
+        "points": 0,
+        "points_per_scan": 0.0,
+        "points_6_to_10_m": 0,
+        "band_points_per_scan": 0.0,
+        "empty_frames": 473,
+        "records_not_in_same_raw_scan": 0,
+        "recorded_arrival_minus_raw_stamp_ms_p50_p95_max": [
+          9.502354,
+          11.274353999999999,
+          14.56901
+        ]
+      }
+    },
+    "partition_count_errors": 0,
+    "diagnostics": {
+      "smart_radar_readback: Control requests": {},
+      "/umrr96_processing/doppler": {
+        "processing_ms": {
+          "samples": 25,
+          "first": 8.98536300064734,
+          "last": 10.194778999903065,
+          "min": 8.530880000762409,
+          "max": 11.490152000078524,
+          "p95": 11.234009799227348
+        },
+        "receive_age_seconds": {
+          "samples": 25,
+          "first": 0.00044424400000000005,
+          "last": 0.00046266300000000004,
+          "min": 0.00031450900000000003,
+          "max": 0.000621948,
+          "p95": 0.0005644691999999999
+        }
+      },
+      "smart_radar: Target stream 0": {
+        "relative_delay_change_seconds": {
+          "samples": 26,
+          "first": -5.1717e-05,
+          "last": 9.706e-06,
+          "min": -5.2027e-05,
+          "max": 8.3694e-05,
+          "p95": 6.382425e-05
+        },
+        "frames_received": {
+          "samples": 26,
+          "first": 18010.0,
+          "last": 18465.0,
+          "min": 18010.0,
+          "max": 18465.0,
+          "p95": 18442.5
+        }
+      },
+      "smart_radar: UDP adapter 0": {
+        "kernel_drops_total": {
+          "samples": 26,
+          "first": 0.0,
+          "last": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "p95": 0.0
+        },
+        "kernel_drops_since_last_check": {
+          "samples": 26,
+          "first": 0.0,
+          "last": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "p95": 0.0
+        }
+      }
+    },
+    "synthetic_ghost_counterexamples": [
+      {
+        "xyz_m": [
+          [
+            2.0,
+            0.0,
+            0.0
+          ],
+          [
+            2.5,
+            4.330127018922193,
+            0.0
+          ]
+        ],
+        "radial_speeds_mps": [
+          0.5,
+          0.5
+        ],
+        "ghost_mask": [
+          false,
+          true
+        ],
+        "truth_for_counterexample": "Two independent direct-path movers"
+      },
+      {
+        "xyz_m": [
+          [
+            2.0,
+            0.0,
+            0.0
+          ],
+          [
+            2.5,
+            4.330127018922193,
+            0.0
+          ]
+        ],
+        "radial_speeds_mps": [
+          0.5,
+          -0.5
+        ],
+        "ghost_mask": [
+          false,
+          true
+        ],
+        "truth_for_counterexample": "Two independent direct-path movers"
+      },
+      {
+        "xyz_m": [
+          [
+            2.0,
+            0.0,
+            0.0
+          ],
+          [
+            2.5,
+            4.330127018922193,
+            0.0
+          ]
+        ],
+        "radial_speeds_mps": [
+          0.5,
+          1.0
+        ],
+        "ghost_mask": [
+          false,
+          true
+        ],
+        "truth_for_counterexample": "Two independent direct-path movers"
+      },
+      {
+        "xyz_m": [
+          [
+            2.0,
+            0.0,
+            0.0
+          ],
+          [
+            2.5,
+            4.330127018922193,
+            0.0
+          ]
+        ],
+        "radial_speeds_mps": [
+          0.5,
+          2.0
+        ],
+        "ghost_mask": [
+          false,
+          false
+        ],
+        "truth_for_counterexample": "Two independent direct-path movers"
+      }
+    ],
+    "synthetic_opposite_speed_cluster": {
+      "xy_m": [
+        [
+          2.0,
+          0.0
+        ],
+        [
+          2.0,
+          0.2
+        ]
+      ],
+      "radial_speeds_mps": [
+        0.5,
+        -0.5
+      ],
+      "labels": [
+        0,
+        0
+      ],
+      "interpretation": "Clustering uses position alone; speed does not enter the function."
+    },
+    "source_hashes": {
+      "smartmicro_processing/smartmicro_processing/ghosts.py": "521e4da6b4d547e9ba508ca8f2d7c0500c28fbb62136e914a978e88d5075740c",
+      "smartmicro_processing/smartmicro_processing/tracker.py": "bef1689287e9edfc1be5e6ff6a0bde9b1e4a2b3766bb784c982de097f721b1f2",
+      "smartmicro_processing/smartmicro_processing/node.py": "485a1b751ef1e3535ac85d30e0d6130e99fbc9f35cc793df54c5e560716583a4"
+    },
+    "limitations": [
+      "Synthetic counterexamples are not live false-negative measurements.",
+      "No independent labels; stage retention is not detection accuracy.",
+      "Recorder delay is not sensor acquisition latency.",
+      "Matched-frame comparisons exclude unmatched capture edges."
+    ]
+  },
+  "capture_files": {
+    "0_live_2026_09_28-09_54_56.mcap": {
+      "bytes": 5597332,
+      "sha256": "fc23672b3b94a24f9c92dce5325a8d5d9f9b991b1116723c5cb88fb2b0970676"
+    },
+    "metadata.yaml": {
+      "bytes": 12133,
+      "sha256": "8cd5cf0c2285ad0a95579650f8236c14bfc5f2fe19a65e1a2bcddd218bc9214d"
+    }
+  },
+  "field_statistics": {
+    "variance_range": {
+      "count": 8689,
+      "finite": 8689,
+      "min": 0.00037945894291624427,
+      "p05": 0.0003794594667851925,
+      "median": 0.0003927303187083453,
+      "p95": 0.0004958990379236638,
+      "max": 0.0007652327767573297,
+      "mean": 0.00040615788955338016
+    },
+    "variance_speed": {
+      "count": 8689,
+      "finite": 8689,
+      "min": 0.0004450545529834926,
+      "p05": 0.00044509669532999396,
+      "median": 0.0004987362772226334,
+      "p95": 0.0006232156069017948,
+      "max": 0.0009841357823461294,
+      "mean": 0.0005061925575714593
+    },
+    "variance_azimuth_angle": {
+      "count": 8689,
+      "finite": 8689,
+      "min": 6.969380046939477e-05,
+      "p05": 7.18871466233395e-05,
+      "median": 9.054750262293965e-05,
+      "p95": 0.00038226406322792187,
+      "max": 0.001338177127763629,
+      "mean": 0.0001445829373765901
+    },
+    "variance_elevation_angle": {
+      "count": 8689,
+      "finite": 8689,
+      "min": 5.687616067007184e-05,
+      "p05": 5.687617158400826e-05,
+      "median": 5.768599294242449e-05,
+      "p95": 5.9884752408834176e-05,
+      "max": 6.452545494539663e-05,
+      "mean": 5.7902883729389765e-05
+    },
+    "rcs": {
+      "count": 8689,
+      "finite": 8689,
+      "min": 0.0016110963188111782,
+      "p05": 0.044469501823186874,
+      "median": 0.7135294079780579,
+      "p95": 222.92756958007823,
+      "max": 14970.6611328125,
+      "mean": 105.7499489213808
+    },
+    "snr": {
+      "count": 8689,
+      "finite": 8689,
+      "min": 16.917999267578125,
+      "p05": 22.12030944824219,
+      "median": 31.55211639404297,
+      "p95": 75.35759124755859,
+      "max": 77.18202209472656,
+      "mean": 38.062259630608686
+    }
+  },
+  "analysis_source_sha256": {
+    "results/umrr96-ingest-research-20260928/check_pipeline.py": "1edeb664654f080c191f3dd320a4754ad162e518a3f7b305c5f67337885d0ede",
+    "src/smartmicro_ros2_radars/tools/assessment/assess_bag.py": "de19acbaa25bb6b3c9309ba8971de328366436bfba57ac392949338eaf49bcd5"
+  }
+}
