@@ -31,6 +31,9 @@
     # while the fitted sensor speed exceeds sensor_moving_speed for 3 scans.
     cluster_radius: 0.6
     gate: 1.2
+    joint_association: true  # isolated worktree experiment
+    association_uncertainty: false  # innovation gates regressed on the recorded walk
+    association_doppler: true
     confirm_hits: 8
     confirm_window: 10
     max_coast: 1.0

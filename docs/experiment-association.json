@@ -1,0 +1,748 @@
+{
+  "common_base": "3aee7a7",
+  "branch": "experiment/umrr96-association",
+  "worktree": "/home/jcfurey/robotics/resple_test_ws/worktrees/smartmicro-association",
+  "scope": "Isolated tracker experiment; current point pipeline held fixed; no live hardware actions or scan accumulation.",
+  "validation": {
+    "processing_pytest_cases": 124,
+    "failures": 0,
+    "errors": 0,
+    "package_lint_passed": true,
+    "test_result_sha256": {
+      "flake8.xunit.xml": "8860ebf11f52612721ade5c9f3a5d30239b40a7faf273d94d22ebc6d007e0f28",
+      "flake8_scripts.xunit.xml": "7fa51926b08c99f35d232bc30d718209643274ba6e314367350be8c3bd8b0ed7",
+      "lint_cmake.xunit.xml": "83d02568b897d8d7ee7c2a43526d070d9e980906e4edf0da701ada5e39f1f83d",
+      "pep257.xunit.xml": "e7bbdb2edc57a0bca5b16e04d2da5784b794bff68635cf5a67ac3f60645165dc",
+      "test_accumulation.xunit.xml": "018bef0f3d306d39fcd52c7a153fe64c2a962492d3b84f080c1cba88c71e0bb8",
+      "test_accumulation_runtime.xunit.xml": "a2ff1f04dd05ec660a18d909d5a073a11b5686d578d4e904365007cefb4a0bc2",
+      "test_classification.xunit.xml": "6cbe369b7f04106f066258df40d883eb2b9fb76c34d51b6b2493e45ab43bb5c1",
+      "test_cloud.xunit.xml": "fa237b2b00fea04402f687df42046e2376cf91d99e0f11cab8c2ea11cccdc459",
+      "test_doppler.xunit.xml": "dc62248a1dc0fac5a01f1174a32b9e678582442f616d46a7f6db965c9ed35a07",
+      "test_ghost_candidates.xunit.xml": "79d88594bdd4f4bbf1dfc956f717b5331fc73e82e155c58834e4a0a6550eb8e6",
+      "test_ghosts.xunit.xml": "e85cee4f03d974187b6fdd3fb279f224806daab008d9f16c8497317f10e61bdd",
+      "test_node_logic.xunit.xml": "49560c24414cb436e4f96c841f553bf91ffc5d2177082f7dde96ebc8021a3da9",
+      "test_obstacles.xunit.xml": "d36f1fe3720b430135793c1514b4632757d4e43a1a519d1d73e9ca07f80d101b",
+      "test_processing_runtime.xunit.xml": "8ad21d4988dda4d825c670cebbc688e63615a948c438df3e3a1708fd16d15688",
+      "test_tracker.xunit.xml": "01af3765f5569611a44ce64f0216062f2aa8f131e5a5b0f7443d9063297d908f",
+      "test_vectorized_equivalence.xunit.xml": "e63b92781eac41e0182f016f083aff7d3efa6463c38de280e8b31f1c7f03cf69",
+      "xmllint.xunit.xml": "5806d049e7c2f18fbfb0928cbb4e9c26c485808948330a55c3479e1ec44f939b"
+    },
+    "disabled_baseline_digest_matches_scans": 3436,
+    "state_digest_fields": [
+      "track_id",
+      "x",
+      "P",
+      "last_moving",
+      "last_support",
+      "confirmed",
+      "ghost"
+    ],
+    "current_source_sha256": "03e91fec1d0a548cff52aef63b5a9ab6832ce11a66a892478a210fb19dd7f825",
+    "evaluated_source_sha256": "03e91fec1d0a548cff52aef63b5a9ab6832ce11a66a892478a210fb19dd7f825",
+    "evaluated_current_python_ast_equal": true,
+    "source_note": "Only line wrapping changed the standing source bytes after recorded replays; full Python AST equality verified. Synthetic report uses current source bytes."
+  },
+  "recorded": {
+    "walk": {
+      "totals": {
+        "scans": 1845,
+        "raw_points": 60251,
+        "valid_fits": 1841
+      },
+      "baseline": {
+        "repository": "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars",
+        "config": {
+          "cluster_radius": 0.6,
+          "gate": 1.2,
+          "position_std": 0.15,
+          "radial_speed_std": 0.1,
+          "accel_std": 2.0,
+          "confirm_hits": 8,
+          "confirm_window": 10,
+          "max_coast": 1.0,
+          "static_hold": 5.0,
+          "static_gate": 0.5,
+          "ghost_range_gap": 1.5,
+          "ghost_speed_tolerance": 0.25,
+          "background_range_bin": 0.5,
+          "background_azimuth_bin_deg": 3.0,
+          "background_time_constant": 30.0,
+          "background_threshold": 0.3,
+          "background_warmup": 3.0
+        },
+        "source_sha256": "bef1689287e9edfc1be5e6ff6a0bde9b1e4a2b3766bb784c982de097f721b1f2",
+        "yaml_sha256": "7bb7ed8af702b4a18aff2fc91405818db18540763a3e612de76985b7691f1f69",
+        "phases": {
+          "walking": {
+            "scans": 618,
+            "any_track_present": 591,
+            "near_track_present": 591,
+            "far_track_present": 10,
+            "current_supported_near_track_present": 531,
+            "direct_proxy_retained_on_track": 1003,
+            "ghost_proxy_retained_on_track": 3
+          },
+          "standing": {
+            "scans": 145,
+            "any_track_present": 88,
+            "near_track_present": 88,
+            "far_track_present": 0,
+            "current_supported_near_track_present": 53,
+            "direct_proxy_retained_on_track": 0,
+            "ghost_proxy_retained_on_track": 0
+          },
+          "swaying": {
+            "scans": 108,
+            "any_track_present": 63,
+            "near_track_present": 63,
+            "far_track_present": 0,
+            "current_supported_near_track_present": 48,
+            "direct_proxy_retained_on_track": 12,
+            "ghost_proxy_retained_on_track": 0
+          },
+          "absent": {
+            "scans": 290,
+            "any_track_present": 0,
+            "near_track_present": 0,
+            "far_track_present": 0,
+            "current_supported_near_track_present": 0
+          },
+          "all_unlabeled": {
+            "scans": 1845,
+            "visible_track_instances": 1148
+          }
+        },
+        "state_digest": "dbc6ab954b09ccdeeca81bffac337096027affc3083a4c5f45b4d74ef8cfdd86",
+        "tracker_ms": {
+          "p50": 0.294179,
+          "p95": 0.652492,
+          "p99": 0.8517453999999997,
+          "max": 1.100779
+        }
+      },
+      "candidate": {
+        "repository": "worktrees/smartmicro-association",
+        "config": {
+          "cluster_radius": 0.6,
+          "gate": 1.2,
+          "joint_association": true,
+          "association_uncertainty": false,
+          "association_doppler": true,
+          "position_std": 0.15,
+          "radial_speed_std": 0.1,
+          "accel_std": 2.0,
+          "confirm_hits": 8,
+          "confirm_window": 10,
+          "max_coast": 1.0,
+          "static_hold": 5.0,
+          "static_gate": 0.5,
+          "ghost_range_gap": 1.5,
+          "ghost_speed_tolerance": 0.25,
+          "background_range_bin": 0.5,
+          "background_azimuth_bin_deg": 3.0,
+          "background_time_constant": 30.0,
+          "background_threshold": 0.3,
+          "background_warmup": 3.0
+        },
+        "source_sha256": "03e91fec1d0a548cff52aef63b5a9ab6832ce11a66a892478a210fb19dd7f825",
+        "yaml_sha256": "0bf73977f966b186f4ed003243beec2db728ef407d8909e245d954c7405f5754",
+        "phases": {
+          "walking": {
+            "scans": 618,
+            "any_track_present": 591,
+            "near_track_present": 591,
+            "far_track_present": 10,
+            "current_supported_near_track_present": 531,
+            "direct_proxy_retained_on_track": 1003,
+            "ghost_proxy_retained_on_track": 3
+          },
+          "standing": {
+            "scans": 145,
+            "any_track_present": 88,
+            "near_track_present": 88,
+            "far_track_present": 0,
+            "current_supported_near_track_present": 53,
+            "direct_proxy_retained_on_track": 0,
+            "ghost_proxy_retained_on_track": 0
+          },
+          "swaying": {
+            "scans": 108,
+            "any_track_present": 63,
+            "near_track_present": 63,
+            "far_track_present": 0,
+            "current_supported_near_track_present": 48,
+            "direct_proxy_retained_on_track": 12,
+            "ghost_proxy_retained_on_track": 0
+          },
+          "absent": {
+            "scans": 290,
+            "any_track_present": 0,
+            "near_track_present": 0,
+            "far_track_present": 0,
+            "current_supported_near_track_present": 0
+          },
+          "all_unlabeled": {
+            "scans": 1845,
+            "visible_track_instances": 1147
+          }
+        },
+        "state_digest": "34bbbdab66cdf2957c4fdd4a5a2fa1307cfefc2cf2d47df863037bcd9b915e57",
+        "tracker_ms": {
+          "p50": 0.26873,
+          "p95": 0.60641,
+          "p99": 0.7987093999999997,
+          "max": 7.41041
+        }
+      }
+    },
+    "static": {
+      "totals": {
+        "scans": 1117,
+        "raw_points": 29503,
+        "valid_fits": 1117
+      },
+      "baseline": {
+        "repository": "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars",
+        "config": {
+          "cluster_radius": 0.6,
+          "gate": 1.2,
+          "position_std": 0.15,
+          "radial_speed_std": 0.1,
+          "accel_std": 2.0,
+          "confirm_hits": 8,
+          "confirm_window": 10,
+          "max_coast": 1.0,
+          "static_hold": 5.0,
+          "static_gate": 0.5,
+          "ghost_range_gap": 1.5,
+          "ghost_speed_tolerance": 0.25,
+          "background_range_bin": 0.5,
+          "background_azimuth_bin_deg": 3.0,
+          "background_time_constant": 30.0,
+          "background_threshold": 0.3,
+          "background_warmup": 3.0
+        },
+        "source_sha256": "bef1689287e9edfc1be5e6ff6a0bde9b1e4a2b3766bb784c982de097f721b1f2",
+        "yaml_sha256": "7bb7ed8af702b4a18aff2fc91405818db18540763a3e612de76985b7691f1f69",
+        "phases": {
+          "walking": {},
+          "standing": {},
+          "swaying": {},
+          "absent": {},
+          "all_unlabeled": {
+            "scans": 1117,
+            "visible_track_instances": 0
+          }
+        },
+        "state_digest": "1ade646b0e9f3589ca5df522930c2bf8dbb9214c6699551249226583eee2044b",
+        "tracker_ms": {
+          "p50": 0.069697,
+          "p95": 0.0998708,
+          "p99": 0.11725515999999989,
+          "max": 0.132115
+        }
+      },
+      "candidate": {
+        "repository": "worktrees/smartmicro-association",
+        "config": {
+          "cluster_radius": 0.6,
+          "gate": 1.2,
+          "joint_association": true,
+          "association_uncertainty": false,
+          "association_doppler": true,
+          "position_std": 0.15,
+          "radial_speed_std": 0.1,
+          "accel_std": 2.0,
+          "confirm_hits": 8,
+          "confirm_window": 10,
+          "max_coast": 1.0,
+          "static_hold": 5.0,
+          "static_gate": 0.5,
+          "ghost_range_gap": 1.5,
+          "ghost_speed_tolerance": 0.25,
+          "background_range_bin": 0.5,
+          "background_azimuth_bin_deg": 3.0,
+          "background_time_constant": 30.0,
+          "background_threshold": 0.3,
+          "background_warmup": 3.0
+        },
+        "source_sha256": "03e91fec1d0a548cff52aef63b5a9ab6832ce11a66a892478a210fb19dd7f825",
+        "yaml_sha256": "0bf73977f966b186f4ed003243beec2db728ef407d8909e245d954c7405f5754",
+        "phases": {
+          "walking": {},
+          "standing": {},
+          "swaying": {},
+          "absent": {},
+          "all_unlabeled": {
+            "scans": 1117,
+            "visible_track_instances": 0
+          }
+        },
+        "state_digest": "1ade646b0e9f3589ca5df522930c2bf8dbb9214c6699551249226583eee2044b",
+        "tracker_ms": {
+          "p50": 0.058118,
+          "p95": 0.07331600000000003,
+          "p99": 0.08420619999999997,
+          "max": 0.143305
+        }
+      }
+    },
+    "quiet": {
+      "totals": {
+        "scans": 474,
+        "raw_points": 8689,
+        "valid_fits": 474
+      },
+      "baseline": {
+        "repository": "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars",
+        "config": {
+          "cluster_radius": 0.6,
+          "gate": 1.2,
+          "position_std": 0.15,
+          "radial_speed_std": 0.1,
+          "accel_std": 2.0,
+          "confirm_hits": 8,
+          "confirm_window": 10,
+          "max_coast": 1.0,
+          "static_hold": 5.0,
+          "static_gate": 0.5,
+          "ghost_range_gap": 1.5,
+          "ghost_speed_tolerance": 0.25,
+          "background_range_bin": 0.5,
+          "background_azimuth_bin_deg": 3.0,
+          "background_time_constant": 30.0,
+          "background_threshold": 0.3,
+          "background_warmup": 3.0
+        },
+        "source_sha256": "bef1689287e9edfc1be5e6ff6a0bde9b1e4a2b3766bb784c982de097f721b1f2",
+        "yaml_sha256": "7bb7ed8af702b4a18aff2fc91405818db18540763a3e612de76985b7691f1f69",
+        "phases": {
+          "walking": {},
+          "standing": {},
+          "swaying": {},
+          "absent": {},
+          "all_unlabeled": {
+            "scans": 474,
+            "visible_track_instances": 0
+          }
+        },
+        "state_digest": "e3904d8f39f0af75d2a48ca3eba171711887708b3ccc9fc22eb3c2c32417fd7c",
+        "tracker_ms": {
+          "p50": 0.085392,
+          "p95": 0.1563433499999999,
+          "p99": 0.21552749999999996,
+          "max": 0.25544
+        }
+      },
+      "candidate": {
+        "repository": "worktrees/smartmicro-association",
+        "config": {
+          "cluster_radius": 0.6,
+          "gate": 1.2,
+          "joint_association": true,
+          "association_uncertainty": false,
+          "association_doppler": true,
+          "position_std": 0.15,
+          "radial_speed_std": 0.1,
+          "accel_std": 2.0,
+          "confirm_hits": 8,
+          "confirm_window": 10,
+          "max_coast": 1.0,
+          "static_hold": 5.0,
+          "static_gate": 0.5,
+          "ghost_range_gap": 1.5,
+          "ghost_speed_tolerance": 0.25,
+          "background_range_bin": 0.5,
+          "background_azimuth_bin_deg": 3.0,
+          "background_time_constant": 30.0,
+          "background_threshold": 0.3,
+          "background_warmup": 3.0
+        },
+        "source_sha256": "03e91fec1d0a548cff52aef63b5a9ab6832ce11a66a892478a210fb19dd7f825",
+        "yaml_sha256": "0bf73977f966b186f4ed003243beec2db728ef407d8909e245d954c7405f5754",
+        "phases": {
+          "walking": {},
+          "standing": {},
+          "swaying": {},
+          "absent": {},
+          "all_unlabeled": {
+            "scans": 474,
+            "visible_track_instances": 0
+          }
+        },
+        "state_digest": "e3904d8f39f0af75d2a48ca3eba171711887708b3ccc9fc22eb3c2c32417fd7c",
+        "tracker_ms": {
+          "p50": 0.0686975,
+          "p95": 0.13137949999999995,
+          "p99": 0.19363339999999993,
+          "max": 0.216412
+        }
+      }
+    }
+  },
+  "controls": {
+    "long_static_hold_control": {
+      "repository": "/home/jcfurey/robotics/resple_test_ws/src/smartmicro_ros2_radars",
+      "config": {
+        "cluster_radius": 0.6,
+        "gate": 1.2,
+        "position_std": 0.15,
+        "radial_speed_std": 0.1,
+        "accel_std": 2.0,
+        "confirm_hits": 8,
+        "confirm_window": 10,
+        "max_coast": 1.0,
+        "static_hold": 30.0,
+        "static_gate": 0.5,
+        "ghost_range_gap": 1.5,
+        "ghost_speed_tolerance": 0.25,
+        "background_range_bin": 0.5,
+        "background_azimuth_bin_deg": 3.0,
+        "background_time_constant": 30.0,
+        "background_threshold": 0.3,
+        "background_warmup": 3.0
+      },
+      "source_sha256": "bef1689287e9edfc1be5e6ff6a0bde9b1e4a2b3766bb784c982de097f721b1f2",
+      "yaml_sha256": "7bb7ed8af702b4a18aff2fc91405818db18540763a3e612de76985b7691f1f69",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 591,
+          "near_track_present": 591,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 531,
+          "direct_proxy_retained_on_track": 1003,
+          "ghost_proxy_retained_on_track": 3
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 145,
+          "near_track_present": 145,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 98,
+          "direct_proxy_retained_on_track": 0,
+          "ghost_proxy_retained_on_track": 0
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 108,
+          "near_track_present": 108,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 80,
+          "direct_proxy_retained_on_track": 28,
+          "ghost_proxy_retained_on_track": 0
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        },
+        "all_unlabeled": {
+          "scans": 1845,
+          "visible_track_instances": 1250
+        }
+      },
+      "state_digest": "30e070f8cf686fb361c9e7c61d0c0212896d96adf98da4f62a4415ffdb0aa887",
+      "tracker_ms": {
+        "p50": 0.26972,
+        "p95": 0.5907888,
+        "p99": 0.7896221999999995,
+        "max": 1.047572
+      }
+    },
+    "association_position_only_control": {
+      "repository": "worktrees/smartmicro-association",
+      "config": {
+        "cluster_radius": 0.6,
+        "gate": 1.2,
+        "joint_association": true,
+        "association_uncertainty": true,
+        "association_doppler": false,
+        "position_std": 0.15,
+        "radial_speed_std": 0.1,
+        "accel_std": 2.0,
+        "confirm_hits": 8,
+        "confirm_window": 10,
+        "max_coast": 1.0,
+        "static_hold": 5.0,
+        "static_gate": 0.5,
+        "ghost_range_gap": 1.5,
+        "ghost_speed_tolerance": 0.25,
+        "background_range_bin": 0.5,
+        "background_azimuth_bin_deg": 3.0,
+        "background_time_constant": 30.0,
+        "background_threshold": 0.3,
+        "background_warmup": 3.0
+      },
+      "source_sha256": "03e91fec1d0a548cff52aef63b5a9ab6832ce11a66a892478a210fb19dd7f825",
+      "yaml_sha256": "0bf73977f966b186f4ed003243beec2db728ef407d8909e245d954c7405f5754",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 588,
+          "near_track_present": 588,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 524,
+          "direct_proxy_retained_on_track": 989,
+          "ghost_proxy_retained_on_track": 2
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 88,
+          "near_track_present": 88,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 53,
+          "direct_proxy_retained_on_track": 0,
+          "ghost_proxy_retained_on_track": 0
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 63,
+          "near_track_present": 63,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 48,
+          "direct_proxy_retained_on_track": 12,
+          "ghost_proxy_retained_on_track": 0
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        },
+        "all_unlabeled": {
+          "scans": 1845,
+          "visible_track_instances": 1248
+        }
+      },
+      "state_digest": "51b135732d84aa15da62fab85f1da4184c69387319155aa2e93fb9143e24f25a",
+      "tracker_ms": {
+        "p50": 0.287429,
+        "p95": 0.7332289999999999,
+        "p99": 1.0976653999999997,
+        "max": 9.430627
+      }
+    },
+    "association_innovation_control": {
+      "repository": "worktrees/smartmicro-association",
+      "config": {
+        "cluster_radius": 0.6,
+        "gate": 1.2,
+        "joint_association": true,
+        "association_uncertainty": true,
+        "association_doppler": true,
+        "position_std": 0.15,
+        "radial_speed_std": 0.1,
+        "accel_std": 2.0,
+        "confirm_hits": 8,
+        "confirm_window": 10,
+        "max_coast": 1.0,
+        "static_hold": 5.0,
+        "static_gate": 0.5,
+        "ghost_range_gap": 1.5,
+        "ghost_speed_tolerance": 0.25,
+        "background_range_bin": 0.5,
+        "background_azimuth_bin_deg": 3.0,
+        "background_time_constant": 30.0,
+        "background_threshold": 0.3,
+        "background_warmup": 3.0
+      },
+      "source_sha256": "03e91fec1d0a548cff52aef63b5a9ab6832ce11a66a892478a210fb19dd7f825",
+      "yaml_sha256": "0bf73977f966b186f4ed003243beec2db728ef407d8909e245d954c7405f5754",
+      "phases": {
+        "walking": {
+          "scans": 618,
+          "any_track_present": 588,
+          "near_track_present": 588,
+          "far_track_present": 10,
+          "current_supported_near_track_present": 522,
+          "direct_proxy_retained_on_track": 990,
+          "ghost_proxy_retained_on_track": 2
+        },
+        "standing": {
+          "scans": 145,
+          "any_track_present": 88,
+          "near_track_present": 88,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 53,
+          "direct_proxy_retained_on_track": 0,
+          "ghost_proxy_retained_on_track": 0
+        },
+        "swaying": {
+          "scans": 108,
+          "any_track_present": 32,
+          "near_track_present": 0,
+          "far_track_present": 32,
+          "current_supported_near_track_present": 0,
+          "direct_proxy_retained_on_track": 0,
+          "ghost_proxy_retained_on_track": 22
+        },
+        "absent": {
+          "scans": 290,
+          "any_track_present": 0,
+          "near_track_present": 0,
+          "far_track_present": 0,
+          "current_supported_near_track_present": 0
+        },
+        "all_unlabeled": {
+          "scans": 1845,
+          "visible_track_instances": 1216
+        }
+      },
+      "state_digest": "aa131fe684fa836727d03f8a20edbd284f61f0913dacf9d0a438b20c5596cca7",
+      "tracker_ms": {
+        "p50": 0.27796,
+        "p95": 0.7271572,
+        "p99": 1.0405592399999988,
+        "max": 3.347848
+      }
+    }
+  },
+  "synthetic": {
+    "scope": "Synthetic tracker-only measurements, no point rejection, ego fit or sensor model.",
+    "limits": "Controlled mechanisms, not a forecast of physical crossing performance. ID changes include reinitialization after gaps. No parameter search over seeds.",
+    "crossing_config": {
+      "seeds": [
+        1000,
+        1019
+      ],
+      "frames_per_seed": 200,
+      "dt_s": 0.055,
+      "position_std_m": 0.18,
+      "radial_speed_std_m_s": 0.05,
+      "drop_probability": 0.1,
+      "score_after_s": 1.0,
+      "score_radius_m": 0.8
+    },
+    "crossing_baseline": {
+      "scored_frames": 3620,
+      "object_opportunities": 7240,
+      "matched_objects": 7237,
+      "unmatched_track_instances": 0
+    },
+    "crossing_candidate": {
+      "scored_frames": 3620,
+      "object_opportunities": 7240,
+      "matched_objects": 7237,
+      "unmatched_track_instances": 0
+    },
+    "standing": {
+      "visible_wall": {
+        "baseline": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "confirmation": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "standing": {
+          "standing_scans": 240,
+          "standing_covered": 240,
+          "standing_supported_now": 240,
+          "departure_scans": 100,
+          "departure_track_present": 18,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "association": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "long_static_hold_control": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        }
+      },
+      "occluded_wall": {
+        "baseline": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "confirmation": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "standing": {
+          "standing_scans": 240,
+          "standing_covered": 240,
+          "standing_supported_now": 240,
+          "departure_scans": 100,
+          "departure_track_present": 18,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "association": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        },
+        "long_static_hold_control": {
+          "standing_scans": 240,
+          "standing_covered": 69,
+          "standing_supported_now": 51,
+          "departure_scans": 100,
+          "departure_track_present": 0,
+          "departure_after_coast_scans": 81,
+          "departure_after_coast_track_present": 0
+        }
+      }
+    }
+  },
+  "full_reports": {
+    "walk": {
+      "path": "results/umrr96-three-worktrees-20260928/walk-final.json",
+      "sha256": "5c2d2cbb35f6850cff716b5b513aae9b87a895f748fcd2c6d78db20751a3be28"
+    },
+    "static": {
+      "path": "results/umrr96-three-worktrees-20260928/static.json",
+      "sha256": "795e7a703cd6a609b14c86ea26fea24a1b906a01587f8223140fd973fb5ac424"
+    },
+    "quiet": {
+      "path": "results/umrr96-three-worktrees-20260928/quiet.json",
+      "sha256": "634b73debbc5096d51835be98f0f088a45dc0ed56941022959465f0bcd00378a"
+    },
+    "synthetic": {
+      "path": "results/umrr96-three-worktrees-20260928/stress-final.json",
+      "sha256": "7b8dd4cdcd440ed697a1571c1f4c1a8b87f8d70c918637e2cbb7c7df6a242359"
+    }
+  },
+  "limits": "Single already-examined room recording and approximate range labels; quiet captures and synthetic cases do not establish multi-person accuracy. No obstacle-layer or end-to-end latency evaluation."
+}

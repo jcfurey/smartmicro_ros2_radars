@@ -68,6 +68,18 @@ def test_integer_overrides_are_accepted_for_float_parameters(ros):
         node.destroy_node()
 
 
+def test_association_parameters_reach_the_tracker(ros):
+    ros('joint_association:=true', 'association_uncertainty:=false', 'association_doppler:=true')
+    node = RadarProcessing()
+    try:
+        assert node.tracker.config.joint_association
+        assert not node.tracker.config.association_uncertainty
+        assert node.tracker.config.association_doppler
+        assert node.describe_parameter('joint_association').read_only
+    finally:
+        node.destroy_node()
+
+
 @pytest.mark.parametrize('reject_static', [True, False])
 def test_static_only_policy_agrees_across_clouds_audit_and_diagnostics(ros, reject_static):
     ros('reject_static_only:=' + str(reject_static).lower())

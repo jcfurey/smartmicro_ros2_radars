@@ -50,6 +50,11 @@ GHOST_PARAMETERS = {
     'wall_azimuth_deg': ('Bearing match for the behind-static-return ghost rule (deg).', .1, 30),
 }
 TRACKER_PARAMETERS = {
+    'joint_association': ('Experimental one-to-one global assignment '
+                          'within confirmed and tentative priority tiers.',),
+    'association_uncertainty': ('Use EKF innovation costs and gates instead of distance '
+                                'in joint assignment; requires covariance validation.',),
+    'association_doppler': ('Include signed radial-speed innovation in joint association.',),
     'cluster_radius': ('Moving targets closer than this form one measurement (m).', .05, 10),
     'gate': ('Association distance from a predicted track position (m).', .05, 20),
     'confirm_hits': ('Hits within confirm_window scans needed to confirm a track.', 1, 64, 1),
