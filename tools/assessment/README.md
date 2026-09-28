@@ -121,6 +121,53 @@ an alternative trajectory replay. Proxy labels are restricted to the documented
 person-present phases. The current-detection view already includes tentative
 points, so association losses must not be presented as missing raw detections.
 
+## Three-worktree comparison
+
+The [three experiments](../../docs/umrr96-worktree-comparison-20260928.md) share
+checkpoint `3aee7a7` and use separate checkouts in workspace `worktrees/`.
+The main repository supplies the shared assessment scripts. From the workspace:
+
+```bash
+source /opt/ros/lyrical/setup.bash
+source .colcon/umrr96-processing/install/local_setup.bash
+OPENBLAS_NUM_THREADS=1 python3 \
+  src/smartmicro_ros2_radars/tools/assessment/compare_tracker_worktrees.py \
+  results/umrr96-filtering-20260924/walk --worktrees worktrees --check-disabled \
+  --output /tmp/umrr96-worktrees-walk-repeat.json
+OPENBLAS_NUM_THREADS=1 python3 \
+  src/smartmicro_ros2_radars/tools/assessment/stress_tracker_worktrees.py \
+  --worktrees worktrees --output /tmp/umrr96-worktrees-stress-repeat.json
+```
+
+SciPy is required in addition to the ROS Python environment, NumPy and PyYAML.
+Use fresh outputs. For another recorded bag, pass `--unlabeled` so the walk's
+phase timestamps and room proxies are not accidentally assigned to it. The
+comparison always runs baseline, the three active worktree configurations, a
+longer-static-hold control and two association-cost controls. `--check-disabled`
+also asserts baseline-equivalent recorded state digests for disabled features.
+The output source hashes identify the exact worktree code and YAML evaluated.
+
+For example, build/test the standing branch below. For the other branches,
+change `standing` to the branch name and use domains 181/182 for confirmation
+or 185/186 for association, so concurrent ROS tests stay isolated:
+
+```bash
+colcon --log-base .colcon/umrr96-exp-standing/log build \
+  --base-paths worktrees/smartmicro-standing/smartmicro_processing \
+    worktrees/smartmicro-standing/umrr_ros2_msgs \
+  --build-base .colcon/umrr96-exp-standing/build \
+  --install-base .colcon/umrr96-exp-standing/install \
+  --symlink-install --cmake-args -DBUILD_TESTING=ON \
+    -DSMARTMICRO_PROCESSING_TEST_DOMAIN_ID=183 \
+    -DSMARTMICRO_ACCUMULATION_TEST_DOMAIN_ID=184
+colcon --log-base .colcon/umrr96-exp-standing/log test \
+  --base-paths worktrees/smartmicro-standing/smartmicro_processing \
+    worktrees/smartmicro-standing/umrr_ros2_msgs \
+  --build-base .colcon/umrr96-exp-standing/build \
+  --install-base .colcon/umrr96-exp-standing/install \
+  --packages-select smartmicro_processing --ctest-args --output-on-failure
+```
+
 ## Recorded UMRR-96 bags
 
 These tools inspect recorded detections and reproduce the
