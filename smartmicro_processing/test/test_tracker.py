@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from smartmicro_processing.tracker import cluster, MovingObjectTracker, TrackerConfig
+from smartmicro_processing.tracker import cluster, MovingObjectTracker, Track, TrackerConfig
 
 DT = 0.055
 
@@ -121,3 +121,100 @@ def test_data_gap_longer_than_max_coast_drops_tracks():
 def test_invalid_config():
     with pytest.raises(ValueError):
         TrackerConfig(confirm_hits=6, confirm_window=5)
+
+
+def stopped_tracker():
+    tracker = MovingObjectTracker(TrackerConfig(standing_support=True))
+    wall = [[4., 0., 0.]]
+    for k in range(100):
+        tracker.step(k * DT, [], [], wall)
+    for k in range(100, 140):
+        stop = [1. + .5 * (k - 100) * DT, 0., 0.]
+        tracker.step(k * DT, [stop], [.5], wall)
+    assert tracker.tracks[0].standing_background is not None
+    return tracker, stop, wall, 140
+
+
+def test_current_support_keeps_standing_person_beyond_legacy_hold_then_expires():
+    tracker, stop, wall, start = stopped_tracker()
+    for k in range(start, start + 220):
+        visible = tracker.step(k * DT, [], [], wall + [stop])
+        assert len(visible) == 1
+        assert visible[0].last_support == k * DT
+    # A learned wall cannot maintain the departed person's track.
+    for k in range(start + 220, start + 245):
+        visible = tracker.step(k * DT, [], [], wall)
+    assert not visible
+
+
+def test_standing_support_has_an_absolute_time_limit():
+    tracker, stop, wall, start = stopped_tracker()
+    tracker.config.standing_hold = 7.
+    for k in range(start, start + 155):
+        visible = tracker.step(k * DT, [], [], wall + [stop])
+    assert not visible
+
+
+def test_static_support_cannot_drift_away_from_stop_anchor():
+    tracker, stop, wall, start = stopped_tracker()
+    for k in range(start, start + 20):
+        tracker.step(k * DT, [], [], wall + [stop])
+    anchor = tracker.tracks[0].standing_anchor.copy()
+    for j in range(100):
+        k = start + 20 + j
+        visible = tracker.step(k * DT, [], [], wall + [[stop[0], .025 * j, 0.]])
+    assert not visible
+    assert np.isfinite(anchor).all()
+
+
+def test_sensor_motion_invalidates_the_saved_background():
+    tracker, stop, wall, start = stopped_tracker()
+    tracker.step(start * DT, [], [], wall + [stop], sensor_moving=True)
+    assert tracker.tracks[0].standing_background is None
+    assert tracker.tracks[0].standing_anchor is None
+
+
+def test_unknown_static_returns_do_not_extend_standing_support():
+    tracker, stop, wall, start = stopped_tracker()
+    for k in range(start, start + 100):
+        tracker.step(k * DT, [], [], wall + [stop])
+    for k in range(start + 100, start + 125):
+        visible = tracker.coast(k * DT)
+    assert not visible
+
+
+def test_verified_standing_track_accepts_intermittent_current_support():
+    tracker, stop, wall, start = stopped_tracker()
+    for k in range(start, start + 20):
+        tracker.step(k * DT, [], [], wall + [stop])
+    assert tracker.tracks[0].standing_verified
+    for k in range(start + 20, start + 240):
+        support = wall + ([stop] if k % 8 == 0 else [])
+        visible = tracker.step(k * DT, [], [], support)
+        assert len(visible) == 1
+        if k % 8 == 0:
+            assert visible[0].last_support == k * DT
+
+
+def test_reappearing_preexisting_nearby_wall_cannot_take_over_a_standing_track():
+    tracker = MovingObjectTracker(TrackerConfig(standing_support=True))
+    wall = [[2.6, 0., 0.]]
+    for k in range(100):
+        tracker.step(k * DT, [], [], wall)
+    for k in range(100, 141):
+        stop = [1.1 + .5 * (k - 100) * DT, 0., 0.]
+        tracker.step(k * DT, [stop], [.5], wall)
+    for k in range(141, 381):
+        assert tracker.step(k * DT, [], [], [stop])
+    for k in range(381, 406):
+        visible = tracker.step(k * DT, [], [], wall)
+    assert not visible
+
+
+def test_a_static_point_cannot_support_two_standing_tracks():
+    tracker = MovingObjectTracker(TrackerConfig(standing_support=True))
+    for ident, y in [(1, -.1), (2, .1)]:
+        tracker.tracks.append(Track(ident, np.array([2., y, 0., 0.]), np.eye(4),
+                                    0., 0., 0., confirmed=True, standing_background=frozenset()))
+    selected = tracker.standing_observations(.5, np.array([[2., .05]]), False)
+    assert len(selected[1]) == 0 and len(selected[2]) == 1

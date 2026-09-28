@@ -35,6 +35,8 @@
     confirm_window: 10
     max_coast: 1.0
     static_hold: 5.0
+    standing_support: true  # isolated worktree experiment; requires current novel support
+    standing_hold: 30.0
     background_time_constant: 30.0
     # 0.3 rather than 0.5: walls a person occludes stay background, so fewer are dropped
     # as that person's multipath (walk: structure beyond a track 72% -> 81% kept, far

@@ -68,6 +68,17 @@ def test_integer_overrides_are_accepted_for_float_parameters(ros):
         node.destroy_node()
 
 
+def test_standing_support_parameters_reach_the_tracker(ros):
+    ros('standing_support:=true', 'standing_hold:=30')
+    node = RadarProcessing()
+    try:
+        assert node.tracker.config.standing_support
+        assert node.tracker.config.standing_hold == 30.
+        assert node.describe_parameter('standing_support').read_only
+    finally:
+        node.destroy_node()
+
+
 @pytest.mark.parametrize('reject_static', [True, False])
 def test_static_only_policy_agrees_across_clouds_audit_and_diagnostics(ros, reject_static):
     ros('reject_static_only:=' + str(reject_static).lower())

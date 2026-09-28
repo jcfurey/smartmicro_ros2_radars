@@ -18,6 +18,8 @@ class TrackerConfig:
     max_coast: float = 1.0  # s without any associated detection before deletion
     static_hold: float = 5.0  # s a confirmed track may live on zero-Doppler support only
     static_gate: float = 0.5  # m, zero-Doppler detections this close support a track
+    standing_support: bool = False  # preserve pre-stop background and require current support
+    standing_hold: float = 30.0  # absolute cap on static-only support in the experiment
     ghost_range_gap: float = 1.5  # m, track-level ghost rule (see ghosts.py)
     ghost_speed_tolerance: float = 0.25  # m/s
     background_range_bin: float = 0.5  # m, polar background cell size
@@ -31,13 +33,17 @@ class TrackerConfig:
                   self.accel_std, self.max_coast, self.static_hold, self.static_gate,
                   self.ghost_range_gap, self.ghost_speed_tolerance, self.background_range_bin,
                   self.background_azimuth_bin_deg, self.background_time_constant,
-                  self.background_warmup)
+                  self.background_warmup, self.standing_hold)
         if not all(math.isfinite(v) and v > 0 for v in values):
             raise ValueError('Tracker scales must be finite and positive')
         if not 0 < self.background_threshold < 1:
             raise ValueError('background_threshold must be within (0, 1)')
         if not 1 <= self.confirm_hits <= self.confirm_window <= 64:
             raise ValueError('Need 1 <= confirm_hits <= confirm_window <= 64')
+        if not isinstance(self.standing_support, bool):
+            raise ValueError('standing_support must be a boolean')
+        if self.standing_support and self.standing_hold < self.static_hold:
+            raise ValueError('standing_hold must cover the legacy static_hold interval')
 
 
 @dataclass
@@ -54,6 +60,10 @@ class Track:
     first_stamp: float = 0.0
     radial_speed: float = 0.0  # last associated cluster speed, for the ghost rule
     ghost: bool = False
+    standing_background: object = None  # cells known before a confirmed mover stopped
+    standing_anchor: object = None
+    standing_history: list = field(default_factory=list)
+    standing_verified: bool = False
 
     @property
     def speed(self):
@@ -216,6 +226,33 @@ class MovingObjectTracker:
         """Advance without a static/moving split (failed Doppler fit): record a miss."""
         return self.step(stamp, (), (), None)
 
+    def standing_observations(self, stamp, static_xy, sensor_moving):
+        """Assign each current static point to at most one eligible anchored track."""
+        c = self.config
+        if not c.standing_support or sensor_moving:
+            return {}
+        candidates = [t for t in self.tracks if t.confirmed and not t.ghost
+                      and t.standing_background is not None and t.last_moving < stamp
+                      and stamp - t.last_moving <= c.standing_hold]
+        result = {t.track_id: np.empty((0, 2)) for t in candidates}
+        if not candidates or not len(static_xy):
+            return result
+        keys = self.background.keys(static_xy)
+        cost = np.full((len(candidates), len(static_xy)), np.inf)
+        for i, track in enumerate(candidates):
+            distance = np.linalg.norm(static_xy - track.x[:2], axis=1)
+            allowed = np.array([key not in track.standing_background for key in keys])
+            allowed &= distance < c.static_gate
+            if track.standing_anchor is not None:
+                allowed &= (np.linalg.norm(static_xy - track.standing_anchor, axis=1)
+                            < c.static_gate)
+            cost[i, allowed] = distance[allowed]
+        owner = np.argmin(cost, axis=0)
+        finite = np.isfinite(cost.min(axis=0))
+        for i, track in enumerate(candidates):
+            result[track.track_id] = static_xy[finite & (owner == i)]
+        return result
+
     def step(self, stamp, mover_xyz, mover_speed, static_xyz=(), sensor_moving=False):
         """
         Advance to ``stamp`` (s); return the confirmed tracks.
@@ -246,15 +283,26 @@ class MovingObjectTracker:
                 self.update(track, measurements[best][0], measurements[best][1])
                 track.radial_speed = measurements[best][1]
                 track.last_moving = track.last_support = stamp
+                if c.standing_support:
+                    track.standing_anchor = None
+                    track.standing_history = []
+                    track.standing_verified = False
             track.history = (track.history + [hit])[-c.confirm_window:]
             track.hits += hit
         if sensor_moving:
             self.background.reset()
+            if c.standing_support:
+                for track in self.tracks:
+                    track.standing_background = track.standing_anchor = None
+                    track.standing_history = []
+                    track.standing_verified = False
         if static_xyz is None:
             static_xy = np.empty((0, 2))
+            all_static_xy = static_xy
             self.static_novel = None
         else:
             static_xy = np.asarray(static_xyz, float).reshape(-1, 3)[:, :2]
+            all_static_xy = static_xy
             # Judge novelty before learning this scan, so a new standing object stays novel.
             # Before warm-up every return is novel for holding tracks, but static_novel
             # is None: callers must not drop returns on an unlearned background.
@@ -263,16 +311,34 @@ class MovingObjectTracker:
             self.static_novel = novel if ready else None
             self.background.update(stamp, static_xy)
             static_xy = static_xy[novel]
+        standing = (self.standing_observations(stamp, all_static_xy, sensor_moving)
+                    if static_xyz is not None else {})
         for track in self.tracks:
-            if (track.confirmed and not track.ghost and track.last_moving < stamp
-                    and len(static_xy)):
-                distances = np.linalg.norm(static_xy - track.x[:2], axis=1)
+            support = standing.get(track.track_id, static_xy)
+            extended = track.track_id in standing
+            if track.confirmed and not track.ghost and track.last_moving < stamp:
+                distances = np.linalg.norm(support - track.x[:2], axis=1)
                 close = distances < c.static_gate
-                if close.any() and stamp - track.last_moving <= c.static_hold:
-                    self.update_position(track, static_xy[close].mean(0))
+                if extended:
+                    track.standing_history = (track.standing_history + [bool(close.any())])[-5:]
+                    track.standing_verified |= sum(track.standing_history) >= 3
+                recent = (stamp - track.last_moving <= c.static_hold
+                          or extended and track.standing_verified)
+                if close.any() and recent:
+                    position = support[close].mean(0)
+                    if extended and track.standing_anchor is None:
+                        track.standing_anchor = position.copy()
+                    self.update_position(track, position)
                     track.last_support = stamp
             if not track.confirmed and sum(track.history) >= c.confirm_hits:
                 track.confirmed = True
+            if (c.standing_support and track.confirmed and track.standing_background is None
+                    and track.last_moving == stamp and self.background.ready
+                    and not sensor_moving):
+                threshold = c.background_threshold * self.background.weight
+                track.standing_background = frozenset(
+                    key for key, weight in self.background.occupancy.items()
+                    if weight >= threshold)
         for track in self.tracks:
             track.ghost = track.confirmed and self.is_ghost(track)
         for i, (position, speed, _) in enumerate(measurements):
