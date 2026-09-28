@@ -1,6 +1,5 @@
 # Experimental UMRR-96 processing
 
-
 This package provides a detection adapter, robust **3D radar-origin translation
 velocity** and [bounded temporal evidence](ACCUMULATION.md). It builds independently of the proprietary
 SDK and runs alongside the existing driver. It subscribes to raw targets and

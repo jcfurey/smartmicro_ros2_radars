@@ -52,6 +52,10 @@ GHOST_PARAMETERS = {
 TRACKER_PARAMETERS = {
     'evidence_confirmation': ('Experimental early confirmation from consistent position '
                               'and signed-Doppler predictions; M-of-N remains the fallback.',),
+    'standing_support': ('Experimental anchored support using the background before a '
+                         'confirmed mover stopped; requires current static returns.',),
+    'standing_hold': ('Absolute maximum static-only age under experimental standing support (s).',
+                      .01, 600),
     'cluster_radius': ('Moving targets closer than this form one measurement (m).', .05, 10),
     'gate': ('Association distance from a predicted track position (m).', .05, 20),
     'confirm_hits': ('Hits within confirm_window scans needed to confirm a track.', 1, 64, 1),

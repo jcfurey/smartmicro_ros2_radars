@@ -33,9 +33,11 @@
     gate: 1.2
     confirm_hits: 8
     confirm_window: 10
-    evidence_confirmation: false  # isolated worktree experiment; six consistent hits can confirm
+    evidence_confirmation: false  # opt-in: six consistent hits can confirm
     max_coast: 1.0
     static_hold: 5.0
+    standing_support: false  # opt-in: requires current novel support
+    standing_hold: 30.0
     background_time_constant: 30.0
     # 0.3 rather than 0.5: walls a person occludes stay background, so fewer are dropped
     # as that person's multipath (walk: structure beyond a track 72% -> 81% kept, far
