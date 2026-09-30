@@ -35,6 +35,13 @@ inline constexpr uint8_t kU8Sentinel = std::numeric_limits<uint8_t>::max();
 // port object lists and the published cloud use radians (REP 103).
 inline constexpr float kDegreesToRadians = static_cast<float>(3.14159265358979323846 / 180.0);
 
+// CAN target lists report RCS in dBsm (UIF signal RCS, unit _dB); port target
+// lists report square metres (_m_sq), which is what the rcs point field carries.
+inline float dbsm_to_square_metres(float rcs_dbsm)
+{
+  return std::pow(10.0F, rcs_dbsm / 10.0F);
+}
+
 // Target data an interface may provide but a model does not publish.
 struct TargetOptions
 {
@@ -329,7 +336,9 @@ void convert_can_targets(
   for (const auto & target : targets) {
     // CAN target lists carry no variances, false-alarm probability, flags or peak index.
     cloud.push_back(
-      target_geometry(*target, target->GetSignalLevel(), target->GetNoise(), target->GetRCS()));
+      target_geometry(
+        *target, target->GetSignalLevel(), target->GetNoise(),
+        dbsm_to_square_metres(target->GetRCS())));
   }
 }
 

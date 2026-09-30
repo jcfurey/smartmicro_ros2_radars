@@ -52,6 +52,10 @@ def decoder(codes, namespace):
         code = round(value / DEG)
         if code in table and f32(code * DEG) == value:
             return table[code] + '*deg2rad'
+        if value > 0:  # dB converted to linear in float32 arithmetic
+            code = round(10 * math.log10(value))
+            if code in table and math.isclose(value, 10 ** (code / 10), rel_tol=1e-5):
+                return table[code] + '*db2lin'
         return 'unknown:%r' % value
     return decode
 

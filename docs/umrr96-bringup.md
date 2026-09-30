@@ -131,6 +131,10 @@ Both nodes publish standard `/diagnostics` via `diagnostic_updater`:
   successful exchange. `OK` describes the last request, not continuous connection
   monitoring. Diagnostics do not poll or write the radar. A synchronous control
   request can delay that node's diagnostic update until it replies or times out.
+- **SDK callbacks** (data node): exceptions caught in SDK data and reply
+  callbacks, pending control requests and control-request timeouts. New
+  exceptions since the last update give `ERROR`: a stream whose callback throws
+  can otherwise keep its target status `OK` while publishing nothing.
 
 ```bash
 ros2 topic echo /diagnostics

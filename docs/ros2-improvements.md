@@ -54,9 +54,10 @@ validation results and remaining hardware/vendor dependencies.
    buffers, and add image_transport for remote compressed viewing.
 3. **Typed interfaces:** replace JSON filter status and JSON control results
    gradually with typed messages while retaining compatibility where needed.
-4. **QoS:** expose supported overrides and test raw/filtered topics with RViz and
-   rosbag. Choose reliability/depth deliberately; best effort is not mandatory
-   for every publisher.
+4. **QoS:** the driver's data publishers accept the standard `qos_overrides`
+   parameters (2026-09-30); the Python views/processing nodes do not yet. Test
+   raw/filtered topics with RViz and rosbag. Choose reliability/depth
+   deliberately; best effort is not mandatory for every publisher.
 5. **Lifecycle and shutdown:** callback draining now replaces the shutdown delay,
    and initialization uses the SDK's synchronous result without a fixed sleep.
    SDK singleton ownership and retained callback code still prevent a claim of

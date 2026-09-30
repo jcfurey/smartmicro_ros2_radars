@@ -241,6 +241,10 @@ if(BUILD_TESTING)
     target_include_directories(test_service_parsing PRIVATE include)
     ament_add_gtest(test_udp_socket_health test/test_udp_socket_health.cpp)
     target_include_directories(test_udp_socket_health PRIVATE include)
+    ament_add_gtest(test_instruction_reply test/test_instruction_reply.cpp)
+    target_include_directories(test_instruction_reply PRIVATE include)
+    target_link_libraries(test_instruction_reply
+      ${smartmicro_core_targets} nlohmann_json::nlohmann_json)
 
     ament_add_gtest(test_point_cloud_builder test/test_point_cloud_builder.cpp)
     target_include_directories(test_point_cloud_builder PRIVATE include)

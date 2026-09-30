@@ -44,11 +44,15 @@
 #include <umrr_ros2_msgs/srv/set_ip.hpp>
 #include <umrr_ros2_msgs/srv/set_mode.hpp>
 
+#include <umrr_ros2_driver/instruction_reply.hpp>
 #include <umrr_ros2_driver/update_service.hpp>
 #include <umrr_ros2_driver/visibility_control.hpp>
 
 #include <array>
 #include <atomic>
+#include <chrono>
+#include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -181,70 +185,34 @@ private:
   void can_publishers(const detail::SensorConfig & sensor, size_t sensor_idx);
 
   ///
-  /// @brief      Callback for getting the parameter response.
-  ///
-  /// @param[in]  client_id         The client identifier.
-  /// @param[in]  response          The response batch.
-  /// @param[in]  instruction_names  The instruction names.
-  /// @param[in]  section_name       The interface section name.
-  ///
-  void mode_response(
-    const com::types::ClientId client_id,
-    const std::shared_ptr<com::master::ResponseBatch> & response,
-    const std::vector<std::string> & instruction_names,
-    const std::string & section_name);
-
-  ///
-  /// @brief      Callback for getting the command response.
-  ///
-  /// @param[in]  client_id     The client identifier.
-  /// @param[in]  response      The response batch.
-  /// @param[in]  command_name  The command name.
-  ///
-  void command_response(
-    const com::types::ClientId client_id,
-    const std::shared_ptr<com::master::ResponseBatch> & response, const std::string command_name,
-    const std::string & section_name);
-
-  ///
-  /// @brief      Callback for changing IP address.
-  ///
-  /// @param[in]  client_id  The client identifier.
-  /// @param[in]  response   The response batch.
-  ///
-  void sensor_response_ip(
-    const com::types::ClientId client_id,
-    const std::shared_ptr<com::master::ResponseBatch> & response);
-
-  ///
   /// @brief      Sends instructions to the sensor.
   ///
-  /// @param[in]  request   The request.
-  /// @param[out] response  The response.
+  /// @param[in]  request_header  Identifies the request for the deferred reply.
+  /// @param[in]  request         The request.
   ///
   void set_radar_mode(
-    const std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Request> request,
-    std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Response> response);
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Request> request);
 
   ///
   /// @brief      Configures the sensor IP address.
   ///
-  /// @param[in]  request   The request.
-  /// @param[out] response  The response.
+  /// @param[in]  request_header  Identifies the request for the deferred reply.
+  /// @param[in]  request         The request.
   ///
   void ip_address(
-    const std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Request> request,
-    std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Response> response);
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Request> request);
 
   ///
   /// @brief      Sends command to the sensor.
   ///
-  /// @param[in]  request   The request.
-  /// @param[out] response  The response.
+  /// @param[in]  request_header  Identifies the request for the deferred reply.
+  /// @param[in]  request         The request.
   ///
   void radar_command(
-    const std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Request> request,
-    std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Response> response);
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Request> request);
 
   ///
   /// @brief      Service for firmware download (deferred response).
@@ -337,50 +305,54 @@ private:
   ///
   /// @brief      Service to get sensor status.
   ///
-  /// @param[in]  request   The request.
-  /// @param[out] response  The response.
+  /// @param[in]  request_header  Identifies the request for the deferred reply.
+  /// @param[in]  request         The request.
   ///
   void get_radar_status(
-    const std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Request> request,
-    std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Response> response);
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Request> request);
 
   ///
   /// @brief      Service to get sensor modes.
   ///
-  /// @param[in]  request   The request.
-  /// @param[out] response  The response.
+  /// @param[in]  request_header  Identifies the request for the deferred reply.
+  /// @param[in]  request         The request.
   ///
   void get_radar_mode(
-    const std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Request> request,
-    std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Response> response);
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Request> request);
+
+  using InstructionReply = std::function<void (const std::string & text)>;
 
   ///
-  /// @brief      Callback for getting the status response.
+  /// @brief      Sends an allocated instruction batch. The service reply is deferred
+  ///             until the sensor answers or instruction_timeout_ms expires; the
+  ///             batch is then released on the executor, never in an SDK callback.
   ///
-  /// @param[in]  client_id         The client identifier.
-  /// @param[in]  response          The response batch.
-  /// @param[in]  statuses          The status name of the sensor.
-  /// @param[in]  section_name      The section name of the interface.
+  /// @param[in,out] batch       The allocated batch; taken over once sent.
+  /// @param[in]  sensor_id      The sensor the batch is addressed to.
+  /// @param[in]  section        The request's interface section (reported in the reply).
+  /// @param[in]  items          The instructions whose reply values are reported.
+  /// @param[in]  reply          Sends the service response; called exactly once.
+  /// @param[in]  success_note   Added to a reply the sensor accepted, when not empty.
   ///
-  void status_response(
-    const com::types::ClientId client_id,
-    const std::shared_ptr<com::master::ResponseBatch> & response,
-    const std::vector<std::string> & statuses,
-    const std::string & section_name);
+  void send_instructions(
+    InstructionBatchLease & batch, com::types::ClientId sensor_id, const std::string & section,
+    std::vector<InstructionItem> items, InstructionReply reply,
+    const std::string & success_note = {});
 
   ///
-  /// @brief      Callback for getting the reading param response.
+  /// @brief      Replies to timed-out instruction requests and releases answered batches.
   ///
-  /// @param[in]  client_id         The client identifier.
-  /// @param[in]  response          The response batch.
-  /// @param[in]  params            The parameter names of the sensor.
-  /// @param[in]  section_name      The interface section name.
+  void expire_instructions();
+
   ///
-  void param_response(
-    const com::types::ClientId client_id,
-    const std::shared_ptr<com::master::ResponseBatch> & response,
-    const std::vector<std::string> & params,
-    const std::string & section_name);
+  /// @brief      Creates a data publisher whose QoS can be overridden by parameters
+  ///             (qos_overrides.<topic>.publisher.{reliability,history,depth}).
+  ///
+  template<typename MsgT>
+  typename rclcpp::Publisher<MsgT>::SharedPtr create_data_publisher(
+    const std::string & topic, size_t depth);
 
   // Declared first so its directory outlives the node's publishers/services.
   RuntimeConfig runtime_config_{"smartmicro-data"};
@@ -399,6 +371,24 @@ private:
   rclcpp::Service<umrr_ros2_msgs::srv::FirmwareDownload>::SharedPtr download_srv_;
   rclcpp::Service<umrr_ros2_msgs::srv::GetStatus>::SharedPtr status_srv_;
   rclcpp::Service<umrr_ros2_msgs::srv::GetMode>::SharedPtr read_mode_srv_;
+
+  // Instruction batches sent and awaiting the sensor's reply, by request number.
+  struct PendingInstruction
+  {
+    std::shared_ptr<com::master::InstructionBatch> batch;
+    std::chrono::steady_clock::time_point deadline;
+    com::types::ClientId sensor_id;
+    std::string section;
+    InstructionReply reply;
+  };
+  std::mutex instructions_mutex_;
+  std::map<uint64_t, PendingInstruction> pending_instructions_;
+  std::vector<std::shared_ptr<com::master::InstructionBatch>> answered_batches_;
+  uint64_t next_instruction_id_{};
+  uint64_t instruction_timeouts_{};
+  std::chrono::milliseconds instruction_timeout_{3000};
+  rclcpp::TimerBase::SharedPtr instruction_timer_;
+  uint64_t reported_callback_exceptions_{};
 
   std::array<detail::SensorConfig, detail::kMaxSensorCount> m_sensors{};
   std::array<detail::HWConfig, detail::kMaxHwCount> m_adapters{};

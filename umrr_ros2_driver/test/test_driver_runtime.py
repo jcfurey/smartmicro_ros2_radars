@@ -14,13 +14,15 @@ import time
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
+import pytest
 from rcl_interfaces.srv import DescribeParameters, SetParametersAtomically
 import rclpy
 from rclpy.parameter import Parameter
+from rclpy.qos import ReliabilityPolicy
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from umrr_ros2_msgs.msg import PortTargetHeader, RadarTiming, Umrr96RawQuality
-from umrr_ros2_msgs.srv import FirmwareDownload, SetMode
+from umrr_ros2_msgs.srv import FirmwareDownload, GetMode, GetStatus, SetMode
 import yaml
 
 try:  # Optional: the driver publishes RadarScan only when built with radar_msgs.
@@ -108,11 +110,15 @@ def test_driver_runtime():
                     id=200, frame_id='umrr96_test', history_size=10, ip='127.0.0.1',
                     port=peer_port, inst_type='port_based', data_type='port_based',
                     uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2, uifpatchv=2)},
-                **{'diagnostics.stale_timeout': .5})
+                instruction_timeout_ms=300, **{'diagnostics.stale_timeout': .5})
             driver_processes = []
             for name, port in (('a', port_a), ('b', port_b)):
                 parameters['adapters']['adapter_0']['port'] = port
                 parameters['publish_radar_scan'] = RadarScan is not None and name == 'a'
+                if name == 'b':  # Standard QoS override parameters (REP 2003 consumers).
+                    parameters['qos_overrides'] = {
+                        '/driver_runtime/b/smart_radar/port_targets_0': {
+                            'publisher': {'reliability': 'best_effort', 'depth': 3}}}
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
@@ -120,6 +126,11 @@ def test_driver_runtime():
                     '-r', f'__node:=runtime_{name}', '--params-file', str(params)]))
             wait(lambda: node.count_publishers(topic + 'port_targets_0') and
                  node.count_publishers('/driver_runtime/b/smart_radar/port_targets_0'))
+            qos_a = node.get_publishers_info_by_topic(topic + 'port_targets_0')[0].qos_profile
+            qos_b = node.get_publishers_info_by_topic(
+                '/driver_runtime/b/smart_radar/port_targets_0')[0].qos_profile
+            assert qos_a.reliability == ReliabilityPolicy.RELIABLE and qos_a.depth == 10
+            assert qos_b.reliability == ReliabilityPolicy.BEST_EFFORT and qos_b.depth == 3
             dirs = list(run.glob('smartmicro-data-*'))
             assert len(dirs) == 2, dirs
             assert {json.loads((p / 'hw_inventory.json').read_text())['hwItems'][0]['port']
@@ -156,6 +167,39 @@ def test_driver_runtime():
                     section_name='auto_interface_0dim', sensor_id=sensor_id,
                     params=['frequency_sweep_idx'], values=[value], value_types=[value_type]))
                 assert expected in response.res, (value, response.res)
+            # Control requests reach the SDK and reply when the sensor answers. Nothing
+            # listens on the sensor port yet, so both concurrent reads time out; neither
+            # blocks the executor. A name or type the UIF rejects fails before sending.
+            get_mode = node.create_client(GetMode, topic + 'get_radar_mode')
+            get_status = node.create_client(GetStatus, topic + 'get_radar_status')
+            assert get_mode.wait_for_service(timeout_sec=10)
+            assert get_status.wait_for_service(timeout_sec=10)
+            started = time.monotonic()
+            pending = [
+                get_mode.call_async(GetMode.Request(
+                    section_name='auto_interface_0dim', sensor_id=200,
+                    params=['output_control_target_list_can'], param_types=[3])),
+                get_status.call_async(GetStatus.Request(
+                    section_name='auto_interface', sensor_id=200,
+                    statuses=['sw_version_major'], status_types=[1]))]
+            wait(lambda: all(f.done() for f in pending))
+            elapsed = time.monotonic() - started
+            for future in pending:
+                reply = json.loads(future.result().res)
+                assert reply['sensor_id'] == 200 and reply['success'] is False, reply
+                assert 'Timed out after 300 ms' in reply['error'], reply
+            assert .25 < elapsed < 2.5, elapsed
+            response = call(get_status, GetStatus.Request(
+                section_name='auto_interface', sensor_id=200,
+                statuses=['sw_version_major'], status_types=[0]))
+            assert 'Failed to add instruction' in response.res, response.res
+            response = call(get_mode, GetMode.Request(
+                section_name='auto_interface_0dim', sensor_id=200, params=[], param_types=[]))
+            assert 'non-empty' in response.res, response.res
+            wait(lambda: any(
+                s.name == 'runtime_a: SDK callbacks' and s.level == DiagnosticStatus.OK and
+                int({v.key: v.value for v in s.values}.get('instruction_timeouts', '0')) >= 2
+                for s in statuses))
             # Firmware download replies are deferred to a worker thread (C4).
             download = node.create_client(FirmwareDownload, topic + 'firmware_download')
             response = call(download, FirmwareDownload.Request(sensor_id=0, file_path='/none'))
@@ -302,3 +346,43 @@ def test_radar_scan_requires_radar_msgs():
         assert result.returncode != 0
         assert 'built without radar_msgs' in result.stdout + result.stderr
         assert not list(Path(directory).glob('smartmicro-data-*'))
+
+
+def _startup_failure(parameters, directory):
+    params = Path(directory) / 'params.yaml'
+    params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
+    prefix = Path(get_package_prefix('umrr_ros2_driver'))
+    result = subprocess.run(
+        [str(prefix / 'lib/umrr_ros2_driver/smartmicro_radar_node_exe'),
+         '--ros-args', '--params-file', str(params)],
+        capture_output=True, text=True, timeout=20,
+        env=dict(os.environ, TMPDIR=directory))
+    assert result.returncode != 0
+    assert not list(Path(directory).glob('smartmicro-data-*'))
+    return result.stdout + result.stderr
+
+
+def _eth_sensor(**overrides):
+    sensor = {'link_type': 'eth', 'pub_type': 'target', 'model': 'umrr96_v1_2_2',
+              'dev_id': 4, 'id': 200, 'ip': '127.0.0.1', 'port': 55555}
+    sensor.update(overrides)
+    return sensor
+
+
+@pytest.mark.parametrize('sensors, extra, message', [
+    ({'sensor_0': _eth_sensor(ip='192.168.11.1l')}, {}, "sensor_0.ip must be the sensor's IPv4"),
+    ({'sensor_0': _eth_sensor(), 'sensor_1': _eth_sensor()}, {},
+     'sensor_1.id duplicates sensors.sensor_0'),
+    ({'sensor_0': _eth_sensor(frame_id='/umrr')}, {}, "frame_id must not start with '/'"),
+    ({'sensor_0': _eth_sensor(link_type='can', model='umrr96_can_v1_2_2')}, {},
+     "does not match the 'eth' adapter"),
+    ({'sensor_0': _eth_sensor()}, {'instruction_timeout_ms': 50}, 'instruction_timeout_ms'),
+])
+def test_invalid_startup_configuration_is_rejected(sensors, extra, message):
+    """Configurations that would silently deliver nothing fail at startup instead."""
+    with tempfile.TemporaryDirectory(prefix='umrr-startup-test-') as directory:
+        output = _startup_failure(dict(
+            adapters={'adapter_0': {'hw_type': 'eth', 'hw_dev_id': 4, 'hw_iface_name': 'lo',
+                                    'port': unused_port()}},
+            sensors=sensors, **extra), directory)
+        assert message in output, output

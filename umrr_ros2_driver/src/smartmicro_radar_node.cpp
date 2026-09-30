@@ -28,6 +28,11 @@
 #include <umrr_ros2_driver/sensor_model_traits.hpp>
 #include <umrr_ros2_driver/stream_codecs.hpp>
 
+#include <arpa/inet.h>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -50,6 +55,10 @@ using com::master::InstructionServiceIface;
 using com::master::Response;
 using com::master::ResponseBatch;
 using com::master::SetParamRequest;
+using smartmicro::drivers::radar::decode_instruction_reply;
+using smartmicro::drivers::radar::InstructionBatchLease;
+using smartmicro::drivers::radar::InstructionItem;
+using smartmicro::drivers::radar::InstructionValueType;
 using smartmicro::drivers::radar::ModeValue;
 using smartmicro::drivers::radar::parse_command_value;
 using smartmicro::drivers::radar::parse_mode_value;
@@ -108,6 +117,39 @@ constexpr auto kUIMajorVTag = "user_interface_major_v";
 constexpr auto kUIMinorVTag = "user_interface_minor_v";
 constexpr auto kUIPatchVTag = "user_interface_patch_v";
 
+// Reply value types by request type code: SetMode/GetMode and GetStatus differ.
+constexpr std::array<InstructionValueType, 4> kModeValueTypes = {
+  InstructionValueType::kF32, InstructionValueType::kU32, InstructionValueType::kU16,
+  InstructionValueType::kU8};
+constexpr std::array<InstructionValueType, 4> kStatusValueTypes = {
+  InstructionValueType::kU32, InstructionValueType::kU16, InstructionValueType::kU8,
+  InstructionValueType::kI32};
+
+// An allocated instruction batch for a sensor, or an empty lease if the SDK refuses.
+InstructionBatchLease allocate_instructions(
+  const std::shared_ptr<CommunicationServicesIface> & services, com::types::ClientId client_id)
+{
+  auto inst = services->GetInstructionService();
+  std::shared_ptr<InstructionBatch> batch;
+  if (!inst || !inst->AllocateInstructionBatch(client_id, batch)) {
+    return InstructionBatchLease{nullptr, nullptr};
+  }
+  return InstructionBatchLease{inst, batch};
+}
+
+bool is_ipv4_address(const std::string & text)
+{
+  in_addr address{};
+  return inet_pton(AF_INET, text.c_str(), &address) == 1;
+}
+
+std::string instruction_error(
+  uint32_t sensor_id, const std::string & section, const std::string & error)
+{
+  return nlohmann::json{{"sensor_id", sensor_id}, {"section", section}, {"success", false},
+    {"error", error}}.dump(2);
+}
+
 }  // namespace
 
 namespace smartmicro
@@ -148,6 +190,17 @@ SmartmicroRadarNode::~SmartmicroRadarNode()
   }
   // Drains running SDK callbacks and drops late ones before members are destroyed.
   callback_gate_.close();
+  // Requests still awaiting a reply get none at shutdown; their batches are released.
+  if (m_services) {
+    const auto inst = m_services->GetInstructionService();
+    std::lock_guard<std::mutex> lock(instructions_mutex_);
+    for (auto & pending : pending_instructions_) {
+      answered_batches_.push_back(std::move(pending.second.batch));
+    }
+    for (const auto & batch : answered_batches_) {
+      if (inst) {inst->ReleaseInstructionBatch(batch);}
+    }
+  }
 }
 
 builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
@@ -167,6 +220,15 @@ builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
   const auto stamp = timing.header.stamp;
   timing_publishers_[sensor_idx]->publish(std::move(timing_ptr));
   return stamp;
+}
+
+template<typename MsgT>
+typename rclcpp::Publisher<MsgT>::SharedPtr SmartmicroRadarNode::create_data_publisher(
+  const std::string & topic, size_t depth)
+{
+  rclcpp::PublisherOptions options;
+  options.qos_overriding_options = rclcpp::QosOverridingOptions::with_default_policies();
+  return create_publisher<MsgT>(topic, rclcpp::QoS(depth), options);
 }
 
 void SmartmicroRadarNode::setup_diagnostics()
@@ -202,10 +264,10 @@ void SmartmicroRadarNode::setup_diagnostics()
   diagnostics_->setHardwareID(
     m_number_of_sensors == 1 ? sensor_hardware_id(0) : std::string{"smartmicro_radar"});
   for (size_t i = 0; i < m_number_of_sensors; ++i) {
-    timing_publishers_[i] = create_publisher<umrr_ros2_msgs::msg::RadarTiming>(
+    timing_publishers_[i] = create_data_publisher<umrr_ros2_msgs::msg::RadarTiming>(
       "smart_radar/timing_" + std::to_string(i), m_sensors[i].history_size);
     if (m_sensors[i].model == "umrr96_v1_2_2" && m_sensors[i].data_type == "port_based") {
-      raw_quality_publishers_[i] = create_publisher<umrr_ros2_msgs::msg::Umrr96RawQuality>(
+      raw_quality_publishers_[i] = create_data_publisher<umrr_ros2_msgs::msg::Umrr96RawQuality>(
         "smart_radar/umrr96_raw_quality_" + std::to_string(i), m_sensors[i].history_size);
     }
     diagnostics_->add("Target stream " + std::to_string(i),
@@ -267,6 +329,23 @@ void SmartmicroRadarNode::setup_diagnostics()
         status.add("socket_inode", socket.inode);
       });
   }
+  // Exceptions are contained in the SDK callback gate; without this a stream whose
+  // callback throws on every frame would still look healthy.
+  diagnostics_->add("SDK callbacks",
+    [this](diagnostic_updater::DiagnosticStatusWrapper & status) {
+      using Status = diagnostic_msgs::msg::DiagnosticStatus;
+      const auto total = callback_gate_.exception_count();
+      const auto recent = total - reported_callback_exceptions_;
+      reported_callback_exceptions_ = total;
+      status.summary(recent ? Status::ERROR : Status::OK,
+      recent ? "Exceptions in SDK data or reply callbacks; see the log" :
+      "No new callback exceptions");
+      status.add("exceptions_total", total);
+      status.add("exceptions_since_last_check", recent);
+      std::lock_guard<std::mutex> lock(instructions_mutex_);
+      status.add("instruction_requests_pending", pending_instructions_.size());
+      status.add("instruction_timeouts", instruction_timeouts_);
+    });
 }
 
 void SmartmicroRadarNode::initialize_services()
@@ -277,24 +356,37 @@ void SmartmicroRadarNode::initialize_services()
     throw std::runtime_error("Communication Service initialization failed");
   }
 
+  // Control services reply when the sensor answers (deferred responses), or with
+  // a timeout error; the executor is never blocked while waiting.
+  instruction_timer_ = create_wall_timer(
+    std::chrono::milliseconds(100), [this]() {expire_instructions();});
 
   // create a ros2 service to change the radar parameters
   mode_srv_ = create_service<umrr_ros2_msgs::srv::SetMode>(
     "smart_radar/set_radar_mode",
-    std::bind(
-      &SmartmicroRadarNode::set_radar_mode, this, std::placeholders::_1, std::placeholders::_2));
+    [this](
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Request> request) {
+      set_radar_mode(request_header, request);
+    });
 
   // create a ros2 service to change the IP address
   ip_addr_srv_ = create_service<umrr_ros2_msgs::srv::SetIp>(
     "smart_radar/set_ip_address",
-    std::bind(
-      &SmartmicroRadarNode::ip_address, this, std::placeholders::_1, std::placeholders::_2));
+    [this](
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Request> request) {
+      ip_address(request_header, request);
+    });
 
   // create a ros2 service to send command to radar
   command_srv_ = create_service<umrr_ros2_msgs::srv::SendCommand>(
     "smart_radar/send_command",
-    std::bind(
-      &SmartmicroRadarNode::radar_command, this, std::placeholders::_1, std::placeholders::_2));
+    [this](
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Request> request) {
+      radar_command(request_header, request);
+    });
 
   // create a ros2 service to perform firmware download
   download_srv_ = create_service<umrr_ros2_msgs::srv::FirmwareDownload>(
@@ -308,14 +400,20 @@ void SmartmicroRadarNode::initialize_services()
   // create a ros2 service to read the radar status
   status_srv_ = create_service<umrr_ros2_msgs::srv::GetStatus>(
     "smart_radar/get_radar_status",
-    std::bind(
-      &SmartmicroRadarNode::get_radar_status, this, std::placeholders::_1, std::placeholders::_2));
+    [this](
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Request> request) {
+      get_radar_status(request_header, request);
+    });
 
   // create a ros2 service to read the radar modes
   read_mode_srv_ = create_service<umrr_ros2_msgs::srv::GetMode>(
     "smart_radar/get_radar_mode",
-    std::bind(
-      &SmartmicroRadarNode::get_radar_mode, this, std::placeholders::_1, std::placeholders::_2));
+    [this](
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Request> request) {
+      get_radar_mode(request_header, request);
+    });
 
   RCLCPP_INFO(this->get_logger(), "Radar services are ready.");
 }
@@ -335,7 +433,7 @@ void SmartmicroRadarNode::setup_publishers()
     }
 #ifdef UMRR_HAVE_RADAR_MSGS
     if (publish_radar_scan_) {
-      radar_scan_publishers_[i] = create_publisher<radar_msgs::msg::RadarScan>(
+      radar_scan_publishers_[i] = create_data_publisher<radar_msgs::msg::RadarScan>(
         "smart_radar/radar_scan_" + std::to_string(i), sensor.history_size);
     }
 #endif
@@ -384,22 +482,22 @@ void SmartmicroRadarNode::port_publishers(const detail::SensorConfig & sensor, s
 
   try {
     if (pub_type == kMsePubType) {
-      m_publishers_obj[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
+      m_publishers_obj[sensor_idx] = create_data_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/port_objects_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_port_obj_header[sensor_idx] =
-        create_publisher<umrr_ros2_msgs::msg::PortObjectHeader>(
+        create_data_publisher<umrr_ros2_msgs::msg::PortObjectHeader>(
         "smart_radar/port_objectheader_" + std::to_string(sensor_idx), sensor.history_size);
-      m_publishers[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
+      m_publishers[sensor_idx] = create_data_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/port_targets_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_port_target_header[sensor_idx] =
-        create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
+        create_data_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
         "smart_radar/port_targetheader_" + std::to_string(sensor_idx), sensor.history_size);
 
     } else if (pub_type == kTargetPubType) {
-      m_publishers[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
+      m_publishers[sensor_idx] = create_data_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/port_targets_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_port_target_header[sensor_idx] =
-        create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
+        create_data_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
         "smart_radar/port_targetheader_" + std::to_string(sensor_idx), sensor.history_size);
     } else {
       RCLCPP_ERROR(get_logger(), "Unknown publish type: %s", sensor.pub_type.c_str());
@@ -420,22 +518,22 @@ void SmartmicroRadarNode::can_publishers(const detail::SensorConfig & sensor, si
 
   try {
     if (pub_type == kMsePubType) {
-      m_publishers_obj[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
+      m_publishers_obj[sensor_idx] = create_data_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/can_objects_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_can_obj_header[sensor_idx] =
-        create_publisher<umrr_ros2_msgs::msg::CanObjectHeader>(
+        create_data_publisher<umrr_ros2_msgs::msg::CanObjectHeader>(
         "smart_radar/can_objectheader_" + std::to_string(sensor_idx), sensor.history_size);
 
-      m_publishers[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
+      m_publishers[sensor_idx] = create_data_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/can_targets_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_can_target_header[sensor_idx] =
-        create_publisher<umrr_ros2_msgs::msg::CanTargetHeader>(
+        create_data_publisher<umrr_ros2_msgs::msg::CanTargetHeader>(
         "smart_radar/can_targetheader_" + std::to_string(sensor_idx), sensor.history_size);
     } else if (pub_type == kTargetPubType) {
-      m_publishers[sensor_idx] = create_publisher<sensor_msgs::msg::PointCloud2>(
+      m_publishers[sensor_idx] = create_data_publisher<sensor_msgs::msg::PointCloud2>(
         "smart_radar/can_targets_" + std::to_string(sensor_idx), sensor.history_size);
       m_publishers_can_target_header[sensor_idx] =
-        create_publisher<umrr_ros2_msgs::msg::CanTargetHeader>(
+        create_data_publisher<umrr_ros2_msgs::msg::CanTargetHeader>(
         "smart_radar/can_targetheader_" + std::to_string(sensor_idx), sensor.history_size);
     } else {
       throw std::invalid_argument("Unknown publish type: " + sensor.pub_type);
@@ -531,170 +629,143 @@ std::string SmartmicroRadarNode::firmware_download_result(UpdateResult update_re
 }
 
 void SmartmicroRadarNode::set_radar_mode(
-  const std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Request> request,
-  std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Response> result)
+  const std::shared_ptr<rmw_request_id_t> request_header,
+  const std::shared_ptr<umrr_ros2_msgs::srv::SetMode::Request> request)
 {
+  const auto reply = [this, request_header](const std::string & text) {
+      umrr_ros2_msgs::srv::SetMode::Response response;
+      response.res = text;
+      mode_srv_->send_response(*request_header, response);
+    };
   const auto client_id = request->sensor_id;
   if (!is_configured_sensor(client_id)) {
-    result->res = "Error: Sensor ID is invalid! ";
+    reply("Error: Sensor ID is invalid! ");
     return;
   }
 
-  auto section_name = request->section_name;
+  const auto & section_name = request->section_name;
   if (
     section_name != "auto_interface_0dim" && section_name != "auto_interface_rrm" &&
     section_name != "Parameter")
   {
-    result->res =
+    reply(
       "Error: Invalid section name specified! Must be 'auto_interface_0dim', "
-      "'auto_interface_rrm', or 'Parameter'.";
+      "'auto_interface_rrm', or 'Parameter'.");
     return;
   }
 
   // Check arrays have same length
   if (
-    request->params.size() != request->values.size() ||
+    request->params.empty() || request->params.size() != request->values.size() ||
     request->params.size() != request->value_types.size())
   {
-    result->res = "Error: param, values and value_types arrays must have same length";
+    reply("Error: param, values and value_types arrays must be non-empty and have same length");
     return;
   }
 
   // Parse every value before allocating an SDK batch, so a rejected request
-  // neither sends a partial batch nor leaves one allocated.
+  // never sends a partial batch.
   std::vector<ModeValue> parsed_values;
   parsed_values.reserve(request->params.size());
   for (size_t i = 0; i < request->params.size(); i++) {
     try {
       parsed_values.push_back(parse_mode_value(request->values[i], request->value_types[i]));
     } catch (const std::exception & e) {
-      result->res = "Error: parameter '" + request->params[i] + "': " + e.what();
+      reply("Error: parameter '" + request->params[i] + "': " + e.what());
       return;
     }
   }
 
-  std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
-  if (!inst) {
-    result->res = "Error: Failed to get instruction service";
+  auto batch = allocate_instructions(m_services, client_id);
+  if (!batch.get()) {
+    reply("Error: Failed to allocate instruction! ");
     return;
   }
-
-  std::shared_ptr<InstructionBatch> batch;
-  if (!inst->AllocateInstructionBatch(client_id, batch)) {
-    result->res = "Error: Failed to allocate instruction! ";
-    return;
-  }
-
+  std::vector<InstructionItem> items;
   for (size_t i = 0; i < request->params.size(); i++) {
     const auto & param = request->params[i];
     const bool request_added = std::visit(
       [&](auto typed_value) {
-        return batch->AddRequest(
+        return batch.get()->AddRequest(
           std::make_shared<SetParamRequest<decltype(typed_value)>>(section_name, param,
               typed_value));
       }, parsed_values[i]);
 
     if (!request_added) {
-      result->res = "Error: Failed to add instruction '" + param + "'! ";
+      reply("Error: Failed to add instruction '" + param + "'! ");
       return;
     }
+    items.push_back({section_name, param, kModeValueTypes[request->value_types[i]]});
   }
-
-  if (
-    com::types::ERROR_CODE_OK !=
-    inst->SendInstructionBatch(
-      batch, callback_gate_.wrap(std::bind(
-        &SmartmicroRadarNode::mode_response, this, client_id, std::placeholders::_2,
-        request->params, section_name))))
-  {
-    result->res = "Error: Check params are valid for this sensor and values within range!";
-    return;
-  }
-  result->res = "Success: Request sent successfully. Check main terminal for sensor response!";
-  RCLCPP_INFO(this->get_logger(), "Service call result: %s", result->res.c_str());
+  send_instructions(batch, client_id, section_name, std::move(items), reply);
 }
 
 void SmartmicroRadarNode::ip_address(
-  const std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Request> request,
-  std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Response> result)
+  const std::shared_ptr<rmw_request_id_t> request_header,
+  const std::shared_ptr<umrr_ros2_msgs::srv::SetIp::Request> request)
 {
+  const auto reply = [this, request_header](const std::string & text) {
+      umrr_ros2_msgs::srv::SetIp::Response response;
+      response.res_ip = text;
+      ip_addr_srv_->send_response(*request_header, response);
+    };
   const auto client_id = request->sensor_id;
   if (!is_configured_sensor(client_id)) {
-    result->res_ip = "Sensor ID entered is not listed in the param file! ";
+    reply("Sensor ID entered is not listed in the param file! ");
     return;
   }
   try {
     validate_sensor_ipv4(request->value_ip);
   } catch (const std::invalid_argument & error) {
-    result->res_ip = std::string("Error: ") + error.what();
+    reply(std::string("Error: ") + error.what());
     return;
   }
-  std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
-  if (!inst) {
-    result->res_ip = "Failed to get instruction service";
-    return;
-  }
-
-  std::shared_ptr<InstructionBatch> batch;
-  if (!inst->AllocateInstructionBatch(client_id, batch)) {
-    result->res_ip = "Failed to allocate instruction! ";
+  auto batch = allocate_instructions(m_services, client_id);
+  if (!batch.get()) {
+    reply("Failed to allocate instruction! ");
     return;
   }
 
-  std::shared_ptr<SetParamRequest<uint32_t>> ip_address =
-    std::make_shared<SetParamRequest<uint32_t>>(
-    "auto_interface_0dim", "ip_source_address", request->value_ip);
-
-  std::shared_ptr<CmdRequest> cmd =
-    std::make_shared<CmdRequest>("auto_interface_command", "comp_eeprom_ctrl_save_param_sec", 2010);
-
-  if (!batch->AddRequest(ip_address)) {
-    result->res_ip = "Failed to add instruction! ";
-    return;
-  }
-  if (!batch->AddRequest(cmd)) {
-    result->res_ip = "Failed to add instruction! ";
-    return;
-  }
-  // send instruction batch to the device
-  if (
-    com::types::ERROR_CODE_OK !=
-    inst->SendInstructionBatch(
-      batch, callback_gate_.wrap(std::bind(
-        &SmartmicroRadarNode::sensor_response_ip, this, client_id, std::placeholders::_2))))
+  const InstructionItem ip_item{"auto_interface_0dim", "ip_source_address",
+    InstructionValueType::kU32};
+  const InstructionItem save_item{"auto_interface_command", "comp_eeprom_ctrl_save_param_sec",
+    InstructionValueType::kU32};
+  if (!batch.get()->AddRequest(
+      std::make_shared<SetParamRequest<uint32_t>>(
+        ip_item.section, ip_item.name, request->value_ip)) ||
+    !batch.get()->AddRequest(std::make_shared<CmdRequest>(save_item.section, save_item.name, 2010)))
   {
-    result->res_ip = "Service not conducted";
+    reply("Failed to add instruction! ");
     return;
-  } else {
-    RCLCPP_INFO(
-      this->get_logger(),
-      "Radar must be restarted and the parameters in the param file "
-      "must be updated !!.");
-    result->res_ip =
-      "Success: IP change executed successfully. Radar must be restarted "
-      "and the parameters in the param file must be updated";
   }
+  send_instructions(
+    batch, client_id, ip_item.section, {ip_item, save_item}, reply,
+    "Restart the radar and update the ip parameter in the param file.");
 }
 
 void SmartmicroRadarNode::radar_command(
-  const std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Request> request,
-  std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Response> result)
+  const std::shared_ptr<rmw_request_id_t> request_header,
+  const std::shared_ptr<umrr_ros2_msgs::srv::SendCommand::Request> request)
 {
-  const std::string command_name = request->command;
+  const auto reply = [this, request_header](const std::string & text) {
+      umrr_ros2_msgs::srv::SendCommand::Response response;
+      response.res = text;
+      command_srv_->send_response(*request_header, response);
+    };
   const auto client_id = request->sensor_id;
   if (!is_configured_sensor(client_id)) {
-    result->res = "The sensor ID value entered is invalid! ";
+    reply("The sensor ID value entered is invalid! ");
     return;
   }
 
-  auto section_name = request->section_name;
+  const auto & section_name = request->section_name;
   if (
     section_name != "auto_interface_command" && section_name != "auto_interface_rrm_command" &&
     section_name != "Command")
   {
-    result->res =
+    reply(
       "Error: Invalid section name specified! Must be 'auto_interface_command', "
-      "'auto_interface_rrm_command', or 'Command'.";
+      "'auto_interface_rrm_command', or 'Command'.");
     return;
   }
 
@@ -702,467 +773,287 @@ void SmartmicroRadarNode::radar_command(
   try {
     command_value = parse_command_value(request->value);
   } catch (const std::invalid_argument & error) {
-    result->res = std::string("Error: ") + error.what();
+    reply(std::string("Error: ") + error.what());
     return;
   }
 
-  std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
-  if (!inst) {
-    result->res = "Failed to get instruction service";
+  auto batch = allocate_instructions(m_services, client_id);
+  if (!batch.get()) {
+    reply("Failed to allocate instruction! ");
     return;
   }
-  std::shared_ptr<InstructionBatch> batch;
-
-  if (!inst->AllocateInstructionBatch(client_id, batch)) {
-    result->res = "Failed to allocate instruction! ";
-    return;
-  }
-
-  std::shared_ptr<CmdRequest> radar_command =
-    std::make_shared<CmdRequest>(section_name, request->command, command_value);
-
-  if (!batch->AddRequest(radar_command)) {
-    result->res = "Failed to add instruction! ";
-    return;
-  }
-
-  if (
-    com::types::ERROR_CODE_OK != inst->SendInstructionBatch(
-      batch, callback_gate_.wrap(std::bind(
-        &SmartmicroRadarNode::command_response, this, client_id,
-        std::placeholders::_2, command_name, section_name))))
+  if (!batch.get()->AddRequest(
+      std::make_shared<CmdRequest>(section_name, request->command, command_value)))
   {
-    result->res = "Error in sending command to the sensor!";
+    reply("Failed to add instruction! ");
     return;
   }
-  result->res = "Success: Request sent successfully.";
+  send_instructions(
+    batch, client_id, section_name,
+    {{section_name, request->command, InstructionValueType::kU32}}, reply);
 }
 
 void SmartmicroRadarNode::get_radar_status(
-  const std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Request> request,
-  std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Response> result)
+  const std::shared_ptr<rmw_request_id_t> request_header,
+  const std::shared_ptr<umrr_ros2_msgs::srv::GetStatus::Request> request)
 {
+  const auto reply = [this, request_header](const std::string & text) {
+      umrr_ros2_msgs::srv::GetStatus::Response response;
+      response.res = text;
+      status_srv_->send_response(*request_header, response);
+    };
   const auto client_id = request->sensor_id;
   if (!is_configured_sensor(client_id)) {
-    result->res = "Error: Sensor ID is invalid! ";
+    reply("Error: Sensor ID is invalid! ");
     return;
   }
 
-  auto section_name = request->section_name;
+  const auto & section_name = request->section_name;
   if (
     section_name != "auto_interface" && section_name != "auto_interface_rrm" &&
     section_name != "Status")
   {
-    result->res =
+    reply(
       "Error: Invalid section name specified! Must be 'auto_interface', 'auto_interface_rrm', or "
-      "'Status'.";
+      "'Status'.");
     return;
   }
 
   // Check arrays have same length
-  if (request->statuses.size() != request->status_types.size()) {
-    result->res = "Error: status and status_types arrays must have same length";
+  if (request->statuses.empty() || request->statuses.size() != request->status_types.size()) {
+    reply("Error: status and status_types arrays must be non-empty and have same length");
     return;
   }
 
-  std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
-  if (!inst) {
-    result->res = "Error: Failed to get instruction service";
+  auto batch = allocate_instructions(m_services, client_id);
+  if (!batch.get()) {
+    reply("Error: Failed to allocate instruction! ");
     return;
   }
 
-  std::shared_ptr<InstructionBatch> batch;
-  if (!inst->AllocateInstructionBatch(client_id, batch)) {
-    result->res = "Error: Failed to allocate instruction! ";
-    return;
-  }
-
+  std::vector<InstructionItem> items;
   for (size_t i = 0; i < request->statuses.size(); i++) {
     const auto & status = request->statuses[i];
-    const auto & status_type = request->status_types[i];
+    const auto status_type = request->status_types[i];
+    if (status_type >= kStatusValueTypes.size()) {
+      reply("Error: Invalid value_type specified. Must be 0 (u32), 1 (u16), 2 (u8), or 3 (i32)");
+      return;
+    }
+    const auto type = kStatusValueTypes[status_type];
     bool request_added = false;
-
-    switch (status_type) {
-      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_UINT32: {
-          auto radar_status_u32 =
-            std::make_shared<GetStatusRequest<uint32_t>>(section_name, status);
-          request_added = batch->AddRequest(radar_status_u32);
-          break;
-        }
-      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_UINT16: {
-          auto radar_status_u16 =
-            std::make_shared<GetStatusRequest<uint16_t>>(section_name, status);
-          request_added = batch->AddRequest(radar_status_u16);
-          break;
-        }
-      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_UINT8: {
-          auto radar_status_u8 = std::make_shared<GetStatusRequest<uint8_t>>(section_name, status);
-          request_added = batch->AddRequest(radar_status_u8);
-          break;
-        }
-      case umrr_ros2_msgs::srv::GetStatus::Request::TYPE_INT32: {
-          auto radar_status_i32 = std::make_shared<GetStatusRequest<int32_t>>(section_name, status);
-          request_added = batch->AddRequest(radar_status_i32);
-          break;
-        }
-      default:
-        result->res =
-          "Error: Invalid value_type specified. Must be 0 (u32), 1 (u16), 2 (u8), or 3 (i32)";
-        return;
+    switch (type) {
+      case InstructionValueType::kU32:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetStatusRequest<uint32_t>>(section_name, status));
+        break;
+      case InstructionValueType::kU16:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetStatusRequest<uint16_t>>(section_name, status));
+        break;
+      case InstructionValueType::kU8:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetStatusRequest<uint8_t>>(section_name, status));
+        break;
+      case InstructionValueType::kI32:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetStatusRequest<int32_t>>(section_name, status));
+        break;
+      case InstructionValueType::kF32:
+        break;
     }
 
     if (!request_added) {
-      result->res = "Error: Failed to add instruction '" + status + "' ! ";
+      reply("Error: Failed to add instruction '" + status + "' ! ");
       return;
     }
+    items.push_back({section_name, status, type});
   }
-
-  if (
-    com::types::ERROR_CODE_OK !=
-    inst->SendInstructionBatch(
-      batch, callback_gate_.wrap(std::bind(
-        &SmartmicroRadarNode::status_response, this, client_id, std::placeholders::_2,
-        request->statuses, section_name))))
-  {
-    result->res = "Error: Check status are valid for this sensor!";
-    return;
-  }
-  result->res = "Success: Request sent successfully. Check main terminal for sensor response!";
+  send_instructions(batch, client_id, section_name, std::move(items), reply);
 }
 
 void SmartmicroRadarNode::get_radar_mode(
-  const std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Request> request,
-  std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Response> result)
+  const std::shared_ptr<rmw_request_id_t> request_header,
+  const std::shared_ptr<umrr_ros2_msgs::srv::GetMode::Request> request)
 {
+  const auto reply = [this, request_header](const std::string & text) {
+      umrr_ros2_msgs::srv::GetMode::Response response;
+      response.res = text;
+      read_mode_srv_->send_response(*request_header, response);
+    };
   const auto client_id = request->sensor_id;
   if (!is_configured_sensor(client_id)) {
-    result->res = "Error: Sensor ID is invalid! ";
+    reply("Error: Sensor ID is invalid! ");
     return;
   }
 
-  auto section_name = request->section_name;
+  const auto & section_name = request->section_name;
   if (
     section_name != "auto_interface_0dim" && section_name != "auto_interface_rrm" &&
     section_name != "Parameter")
   {
-    result->res =
-      "Error: Invalid section name specified! Must be 'auto_interface_0dim', 'auto_interface_rrm', "
-      "or 'Parameter'.";
+    reply(
+      "Error: Invalid section name specified! Must be 'auto_interface_0dim', "
+      "'auto_interface_rrm', or 'Parameter'.");
     return;
   }
 
   // Check arrays have same length
-  if (request->params.size() != request->param_types.size()) {
-    result->res = "Error: param and value_types arrays must have same length";
+  if (request->params.empty() || request->params.size() != request->param_types.size()) {
+    reply("Error: param and value_types arrays must be non-empty and have same length");
     return;
   }
 
-  std::shared_ptr<InstructionServiceIface> inst{m_services->GetInstructionService()};
-  if (!inst) {
-    result->res = "Error: Failed to get instruction service";
+  auto batch = allocate_instructions(m_services, client_id);
+  if (!batch.get()) {
+    reply("Error: Failed to allocate instruction! ");
     return;
   }
 
-  std::shared_ptr<InstructionBatch> batch;
-  if (!inst->AllocateInstructionBatch(client_id, batch)) {
-    result->res = "Error: Failed to allocate instruction! ";
-    return;
-  }
-
+  std::vector<InstructionItem> items;
   for (size_t i = 0; i < request->params.size(); i++) {
     const auto & param = request->params[i];
-    const auto & param_type = request->param_types[i];
+    const auto param_type = request->param_types[i];
+    if (param_type >= kModeValueTypes.size()) {
+      reply(
+        "Error: Invalid param_type specified. Must be 0 (f32), 1 (u32), 2 (u16) or 3 (u8)");
+      return;
+    }
+    const auto type = kModeValueTypes[param_type];
     bool request_added = false;
-
-    switch (param_type) {
-      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_FLOAT32: {
-          auto radar_param_float = std::make_shared<GetParamRequest<float>>(section_name, param);
-          request_added = batch->AddRequest(radar_param_float);
-          break;
-        }
-      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_UINT32: {
-          auto radar_param_u32 = std::make_shared<GetParamRequest<uint32_t>>(section_name, param);
-          request_added = batch->AddRequest(radar_param_u32);
-          break;
-        }
-      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_UINT16: {
-          auto radar_param_u16 = std::make_shared<GetParamRequest<uint16_t>>(section_name, param);
-          request_added = batch->AddRequest(radar_param_u16);
-          break;
-        }
-      case umrr_ros2_msgs::srv::GetMode::Request::TYPE_UINT8: {
-          auto radar_param_u8 = std::make_shared<GetParamRequest<uint8_t>>(section_name, param);
-          request_added = batch->AddRequest(radar_param_u8);
-          break;
-        }
-      default:
-        result->res =
-          "Error: Invalid param_type specified. Must be 0 (f32), 1 (u32), 2 (u16) or 3 (u8)";
-        return;
+    switch (type) {
+      case InstructionValueType::kF32:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetParamRequest<float>>(section_name, param));
+        break;
+      case InstructionValueType::kU32:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetParamRequest<uint32_t>>(section_name, param));
+        break;
+      case InstructionValueType::kU16:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetParamRequest<uint16_t>>(section_name, param));
+        break;
+      case InstructionValueType::kU8:
+        request_added = batch.get()->AddRequest(
+          std::make_shared<GetParamRequest<uint8_t>>(section_name, param));
+        break;
+      case InstructionValueType::kI32:
+        break;
     }
 
     if (!request_added) {
-      result->res = "Error: Failed to add instruction '" + param + "' Check param types match! ";
+      reply("Error: Failed to add instruction '" + param + "' Check param types match! ");
       return;
     }
+    items.push_back({section_name, param, type});
   }
+  send_instructions(batch, client_id, section_name, std::move(items), reply);
+}
 
-  if (
-    com::types::ERROR_CODE_OK !=
-    inst->SendInstructionBatch(
-      batch, callback_gate_.wrap(std::bind(
-        &SmartmicroRadarNode::param_response, this, client_id, std::placeholders::_2,
-        request->params, section_name))))
+void SmartmicroRadarNode::send_instructions(
+  InstructionBatchLease & batch, const com::types::ClientId sensor_id,
+  const std::string & section, std::vector<InstructionItem> items, InstructionReply reply,
+  const std::string & success_note)
+{
+  const auto inst = m_services->GetInstructionService();
+  uint64_t id{};
   {
-    result->res = "Error: Check params are valid for this sensor!";
+    // Registered before sending: the SDK may answer before SendInstructionBatch returns.
+    std::lock_guard<std::mutex> lock(instructions_mutex_);
+    id = next_instruction_id_++;
+    pending_instructions_.emplace(
+      id, PendingInstruction{batch.get(), std::chrono::steady_clock::now() + instruction_timeout_,
+        sensor_id, section, reply});
+  }
+  auto on_reply = [this, id, sensor_id, section, items = std::move(items), success_note](
+    com::types::ClientId, const std::shared_ptr<ResponseBatch> & response) {
+      InstructionReply send;
+      {
+        std::lock_guard<std::mutex> lock(instructions_mutex_);
+        const auto pending = pending_instructions_.find(id);
+        if (pending == pending_instructions_.end()) {
+          return;  // Already answered as timed out.
+        }
+        send = std::move(pending->second.reply);
+        answered_batches_.push_back(std::move(pending->second.batch));
+        pending_instructions_.erase(pending);
+      }
+      std::string text;
+      try {
+        auto result = decode_instruction_reply(response, sensor_id, section, items);
+        if (result["success"].get<bool>() && !success_note.empty()) {
+          result["note"] = success_note;
+        }
+        text = result.dump(2);
+      } catch (const std::exception & error) {
+        text = instruction_error(sensor_id, section, std::string("Undecodable reply: ") +
+            error.what());
+      }
+      RCLCPP_INFO(get_logger(), "Sensor %u reply: %s", sensor_id, text.c_str());
+      send(text);
+    };
+  if (
+    inst && inst->SendInstructionBatch(batch.get(), callback_gate_.wrap(std::move(on_reply))) ==
+    com::types::ERROR_CODE_OK)
+  {
+    batch.release();  // Released by expire_instructions() once answered or expired.
     return;
   }
-  result->res = "Success: Request sent successfully. Check main terminal for sensor response!";
-}
-
-void SmartmicroRadarNode::mode_response(
-  const com::types::ClientId client_id,
-  const std::shared_ptr<com::master::ResponseBatch> & response,
-  const std::vector<std::string> & instruction_names, const std::string & section_name)
-{
-  for (const auto & instruction_name : instruction_names) {
-    std::vector<std::shared_ptr<Response<uint8_t>>> resp_u8;
-    std::vector<std::shared_ptr<Response<uint16_t>>> resp_u16;
-    std::vector<std::shared_ptr<Response<uint32_t>>> resp_u32;
-    std::vector<std::shared_ptr<Response<float>>> resp_f;
-    bool response_found = false;
-
-    if (response->GetResponse<uint8_t>(section_name, instruction_name.c_str(), resp_u8)) {
-      response_found = true;
-      for (auto & resp : resp_u8) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<uint32_t>(section_name, instruction_name.c_str(), resp_u32)) {
-      response_found = true;
-      for (auto & resp : resp_u32) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<uint16_t>(section_name, instruction_name.c_str(), resp_u16)) {
-      response_found = true;
-      for (auto & resp : resp_u16) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<float>(section_name, instruction_name.c_str(), resp_f)) {
-      response_found = true;
-      for (auto & resp : resp_f) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %f\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (!response_found) {
-      RCLCPP_WARN(this->get_logger(), "No response received!");
-    }
+  bool unanswered{};
+  {
+    std::lock_guard<std::mutex> lock(instructions_mutex_);
+    unanswered = pending_instructions_.erase(id) > 0;
+  }
+  if (unanswered) {
+    reply(
+      instruction_error(
+        sensor_id, section,
+        "SDK could not send the instructions; check names and types for this sensor"));
+  } else {
+    batch.release();  // Answered anyway; its batch is already queued for release.
   }
 }
 
-void SmartmicroRadarNode::sensor_response_ip(
-  const com::types::ClientId client_id,
-  const std::shared_ptr<com::master::ResponseBatch> & response)
+void SmartmicroRadarNode::expire_instructions()
 {
-  std::vector<std::shared_ptr<Response<uint32_t>>> resp_ip;
-  if (response->GetResponse<uint32_t>("auto_interface_0dim", "ip_source_address", resp_ip)) {
-    for (auto & resp : resp_ip) {
-      RCLCPP_INFO(
-        this->get_logger(),
-        "Response details:\n"
-        "   Instruction: %s\n"
-        "   Response type: %u\n"
-        "   Value: %u\n",
-        resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
+  std::vector<PendingInstruction> expired;
+  std::vector<std::shared_ptr<InstructionBatch>> finished;
+  {
+    std::lock_guard<std::mutex> lock(instructions_mutex_);
+    const auto now = std::chrono::steady_clock::now();
+    for (auto pending = pending_instructions_.begin(); pending != pending_instructions_.end(); ) {
+      if (pending->second.deadline <= now) {
+        expired.push_back(std::move(pending->second));
+        pending = pending_instructions_.erase(pending);
+      } else {
+        ++pending;
+      }
+    }
+    finished.swap(answered_batches_);
+    instruction_timeouts_ += expired.size();
+  }
+  for (auto & request : expired) {
+    finished.push_back(std::move(request.batch));
+    RCLCPP_WARN(
+      get_logger(), "No reply from sensor %u within %s ms", request.sensor_id,
+      std::to_string(instruction_timeout_.count()).c_str());
+    try {
+      request.reply(
+        instruction_error(
+          request.sensor_id, request.section,
+          "Timed out after " + std::to_string(instruction_timeout_.count()) +
+          " ms waiting for the sensor reply; the instructions may still have been applied"));
+    } catch (const std::exception & error) {
+      RCLCPP_ERROR(get_logger(), "Could not send the timeout reply: %s", error.what());
     }
   }
-}
-
-void SmartmicroRadarNode::command_response(
-  const com::types::ClientId client_id,
-  const std::shared_ptr<com::master::ResponseBatch> & response, const std::string command_name,
-  const std::string & section_name)
-{
-  std::vector<std::shared_ptr<Response<uint32_t>>> command_resp;
-  if (response->GetResponse<uint32_t>(section_name, command_name.c_str(), command_resp)) {
-    for (auto & resp : command_resp) {
-      RCLCPP_INFO(
-        this->get_logger(),
-        "Response details:\n"
-        "   Instruction: %s\n"
-        "   Response type: %u\n"
-        "   Value: %u\n",
-        resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-    }
+  if (finished.empty()) {
+    return;
   }
-}
-
-void SmartmicroRadarNode::status_response(
-  const com::types::ClientId client_id,
-  const std::shared_ptr<com::master::ResponseBatch> & response,
-  const std::vector<std::string> & statuses, const std::string & section_name)
-{
-  for (const auto & instruction_name : statuses) {
-    std::vector<std::shared_ptr<Response<uint16_t>>> resp_u16;
-    std::vector<std::shared_ptr<Response<uint32_t>>> resp_u32;
-    std::vector<std::shared_ptr<Response<uint8_t>>> resp_u8;
-    std::vector<std::shared_ptr<Response<int32_t>>> resp_i32;
-    bool response_found = false;
-
-    if (response->GetResponse<uint16_t>(section_name, instruction_name.c_str(), resp_u16)) {
-      response_found = true;
-      for (auto & resp : resp_u16) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<uint32_t>(section_name, instruction_name.c_str(), resp_u32)) {
-      response_found = true;
-      for (auto & resp : resp_u32) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<uint8_t>(section_name, instruction_name.c_str(), resp_u8)) {
-      response_found = true;
-      for (auto & resp : resp_u8) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<int32_t>(section_name, instruction_name.c_str(), resp_i32)) {
-      response_found = true;
-      for (auto & resp : resp_i32) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %d\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (!response_found) {
-      RCLCPP_WARN(this->get_logger(), "No response received!");
-    }
-  }
-}
-
-void SmartmicroRadarNode::param_response(
-  const com::types::ClientId client_id,
-  const std::shared_ptr<com::master::ResponseBatch> & response,
-  const std::vector<std::string> & statuses, const std::string & section_name)
-{
-  for (const auto & instruction_name : statuses) {
-    std::vector<std::shared_ptr<Response<uint16_t>>> resp_u16;
-    std::vector<std::shared_ptr<Response<uint32_t>>> resp_u32;
-    std::vector<std::shared_ptr<Response<uint8_t>>> resp_u8;
-    std::vector<std::shared_ptr<Response<float>>> resp_f;
-    bool response_found = false;
-
-    if (response->GetResponse<uint16_t>(section_name, instruction_name.c_str(), resp_u16)) {
-      response_found = true;
-      for (auto & resp : resp_u16) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<uint32_t>(section_name, instruction_name.c_str(), resp_u32)) {
-      response_found = true;
-      for (auto & resp : resp_u32) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<uint8_t>(section_name, instruction_name.c_str(), resp_u8)) {
-      response_found = true;
-      for (auto & resp : resp_u8) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %u\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (response->GetResponse<float>(section_name, instruction_name.c_str(), resp_f)) {
-      response_found = true;
-      for (auto & resp : resp_f) {
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Response details:\n"
-          "   Instruction: %s\n"
-          "   Response type: %u\n"
-          "   Value: %f\n",
-          resp->GetInstructionName().c_str(), resp->GetResponseType(), resp->GetValue());
-      }
-    }
-
-    if (!response_found) {
-      RCLCPP_WARN(this->get_logger(), "No response received!");
+  const auto inst = m_services->GetInstructionService();
+  for (const auto & batch : finished) {
+    if (inst && inst->ReleaseInstructionBatch(batch) != com::types::ERROR_CODE_OK) {
+      RCLCPP_WARN(get_logger(), "Could not release an instruction batch");
     }
   }
 }
@@ -1288,7 +1179,7 @@ void SmartmicroRadarNode::register_model(
     }
     if constexpr (Model::kFaultReports) {
       m_publishers_fault_report_msg[sensor_idx] =
-        create_publisher<umrr_ros2_msgs::msg::PortFaultReportsMsg>(
+        create_data_publisher<umrr_ros2_msgs::msg::PortFaultReportsMsg>(
         "smart_radar/port_faultreport_" + std::to_string(sensor_idx), sensor.history_size);
       check(
         service->RegisterFaultReportsReceiveCallback(
@@ -1426,6 +1317,20 @@ void SmartmicroRadarNode::update_config_files_from_params()
             "publish_radar_scan is true, but this driver was built without radar_msgs");
   }
 #endif
+  auto timeout_descriptor = startup_descriptor();
+  timeout_descriptor.description =
+    "Deadline for the sensor's reply to a control service request [ms]; restart to change.";
+  rcl_interfaces::msg::IntegerRange timeout_range;
+  timeout_range.from_value = 100;
+  timeout_range.to_value = 60000;
+  timeout_descriptor.integer_range.push_back(timeout_range);
+  const auto timeout_ms =
+    declare_parameter<int64_t>("instruction_timeout_ms", 3000, timeout_descriptor);
+  if (timeout_ms < timeout_range.from_value || timeout_ms > timeout_range.to_value) {
+    throw std::invalid_argument("instruction_timeout_ms must be within 100..60000");
+  }
+  instruction_timeout_ = std::chrono::milliseconds(timeout_ms);
+
   const auto master_inst_serial_type = startup_parameter(*this, kInstSerialTypeTag, std::string{});
   const auto master_data_serial_type = startup_parameter(*this, kDataSerialTypeTag, std::string{});
 
@@ -1451,6 +1356,17 @@ void SmartmicroRadarNode::update_config_files_from_params()
         (current_adapter.hw_type == "eth" && current_adapter.port == 0))
       {
         throw std::invalid_argument(prefix_2 + ".port must be a valid UDP port for Ethernet");
+      }
+      if (!current_adapter.hw_ip_address.empty() &&
+        !is_ipv4_address(current_adapter.hw_ip_address))
+      {
+        throw std::invalid_argument(prefix_2 + ".hw_ip_address must be an IPv4 address");
+      }
+      for (size_t i = 0; i < index; ++i) {
+        if (m_adapters[i].hw_dev_id == current_adapter.hw_dev_id) {
+          throw std::invalid_argument(
+                  prefix_2 + ".hw_dev_id duplicates adapters.adapter_" + std::to_string(i));
+        }
       }
       return true;
     };
@@ -1486,12 +1402,31 @@ void SmartmicroRadarNode::update_config_files_from_params()
         throw std::invalid_argument(prefix_3 +
               ": invalid port, empty frame_id or zero history_size");
       }
-      bool adapter_found = false;
-      for (size_t i = 0; i < m_number_of_adapters; ++i) {
-        adapter_found |= m_adapters[i].hw_dev_id == sensor.dev_id;
+      // tf2 rejects frame ids with a leading slash (a ROS 1 convention).
+      if (sensor.frame_id.front() == '/') {
+        throw std::invalid_argument(prefix_3 + ".frame_id must not start with '/'");
       }
-      if (!adapter_found) {
+      // An unparsable address would only show up as a stream that never starts.
+      if (sensor.link_type == kEthLinkType && !is_ipv4_address(sensor.ip)) {
+        throw std::invalid_argument(prefix_3 + ".ip must be the sensor's IPv4 address");
+      }
+      for (size_t i = 0; i < index; ++i) {
+        if (m_sensors[i].id == sensor.id) {
+          throw std::invalid_argument(
+                  prefix_3 + ".id duplicates sensors.sensor_" + std::to_string(i) +
+                  " (client ids route the SDK streams)");
+        }
+      }
+      const auto adapter = std::find_if(
+        m_adapters.begin(), m_adapters.begin() + m_number_of_adapters,
+        [&sensor](const auto & candidate) {return candidate.hw_dev_id == sensor.dev_id;});
+      if (adapter == m_adapters.begin() + m_number_of_adapters) {
         throw std::invalid_argument(prefix_3 + ".dev_id does not identify a configured adapter");
+      }
+      if (adapter->hw_type != sensor.link_type) {
+        throw std::invalid_argument(
+                prefix_3 + ".link_type '" + sensor.link_type + "' does not match the '" +
+                adapter->hw_type + "' adapter with hw_dev_id " + std::to_string(sensor.dev_id));
       }
       return true;
     };

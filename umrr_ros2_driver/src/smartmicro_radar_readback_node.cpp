@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
+#include <umrr_ros2_driver/instruction_reply.hpp>
 #include <umrr_ros2_driver/readback_node.hpp>
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <umrr_ros2_driver/runtime_config.hpp>
@@ -42,21 +43,9 @@ using com::master::ResponseBatch;
 using smartmicro::drivers::radar::RuntimeConfig;
 using smartmicro::drivers::radar::startup_parameter;
 
-enum class ValueType { F32, U32, U16, U8, I32 };
-
-struct BatchLease
-{
-  ~BatchLease()
-  {
-    // Also release rejected requests and expired batches from the SDK's registry.
-    if (batch) {
-      service->ReleaseInstructionBatch(batch);
-    }
-  }
-
-  std::shared_ptr<com::master::InstructionServiceIface> service;
-  std::shared_ptr<InstructionBatch> batch;
-};
+using ValueType = smartmicro::drivers::radar::InstructionValueType;
+using smartmicro::drivers::radar::InstructionBatchLease;
+using smartmicro::drivers::radar::InstructionItem;
 
 template<typename T>
 bool add_read(
@@ -67,27 +56,6 @@ bool add_read(
     return batch->AddRequest(std::make_shared<com::master::GetStatusRequest<T>>(section, name));
   }
   return batch->AddRequest(std::make_shared<com::master::GetParamRequest<T>>(section, name));
-}
-
-template<typename T>
-Json read_value(
-  const std::shared_ptr<ResponseBatch> & batch,
-  const std::string & section, const std::string & name)
-{
-  std::vector<std::shared_ptr<com::master::Response<T>>> values;
-  if (!batch || !batch->GetResponse<T>(section, name, values) ||
-    values.size() != 1 || !values.front())
-  {
-    return {{"response_type", 0}, {"error", "Missing or unexpected sensor response"}};
-  }
-  const auto code = values.front()->GetResponseType();
-  Json result = {{"response_type", code}};
-  if (code == 1) {
-    result["value"] = values.front()->GetValue();
-  } else {
-    result["error"] = "Sensor rejected the instruction";
-  }
-  return result;
 }
 
 // A sensor reply that did not arrive in time; counted separately from failures.
@@ -278,11 +246,11 @@ private:
       if (!instructions || !instructions->AllocateInstructionBatch(sensor_id_, batch)) {
         throw std::runtime_error("Could not allocate SDK tuning request");
       }
-      const BatchLease lease{instructions, batch};
+      const InstructionBatchLease lease{instructions, batch};
       std::vector<ValueType> types;
       for (size_t i = 0; i < request.params.size(); ++i) {
         const bool floating = std::holds_alternative<float>(values[i]);
-        types.push_back(floating ? ValueType::F32 : ValueType::U8);
+        types.push_back(floating ? ValueType::kF32 : ValueType::kU8);
         const bool added = std::visit([&](auto value) {
               return batch->AddRequest(
               std::make_shared<com::master::SetParamRequest<decltype(value)>>(
@@ -327,16 +295,16 @@ private:
         throw std::invalid_argument("Readback names must be unique");
       }
       constexpr std::array<ValueType, 4> param_types = {
-        ValueType::F32, ValueType::U32, ValueType::U16, ValueType::U8};
+        ValueType::kF32, ValueType::kU32, ValueType::kU16, ValueType::kU8};
       constexpr std::array<ValueType, 4> status_types = {
-        ValueType::U32, ValueType::U16, ValueType::U8, ValueType::I32};
+        ValueType::kU32, ValueType::kU16, ValueType::kU8, ValueType::kI32};
       std::vector<ValueType> types;
       auto instructions = services_->GetInstructionService();
       std::shared_ptr<InstructionBatch> batch;
       if (!instructions || !instructions->AllocateInstructionBatch(sensor_id_, batch)) {
         throw std::runtime_error("Could not allocate SDK read request");
       }
-      const BatchLease lease{instructions, batch};
+      const InstructionBatchLease lease{instructions, batch};
       for (size_t i = 0; i < names.size(); ++i) {
         if (requested_types[i] > 3) {
           throw std::invalid_argument("Invalid readback data type");
@@ -345,11 +313,11 @@ private:
         types.push_back(type);
         bool added = false;
         switch (type) {
-          case ValueType::F32: added = add_read<float>(batch, status, section, names[i]); break;
-          case ValueType::U32: added = add_read<uint32_t>(batch, status, section, names[i]); break;
-          case ValueType::U16: added = add_read<uint16_t>(batch, status, section, names[i]); break;
-          case ValueType::U8: added = add_read<uint8_t>(batch, status, section, names[i]); break;
-          case ValueType::I32: added = add_read<int32_t>(batch, status, section, names[i]); break;
+          case ValueType::kF32: added = add_read<float>(batch, status, section, names[i]); break;
+          case ValueType::kU32: added = add_read<uint32_t>(batch, status, section, names[i]); break;
+          case ValueType::kU16: added = add_read<uint16_t>(batch, status, section, names[i]); break;
+          case ValueType::kU8: added = add_read<uint8_t>(batch, status, section, names[i]); break;
+          case ValueType::kI32: added = add_read<int32_t>(batch, status, section, names[i]); break;
         }
         if (!added) {
           throw std::invalid_argument("Unknown, duplicate, or incorrectly typed read: " + names[i]);
@@ -381,25 +349,15 @@ private:
     auto instructions = services_->GetInstructionService();
     // Capture owned state only: a late reply must remain safe after a timeout.
     const auto pending = std::make_shared<PendingResponse>();
+    std::vector<InstructionItem> items;
+    for (size_t i = 0; i < names.size(); ++i) {
+      items.push_back({section, names[i], types[i]});
+    }
     const auto sent = instructions->SendInstructionBatch(
-      batch, [pending, names, types, section, sensor_id](
+      batch, [pending, items, section, sensor_id](
         com::types::ClientId, const std::shared_ptr<ResponseBatch> response) {
-        Json result = {{"sensor_id", sensor_id}, {"section", section},
-          {"success", true}, {"values", Json::object()}};
-        for (size_t i = 0; i < names.size(); ++i) {
-          Json value;
-          switch (types[i]) {
-            case ValueType::F32: value = read_value<float>(response, section, names[i]); break;
-            case ValueType::U32: value = read_value<uint32_t>(response, section, names[i]); break;
-            case ValueType::U16: value = read_value<uint16_t>(response, section, names[i]); break;
-            case ValueType::U8: value = read_value<uint8_t>(response, section, names[i]); break;
-            case ValueType::I32: value = read_value<int32_t>(response, section, names[i]); break;
-          }
-          if (value["response_type"] != 1) {
-            result["success"] = false;
-          }
-          result["values"][names[i]] = std::move(value);
-        }
+        auto result = smartmicro::drivers::radar::decode_instruction_reply(
+          response, sensor_id, section, items);
         {
           std::lock_guard<std::mutex> lock(pending->mutex);
           pending->result = std::move(result);

@@ -48,7 +48,56 @@ apply in any namespace. Individual topics can still be remapped, for example
 the update runs on a worker thread, so diagnostics and the other services keep
 running meanwhile. Service requests are validated completely before anything is
 sent: unknown sensor ids (including 0), non-numeric, negative, out-of-range or
-non-finite values are rejected with an error string.
+non-finite values, empty name lists and names or types the sensor's interface
+does not define are rejected with an error string starting `Error:` (or, for the
+older wording, `Failed to ...`).
+
+`set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command` and
+`set_ip_address` reply when the sensor answers, without blocking the executor
+(deferred responses). The reply text (`res`, `res_ip`) is the same JSON the
+readback node returns:
+
+```json
+{"sensor_id": 100, "section": "auto_interface_0dim", "success": true,
+ "values": {"frequency_sweep_idx": {"response_type": 1, "value": 2}}}
+```
+
+`success` is true only if the sensor accepted every instruction; a rejected
+instruction has an `error` naming the SDK response type (for example "value above
+maximum") instead of a `value`. Without a reply within the startup parameter
+`instruction_timeout_ms` (default 3000, 100..60000) the reply is
+`success: false` with a "Timed out ..." error; a timed-out write may still have
+been applied. A successful `set_ip_address` adds a `note` to restart the radar.
+Before 2026-09-30 these services replied at once with "Success: Request sent"
+and only logged the sensor's answer. Every SDK instruction batch is released
+after its reply or timeout (previously none were).
+
+### QoS
+
+Data publishers are reliable, volatile, `KEEP_LAST` with depth
+`sensors.sensor_N.history_size`: reliable publishers match both reliable and
+best-effort (`SensorDataQoS`) subscribers. Reliability, history and depth of each
+data topic can be overridden with the standard startup parameters
+`qos_overrides.<fully qualified topic>.publisher.<policy>`:
+
+```yaml
+/**/smart_radar:
+  ros__parameters:
+    qos_overrides:
+      /smart_radar/port_targets_0:     # include the namespace, e.g. /front/smart_radar/...
+        publisher:
+          reliability: best_effort
+          depth: 3
+```
+
+### Startup validation
+
+Besides link type, model and publish type, the node refuses to start when an
+Ethernet sensor's `ip` or an adapter's `hw_ip_address` is not an IPv4 address,
+two sensors share an `id` or two adapters a `hw_dev_id`, a sensor's `link_type`
+differs from its adapter's `hw_type`, or a `frame_id` starts with `/` (tf2
+rejects such frames). Each of these previously started a node that published
+nothing for that sensor.
 
 ## Launch files
 
@@ -111,7 +160,7 @@ float fields and the maximum value for unsigned integer fields.
 | `x`, `y`, `z` | float32 | m, sensor frame (x forward, y left, z up), computed from range and angles |
 | `radial_speed` | float32 | m/s, the SDK `SpeedRadial` value unchanged. **Sign:** the vendor documentation does not state it. The fork's processing assumes positive = receding (`doppler_sign` in `smartmicro_processing`); verify with a target moving at a known velocity before relying on it. |
 | `power` | float32 | dB (port `Power`; CAN `SignalLevel`) |
-| `rcs` | float32 | Radar cross-section as reported: port UIFs declare `_m_sq` (m²), CAN UIFs declare `_dB`. Not converted. |
+| `rcs` | float32 | Radar cross-section [m²]. Port UIFs declare `_m_sq`; CAN UIFs declare `_dB` (dBsm), which the driver converts with 10^(dBsm/10) (before 2026-09-30 CAN values were published in dBsm). |
 | `noise` | float32 | dB |
 | `snr` | float32 | dB, `power - noise` |
 | `azimuth_angle`, `elevation_angle` | float32 | rad |
