@@ -13,7 +13,7 @@ from sensor_msgs_py.point_cloud2 import create_cloud, read_points
 from smartmicro_processing.accumulation import pose_discontinuity, pose_step_limits
 from smartmicro_processing.accumulation_node import RadarAccumulation
 from smartmicro_processing.cloud import empty_cloud
-from smartmicro_processing.node import RadarProcessing
+from smartmicro_processing.node import RadarProcessing, TRACK_FIELDS
 from smartmicro_processing.ros_support import as_float, DiagnosticsRateLimiter
 from std_msgs.msg import Header
 from umrr_ros2_msgs.msg import DetectionAudit
@@ -123,6 +123,15 @@ def test_shadow_half_angle_parameter_reaches_the_obstacle_filter(ros):
     ros('shadow_half_angle_deg:=0')
     with pytest.raises(ValueError):
         RadarProcessing()
+
+
+def test_track_ids_are_exact_uint32():
+    field = next(f for f in TRACK_FIELDS if f.name == 'track_id')
+    assert field.datatype == PointField.UINT32 and field.offset == 24
+    rows = [(1., 2., 0., .1, .2, .3, ident, 1.) for ident in (2 ** 24, 2 ** 24 + 1, 2 ** 32 - 1)]
+    message = create_cloud(Header(frame_id='umrr96'), TRACK_FIELDS, rows)
+    assert message.point_step == 32
+    assert read_points(message)['track_id'].tolist() == [2 ** 24, 2 ** 24 + 1, 2 ** 32 - 1]
 
 
 def test_standing_support_parameters_reach_the_tracker(ros):

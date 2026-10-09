@@ -99,8 +99,10 @@ OBSTACLE_PARAMETERS = {
 }
 OBSTACLE_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
                    for i, n in enumerate('xyz')]
-TRACK_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
-                for i, n in enumerate(('x', 'y', 'z', 'vx', 'vy', 'speed', 'track_id', 'age'))]
+# track_id is UINT32: float32 cannot keep IDs above 2^24 apart (tentative clusters use IDs).
+TRACK_FIELDS = [PointField(name=n, offset=4 * i, count=1, datatype=(
+    PointField.UINT32 if n == 'track_id' else PointField.FLOAT32))
+    for i, n in enumerate(('x', 'y', 'z', 'vx', 'vy', 'speed', 'track_id', 'age'))]
 GATE_PARAMETERS = {
     'min_range': ('Minimum XYZ range of a quality target (m).', 0, 300),
     'max_range': ('Maximum XYZ range of a quality target (m).', 0, 300),
