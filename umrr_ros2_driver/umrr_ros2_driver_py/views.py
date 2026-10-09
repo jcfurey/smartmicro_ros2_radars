@@ -3,15 +3,21 @@
 Detection density in a selected TF frame and sensor-local polar fan displays.
 
 The node also publishes ``smart_radar/filtered_targets_0``, the original target
-records selected by ``filter_mode``, which navigation can consume. It runs
-headless: the density marker, density cells, fan cloud and fan image are only
-built while they have subscribers (the fan guides are latched once), and
-OpenCV is loaded only for the first fan-image subscriber. The filter and the
-density history keep updating either way. All topic names are relative, so a
-namespace (or remapping ``smart_radar/port_targets_0``) moves the node.
+records selected by ``filter_mode``. It runs headless: the density marker,
+density cells, fan cloud and fan image are only built while they have
+subscribers (the fan guides are latched once), and OpenCV is loaded only for
+the first fan-image subscriber. The fan image is drawn only for a new scan, a
+state change (waiting, stale) or a filter change, and published then and to
+newly matched subscribers; ``fan_image/compressed`` carries it as JPEG or PNG
+in image_transport's compressed format. The filter and the density history keep
+updating either way. All topic names are relative, so a namespace (or remapping
+``smart_radar/port_targets_0``) moves the node. Publishers are reliable and
+accept ``qos_overrides`` for history, depth and reliability; the input is
+subscribed with sensor-data QoS.
 """
 
 from collections import deque
+import importlib.util
 import json
 import math
 import time
@@ -22,9 +28,10 @@ from rcl_interfaces.msg import FloatingPointRange, ParameterDescriptor, SetParam
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile
+from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
+from rclpy.qos_overriding_options import QoSOverridingOptions
 from rclpy.time import Time
-from sensor_msgs.msg import Image, PointCloud2, PointField
+from sensor_msgs.msg import CompressedImage, Image, PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import ColorRGBA, Header, String
 from std_srvs.srv import Empty
@@ -33,10 +40,15 @@ from tf2_sensor_msgs.tf2_sensor_msgs import transform_points
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .detection_filter import DetectionFilter
-from .fan_image import FanImage
+from .fan_image import _cv2, FanImage
 from .parameters import as_float, declare
 
 DEFAULT_INPUT = 'smart_radar/port_targets_0'
+# O2: reliable outputs; KEEP_LAST(5) for the filtered cloud, one message for displays.
+OUTPUT_QOS = QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)
+DISPLAY_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE)
+LATCHED_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                         durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 
 class DensityGrid:
@@ -152,7 +164,19 @@ class RadarViews(Node):
             declare(self, 'image_width', 960, 'Fan-image width (px).', 640, 1920),
             declare(self, 'image_height', 640, 'Fan-image height (px).', 480, 1080))
         FanImage.check(*self.image_settings)
+        self.image_compression = declare(
+            self, 'image_compression', 'jpeg',
+            'Encoding of smart_radar/fan_image/compressed: jpeg or png (lossless, slower).')
+        self.image_jpeg_quality = declare(
+            self, 'image_jpeg_quality', 90, 'JPEG quality of the compressed fan image.', 1, 100)
+        if self.image_compression not in ('jpeg', 'png'):
+            raise ValueError('image_compression must be jpeg or png')
         self._image_renderer = None
+        # P9: the last drawn image as (key, header, pixels), and per output the key and
+        # subscriber count of its last publish.
+        self.scans = 0
+        self.image = None
+        self.image_sent = {}
         self.grid = DensityGrid(resolution, decay)
         self.last_input = None
         self.last_cloud = None
@@ -169,18 +193,22 @@ class RadarViews(Node):
                     'Minimum |radial speed| in moving mode (m/s).', 0, 30, read_only=False))
         self.add_on_set_parameters_callback(self.validate_filter)
         self.add_post_set_parameters_callback(self.update_filter)
-        self.grid_pub = self.create_publisher(Marker, 'smart_radar/density_grid', 1)
-        self.cells_pub = self.create_publisher(PointCloud2, 'smart_radar/density_cells', 1)
-        self.fan_pub = self.create_publisher(PointCloud2, 'smart_radar/fan_targets', 1)
-        self.image_pub = self.create_publisher(Image, 'smart_radar/fan_image', 1)
-        self.filtered_pub = self.create_publisher(
-            PointCloud2, 'smart_radar/filtered_targets_0', qos_profile_sensor_data)
-        self.filter_status_pub = self.create_publisher(
-            String, 'smart_radar/filter_status',
-            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
-        self.guides_pub = self.create_publisher(
-            MarkerArray, 'smart_radar/fan_guides',
-            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.grid_pub = self.output(Marker, 'smart_radar/density_grid', DISPLAY_QOS)
+        self.cells_pub = self.output(PointCloud2, 'smart_radar/density_cells', DISPLAY_QOS)
+        self.fan_pub = self.output(PointCloud2, 'smart_radar/fan_targets', DISPLAY_QOS)
+        self.image_pub = self.output(Image, 'smart_radar/fan_image', DISPLAY_QOS)
+        self.compressed_pub = None
+        if importlib.util.find_spec('cv2') is None:
+            self.get_logger().warning(
+                'OpenCV (cv2) is not importable: smart_radar/fan_image/compressed is not '
+                'published')
+        else:
+            self.compressed_pub = self.output(
+                CompressedImage, 'smart_radar/fan_image/compressed', DISPLAY_QOS)
+        self.filtered_pub = self.output(
+            PointCloud2, 'smart_radar/filtered_targets_0', OUTPUT_QOS)
+        self.filter_status_pub = self.output(String, 'smart_radar/filter_status', LATCHED_QOS)
+        self.guides_pub = self.output(MarkerArray, 'smart_radar/fan_guides', LATCHED_QOS)
         self.subscription = self.create_subscription(
             PointCloud2, topic, self.receive, qos_profile_sensor_data)
         self.reset_service = self.create_service(Empty, 'smart_radar/reset_density', self.reset)
@@ -190,6 +218,12 @@ class RadarViews(Node):
         self.get_logger().info(
             f'Radar views on {self.subscription.topic_name}: {resolution:g} m cells, '
             f'decay {decay:g} s, range {self.range:g} m')
+
+    def output(self, message_type, topic, qos):
+        """Create a publisher whose history, depth and reliability qos_overrides can set."""
+        return self.create_publisher(
+            message_type, topic, qos,
+            qos_overriding_options=QoSOverridingOptions.with_default_policies())
 
     @property
     def image_renderer(self):
@@ -345,6 +379,7 @@ class RadarViews(Node):
         self.last_input = now
         self.input_header = cloud.header
         self.image_targets = image_targets
+        self.scans += 1
         self.fan_stale = False
         if self.fan_pub.get_subscription_count():
             self.fan_pub.publish(point_cloud2.create_cloud(cloud.header, fields('snr'), fan))
@@ -397,15 +432,55 @@ class RadarViews(Node):
             if not self.fan_stale:
                 self.fan_pub.publish(point_cloud2.create_cloud(header, fields('snr'), []))
                 self.fan_stale = True
-        if self.image_pub.get_subscription_count():
+        self.publish_image(header)
+
+    def publish_image(self, header):
+        """Draw the fan image only when its content changed (P9); publish it once."""
+        outputs = {'raw': (self.image_pub, self.raw_image)}
+        if self.compressed_pub is not None:
+            outputs['compressed'] = (self.compressed_pub, self.compressed_image)
+        counts = {name: publisher.get_subscription_count()
+                  for name, (publisher, _) in outputs.items()}
+        if any(counts.values()):
             state = ('WAITING FOR DATA' if self.last_input is None else
                      'NO RECENT SCAN' if self.fan_stale else 'LIVE')
-            targets = self.image_targets if state == 'LIVE' else []
-            pixels = self.image_renderer.render(targets, state, self.filter.mode)
-            self.image_pub.publish(Image(
-                header=self.input_header if state == 'LIVE' else header,
-                height=pixels.shape[0], width=pixels.shape[1], encoding='rgb8',
-                is_bigendian=0, step=pixels.shape[1] * 3, data=pixels.tobytes()))
+            key = (self.scans if state == 'LIVE' else -1, state, self.filter.mode)
+            if self.image is None or self.image[0] != key:
+                targets = self.image_targets if state == 'LIVE' else []
+                self.image = (key, self.input_header if state == 'LIVE' else header,
+                              self.image_renderer.render(targets, state, self.filter.mode))
+        for name, (publisher, build) in outputs.items():
+            sent_key, sent_count = self.image_sent.get(name, (None, 0))
+            # Without a new image, publish again only for a newly matched subscriber.
+            if counts[name] and (sent_key != self.image[0] or counts[name] > sent_count):
+                publisher.publish(build())
+                sent_key = self.image[0]
+            self.image_sent[name] = (sent_key, counts[name])
+
+    def raw_image(self):
+        _, header, pixels = self.image
+        return Image(header=header, height=pixels.shape[0], width=pixels.shape[1],
+                     encoding='rgb8', is_bigendian=0, step=pixels.shape[1] * 3,
+                     data=pixels.tobytes())
+
+    def compressed_image(self):
+        """Encode like image_transport's compressed publisher for an rgb8 image."""
+        cv2 = _cv2()
+        # This process needs no OpenCV worker pool: for a 960x640 conversion its spinning
+        # threads cost about 50 times the work (5 ms of CPU instead of 0.1 ms).
+        cv2.setNumThreads(1)
+        _, header, pixels = self.image
+        bgr = cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR)
+        if self.image_compression == 'png':
+            ok, data = cv2.imencode('.png', bgr)
+        else:
+            ok, data = cv2.imencode(
+                '.jpg', bgr, [int(cv2.IMWRITE_JPEG_QUALITY), self.image_jpeg_quality])
+        if not ok:
+            raise RuntimeError('OpenCV could not encode the fan image')
+        return CompressedImage(header=header,
+                               format=f'rgb8; {self.image_compression} compressed bgr8',
+                               data=data.tobytes())
 
     def grid_marker(self, header, samples):
         marker = Marker(header=header, ns='detection_density', id=0, type=Marker.CUBE_LIST)

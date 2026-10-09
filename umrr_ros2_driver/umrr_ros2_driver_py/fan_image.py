@@ -68,6 +68,18 @@ class FanImage:
         self.overlay = np.zeros_like(self.background)
         self._draw_guides()
         self.ink = np.any(self.overlay != 0, axis=2)
+        # P9: the guides are drawn once into the base image, and each polar bin keeps the
+        # flat indices of its pixels that the guides do not cover, contiguous in bin
+        # order, so a render touches only the occupied bins.
+        self.base = self.background.copy()
+        self.base[self.ink] = self.overlay[self.ink]
+        visible = ~self.ink[self.mask]
+        flat = np.flatnonzero(self.mask)[visible].astype(np.int32)
+        bins = (self.pixel_bins[0] * self.angle_bins + self.pixel_bins[1])[visible]
+        order = np.argsort(bins, kind='stable')
+        self.bin_pixels = flat[order]
+        self.bin_starts = np.searchsorted(
+            bins[order], np.arange(self.range_bins * self.angle_bins + 1))
 
     def pixel(self, radius, angle):
         """Map forward range to image up, and positive azimuth to image left."""
@@ -131,15 +143,14 @@ class FanImage:
 
     def render(self, targets, state='LIVE', filter_mode='off'):
         """Return contiguous uint8 RGB pixels, including a waiting/stale indicator."""
-        image = self.background.copy()
+        image = self.base.copy()
         if targets:
-            values = self.bin_targets(targets)[self.pixel_bins]
-            observed = np.isfinite(values)
-            colors = image[self.mask]
-            indices = np.rint(np.clip(values[observed], 0, 50) * 255 / 50).astype(int)
-            colors[observed] = self.palette[indices]
-            image[self.mask] = colors
-        image[self.ink] = self.overlay[self.ink]
+            values = self.bin_targets(targets).ravel()
+            occupied = np.flatnonzero(np.isfinite(values))
+            indices = np.rint(np.clip(values[occupied], 0, 50) * 255 / 50).astype(int)
+            pixels = image.reshape(-1, 3)
+            for index, color in zip(occupied, self.palette[indices]):
+                pixels[self.bin_pixels[self.bin_starts[index]:self.bin_starts[index + 1]]] = color
         status = f'{state} | {len(targets)} targets | filter: {filter_mode}'
         color = (115, 211, 170) if state == 'LIVE' else (246, 183, 88)
         self.text(image, status, (28, 81), .5, color)
