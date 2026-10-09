@@ -405,6 +405,9 @@ def _eth_sensor(**overrides):
     ({'sensor_0': _eth_sensor(link_type='can', model='umrr96_can_v1_2_2')}, {},
      "does not match the 'eth' adapter"),
     ({'sensor_0': _eth_sensor()}, {'instruction_timeout_ms': 50}, 'instruction_timeout_ms'),
+    ({'sensor_0': _eth_sensor(frame_id='radar'),
+      'sensor_1': _eth_sensor(id=201, frame_id='radar')}, {},
+     "sensor_1.frame_id 'radar' duplicates sensors.sensor_0"),
     ({'sensor_0': _eth_sensor(uifname='umrra4_automotive', uifmajorv=1, uifminorv=6,
                               uifpatchv=0)}, {},
      "sensor_0.uifname 'umrra4_automotive' does not match model 'umrr96_v1_2_2'"),
@@ -434,13 +437,15 @@ def _shipped_sensors():
 
 
 def test_shipped_parameter_files_match_the_model_catalogue():
-    """Every shipped sensor names its model's user interface and version (C64)."""
+    """Every shipped sensor names its model's interface (C64) and has its own frame (C69)."""
     catalogue = yaml.safe_load(
         (Path(__file__).resolve().parents[1] / 'param/model_uif_catalogue.yaml').read_text())
     interfaces = {entry['model']: entry['uifname']
                   for entry in catalogue['entries_can'] + catalogue['entries_port']}
     checked = 0
     for name, sensors in _shipped_sensors():
+        frames = [sensor['frame_id'] for sensor in sensors.values()]
+        assert len(set(frames)) == len(frames), (name, frames)
         for key, sensor in sensors.items():
             version = [int(part) for part in sensor['model'].rsplit('_v', 1)[1].split('_')]
             assert sensor['uifname'] == interfaces[sensor['model']], (name, key)

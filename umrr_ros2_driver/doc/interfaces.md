@@ -96,7 +96,9 @@ data topic can be overridden with the standard startup parameters
 
 Besides link type, model and publish type, the node refuses to start when an
 Ethernet sensor's `ip` or an adapter's `hw_ip_address` is not an IPv4 address,
-two sensors share an `id` or two adapters a `hw_dev_id`, a sensor's `link_type`
+two sensors share an `id`, a `frame_id` (two devices in one TF frame; since
+2026-10-09, and the shipped files now use `umrr_0`, `umrr_1`, ...) or two adapters a
+`hw_dev_id`, a sensor's `link_type`
 differs from its adapter's `hw_type`, or a `frame_id` starts with `/` (tf2
 rejects such frames). Each of these previously started a node that published
 nothing for that sensor.
@@ -105,8 +107,7 @@ nothing for that sensor.
 of the sensor's `model` (see `param/model_uif_catalogue.yaml`; the version is the
 model suffix, e.g. `umrr96_v1_2_2` → `umrr96_t153_automotive` 1.2.2). A different
 name or version is rejected with the parameter named; before 2026-10-09 the node
-started, but the SDK decoded the stream with another interface and the callbacks
-never fired. Leaving all four unset (empty name, zero versions) takes them from the
+started but delivered no data for that sensor. Leaving all four unset (empty name, zero versions) takes them from the
 model.
 
 ### Diagnostics

@@ -1413,6 +1413,14 @@ void SmartmicroRadarNode::update_config_files_from_params()
                   " (client ids route the SDK streams)");
         }
       }
+      // Two devices in one TF frame (REP 105): each sensor needs its own mounting pose.
+      for (size_t i = 0; i < index; ++i) {
+        if (m_sensors[i].frame_id == sensor.frame_id) {
+          throw std::invalid_argument(
+                  prefix_3 + ".frame_id '" + sensor.frame_id + "' duplicates sensors.sensor_" +
+                  std::to_string(i) + " (each sensor needs its own TF frame)");
+        }
+      }
       const auto adapter = std::find_if(
         m_adapters.begin(), m_adapters.begin() + m_number_of_adapters,
         [&sensor](const auto & candidate) {return candidate.hw_dev_id == sensor.dev_id;});
