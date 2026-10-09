@@ -95,6 +95,11 @@ private:
   QDoubleSpinBox * decay_{};
   bool decay_ready_{false};
   double staged_decay_{2.0};
+  // Full-precision staged and last reported view settings: the spin boxes round to
+  // their decimals, and only fields that differ from the view node are sent.
+  double staged_snr_{}, staged_speed_{};
+  QString actual_filter_mode_;
+  double actual_snr_{}, actual_speed_{}, actual_decay_{};
   QPushButton * filter_apply_{};
   QLabel * filter_actual_{};
   QLabel * filter_feedback_{};

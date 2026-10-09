@@ -55,7 +55,9 @@ Included in `ros2 launch umrr_ros2_driver umrr96_live.launch.py`, or add
   button stages restoration of the first advanced profile read for that sensor.
 - **Filtering and density history** selects Off, Quality only, Stable mapping, or Moving returns,
   with adjustable minimum SNR, radial speed, and density decay (0.1–30 s).
-  **Apply view settings** changes the host view parameters atomically. Filter
+  **Apply view settings** changes the host view parameters atomically and sends
+  only the fields that differ from the view node's current values, at full
+  precision (an unedited 0.125 m/s is not resent as a rounded value). Filter
   changes clear accumulated history; decay-only edits preserve existing hits
   and apply the new decay rate from that moment onward. It sends no sensor
   commands. Current mode and accepted/rejected counts are displayed separately
