@@ -392,9 +392,16 @@ def _startup_failure(parameters, directory):
 
 def _eth_sensor(**overrides):
     sensor = {'link_type': 'eth', 'pub_type': 'target', 'model': 'umrr96_v1_2_2',
-              'dev_id': 4, 'id': 200, 'ip': '127.0.0.1', 'port': 55555}
+              'dev_id': 4, 'id': 200, 'ip': '127.0.0.1', 'port': 55555,
+              'inst_type': 'port_based', 'data_type': 'port_based'}
     sensor.update(overrides)
     return sensor
+
+
+def _eth_adapter(**overrides):
+    adapter = {'hw_type': 'eth', 'hw_dev_id': 4, 'hw_iface_name': 'lo', 'port': unused_port()}
+    adapter.update(overrides)
+    return adapter
 
 
 @pytest.mark.parametrize('sensors, extra, message', [
@@ -414,26 +421,71 @@ def _eth_sensor(**overrides):
     ({'sensor_0': _eth_sensor(uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2,
                               uifpatchv=1)}, {},
      "sensor_0.uifpatchv 1 does not match model 'umrr96_v1_2_2' (expects 2)"),
+    # C71: each of these failed only with "Communication Service initialization failed".
+    ({'sensor_0': _eth_sensor(frame_id='umrr_0'),
+      'sensor_1': _eth_sensor(id=201, frame_id='umrr_1', port=55556)}, {},
+     'sensor_1.ip 127.0.0.1 duplicates sensors.sensor_0'),
+    ({'sensor_0': _eth_sensor(inst_type='')}, {},
+     "sensor_0.inst_type must be 'port_based' or 'can_based', got ''"),
+    ({'sensor_0': _eth_sensor(data_type='port')}, {},
+     "sensor_0.data_type must be 'port_based' or 'can_based', got 'port'"),
+    ({'sensor_0': _eth_sensor()}, {'master_data_serial_type': 'portbased'},
+     "master_data_serial_type must be 'port_based' or 'can_based' (or empty)"),
+    ({'sensor_0': _eth_sensor()},
+     {'adapters': {'adapter_0': _eth_adapter(), 'adapter_1': _eth_adapter(hw_dev_id=5)}},
+     "adapters.adapter_1.hw_type 'eth': the SDK accepts one Ethernet adapter per process"),
+    ({'sensor_0': _eth_sensor()},
+     {'adapters': {'adapter_0': _eth_adapter(), 'adapter_1': _eth_adapter(
+         hw_type='ethernet', hw_dev_id=5)}},
+     "adapters.adapter_1.hw_type must be 'eth' or 'can', got 'ethernet'"),
 ])
 def test_invalid_startup_configuration_is_rejected(sensors, extra, message):
     """Configurations that would silently deliver nothing fail at startup instead."""
     with tempfile.TemporaryDirectory(prefix='umrr-startup-test-') as directory:
-        output = _startup_failure(dict(
-            adapters={'adapter_0': {'hw_type': 'eth', 'hw_dev_id': 4, 'hw_iface_name': 'lo',
-                                    'port': unused_port()}},
-            sensors=sensors, **extra), directory)
+        parameters = {'adapters': {'adapter_0': _eth_adapter()}, 'sensors': sensors}
+        parameters.update(extra)
+        output = _startup_failure(parameters, directory)
         assert message in output, output
 
 
-def _shipped_sensors():
-    """Yield the file name and sensors of every shipped driver parameter file."""
+def _shipped_sections():
+    """Yield the file name and ros__parameters of every shipped driver parameter section."""
     for path in sorted((Path(__file__).resolve().parents[1] / 'param').rglob('*.yaml')):
         for section in yaml.safe_load(path.read_text()).values():
             if not isinstance(section, dict):
                 continue  # model_uif_catalogue.yaml
-            sensors = (section.get('ros__parameters') or {}).get('sensors')
-            if isinstance(sensors, dict):
-                yield path.name, sensors
+            yield path.name, section.get('ros__parameters') or {}
+
+
+def _shipped_sensors():
+    """Yield the file name and sensors of every shipped driver parameter file."""
+    for name, parameters in _shipped_sections():
+        sensors = parameters.get('sensors')
+        if isinstance(sensors, dict):
+            yield name, sensors
+
+
+def test_shipped_parameter_files_pass_the_sdk_checks():
+    """Shipped files satisfy the C71 startup checks (adapters and sensors may be split)."""
+    serialization = {'port_based', 'can_based'}
+    checked = 0
+    for name, parameters in _shipped_sections():
+        adapters = parameters.get('adapters')
+        if isinstance(adapters, dict):
+            types = [adapter['hw_type'] for adapter in adapters.values()]
+            assert set(types) <= {'eth', 'can'} and types.count('eth') <= 1, (name, types)
+            for key in ('master_data_serial_type', 'master_inst_serial_type'):
+                assert parameters.get(key, '') in serialization | {''}, (name, key)
+            checked += 1
+        sensors = parameters.get('sensors')
+        if isinstance(sensors, dict):
+            ips = [s['ip'] for s in sensors.values() if s['link_type'] == 'eth']
+            assert len(set(ips)) == len(ips), (name, ips)
+            for key, sensor in sensors.items():
+                assert {sensor.get('inst_type'), sensor.get('data_type')} <= serialization, (
+                    name, key)
+                checked += 1
+    assert checked >= 14, checked
 
 
 def test_shipped_parameter_files_match_the_model_catalogue():

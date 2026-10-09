@@ -150,6 +150,20 @@ differs from its adapter's `hw_type`, or a `frame_id` starts with `/` (tf2
 rejects such frames). Each of these previously started a node that published
 nothing for that sensor.
 
+It also names the parameter for configurations that the SDK refused only with
+"Communication Service initialization failed" (since 2026-10-09): two Ethernet
+sensors with the same `ip` (the SDK identifies Ethernet sensors by address, so a
+different `port` does not help), a sensor `inst_type` or `data_type` other than
+`port_based` or `can_based` (empty included; the shipped CAN example now sets
+`can_based`), a second `eth` adapter (SDK 3.13.0: "Only one ETH iface is
+allowed"; several Ethernet sensors share one adapter) and an adapter `hw_type`
+other than `eth` or `can`. `master_data_serial_type` and
+`master_inst_serial_type` may stay empty, which the SDK accepts with its own
+default (loopback reception was unaffected), but any other value than
+`port_based` or `can_based` is rejected as a typo. Use `port_based` for Ethernet
+sensors: on loopback an Ethernet sensor with `inst_type: can_based` started but
+never received data (not rejected; unverified on hardware).
+
 `uifname`, `uifmajorv`, `uifminorv` and `uifpatchv` must name the user interface
 of the sensor's `model` (see `param/model_uif_catalogue.yaml`; the version is the
 model suffix, e.g. `umrr96_v1_2_2` → `umrr96_t153_automotive` 1.2.2). A different

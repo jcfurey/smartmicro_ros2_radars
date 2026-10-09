@@ -39,6 +39,8 @@ inline constexpr std::string_view kEthLinkType = "eth";
 inline constexpr std::string_view kCanLinkType = "can";
 inline constexpr std::string_view kTargetPubType = "target";
 inline constexpr std::string_view kMsePubType = "mse";
+inline constexpr std::string_view kPortBasedSerialization = "port_based";
+inline constexpr std::string_view kCanBasedSerialization = "can_based";
 
 template<size_t N>
 constexpr bool contains(const std::array<std::string_view, N> & values, std::string_view value)
@@ -75,6 +77,24 @@ inline void validate_sensor_config(
             prefix + ".model '" + std::string(model) + "' " + (is_mse ? "must" : "must not") +
             " contain 'mse' when pub_type is '" + std::string(pub_type) + "'");
   }
+}
+
+// Smart Access serialization types. A sensor (routing table client) with an empty or
+// unknown inst_type or data_type fails SDK initialization with only "Communication
+// Service initialization failed". The master's own types (master_*_serial_type) do not:
+// the SDK falls back to a default, so empty stays accepted there (allow_empty) and only
+// an unknown value, i.e. a typo the SDK would silently replace, is rejected.
+inline void validate_serialization_type(
+  const std::string & name, std::string_view value, bool allow_empty = false)
+{
+  if (value == kPortBasedSerialization || value == kCanBasedSerialization ||
+    (allow_empty && value.empty()))
+  {
+    return;
+  }
+  throw std::invalid_argument(
+          name + " must be 'port_based' or 'can_based'" + (allow_empty ? " (or empty)" : "") +
+          ", got '" + std::string(value) + "'");
 }
 
 // The Smart Access user interface a model is compiled against: the name of its

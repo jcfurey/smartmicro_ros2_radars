@@ -14,6 +14,7 @@ using smartmicro::drivers::radar::parse_command_value;
 using smartmicro::drivers::radar::parse_mode_value;
 using smartmicro::drivers::radar::validate_sensor_ipv4;
 using smartmicro::drivers::radar::validate_sensor_config;
+using smartmicro::drivers::radar::validate_serialization_type;
 using smartmicro::drivers::radar::kCanModels;
 using smartmicro::drivers::radar::kEthernetModels;
 using smartmicro::drivers::radar::model_user_interface;
@@ -97,6 +98,21 @@ TEST(SensorConfig, RejectsUnknownOrInconsistentConfiguration)
   EXPECT_THROW(validate_sensor_config("s", "eth", "umrra4_mse_v3_0_0", "target"),
     std::invalid_argument);
   EXPECT_THROW(validate_sensor_config("s", "eth", "umrr96_v1_2_2", "mse"), std::invalid_argument);
+}
+
+TEST(SensorConfig, SerializationTypesAreKnown)
+{
+  // C71: a sensor with an empty or unknown type fails SDK initialization unnamed.
+  EXPECT_NO_THROW(validate_serialization_type("s.inst_type", "port_based"));
+  EXPECT_NO_THROW(validate_serialization_type("s.data_type", "can_based"));
+  EXPECT_EQ(rejection([] {validate_serialization_type("s.inst_type", "");}),
+    "s.inst_type must be 'port_based' or 'can_based', got ''");
+  EXPECT_EQ(rejection([] {validate_serialization_type("s.data_type", "port-based");}),
+    "s.data_type must be 'port_based' or 'can_based', got 'port-based'");
+  // The master's own types fall back to an SDK default when empty; typos are rejected.
+  EXPECT_NO_THROW(validate_serialization_type("master_data_serial_type", "", true));
+  EXPECT_EQ(rejection([] {validate_serialization_type("master_inst_serial_type", "can", true);}),
+    "master_inst_serial_type must be 'port_based' or 'can_based' (or empty), got 'can'");
 }
 
 TEST(SensorConfig, UserInterfaceOfEveryModelMatchesCatalogueAndSdk)

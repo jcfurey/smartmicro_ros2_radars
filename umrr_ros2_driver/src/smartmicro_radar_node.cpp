@@ -83,6 +83,7 @@ using smartmicro::drivers::radar::kMsePubType;
 using smartmicro::drivers::radar::kTargetPubType;
 using smartmicro::drivers::radar::resolve_user_interface;
 using smartmicro::drivers::radar::validate_sensor_config;
+using smartmicro::drivers::radar::validate_serialization_type;
 
 constexpr auto kDefaultClientId = 0;
 constexpr auto kDefaultPort = 55555;
@@ -1355,6 +1356,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
 
   const auto master_inst_serial_type = startup_parameter(*this, kInstSerialTypeTag, std::string{});
   const auto master_data_serial_type = startup_parameter(*this, kDataSerialTypeTag, std::string{});
+  validate_serialization_type(kInstSerialTypeTag, master_inst_serial_type, true);
+  validate_serialization_type(kDataSerialTypeTag, master_data_serial_type, true);
 
   auto read_adapter_params_if_possible = [&](const std::uint32_t index) {
       auto & current_adapter = m_adapters[index];
@@ -1374,6 +1377,13 @@ void SmartmicroRadarNode::update_config_files_from_params()
       current_adapter.baudrate = startup_parameter(*this, prefix_2 + ".baudrate", 500000);
       current_adapter.port = startup_parameter(*this, prefix_2 + ".port", kDefaultPort, 0, 65535);
 
+      // Sensors use only Ethernet and CAN adapters; the SDK fails initialization on an
+      // unknown type ("Obtained Undefined type hwItem") without naming the adapter.
+      if (current_adapter.hw_type != kEthLinkType && current_adapter.hw_type != kCanLinkType) {
+        throw std::invalid_argument(
+                prefix_2 + ".hw_type must be 'eth' or 'can', got '" + current_adapter.hw_type +
+                "'");
+      }
       if (current_adapter.port > 65535 ||
         (current_adapter.hw_type == "eth" && current_adapter.port == 0))
       {
@@ -1388,6 +1398,12 @@ void SmartmicroRadarNode::update_config_files_from_params()
         if (m_adapters[i].hw_dev_id == current_adapter.hw_dev_id) {
           throw std::invalid_argument(
                   prefix_2 + ".hw_dev_id duplicates adapters.adapter_" + std::to_string(i));
+        }
+        // SDK 3.13.0: "Only one ETH iface is allowed"; several sensors share one adapter.
+        if (current_adapter.hw_type == kEthLinkType && m_adapters[i].hw_type == kEthLinkType) {
+          throw std::invalid_argument(
+                  prefix_2 + ".hw_type 'eth': the SDK accepts one Ethernet adapter per process, "
+                  "and adapters.adapter_" + std::to_string(i) + " is one");
         }
       }
       return true;
@@ -1418,6 +1434,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
       sensor.link_type = startup_parameter(*this, prefix_3 + ".link_type", kDefaultHwLinkType);
       sensor.pub_type = startup_parameter(*this, prefix_3 + ".pub_type", "");
       validate_sensor_config(prefix_3, sensor.link_type, sensor.model, sensor.pub_type);
+      validate_serialization_type(prefix_3 + ".inst_type", sensor.inst_type);
+      validate_serialization_type(prefix_3 + ".data_type", sensor.data_type);
       const auto interface = resolve_user_interface(
         prefix_3, sensor.model, sensor.uifname, sensor.uifmajorv, sensor.uifminorv,
         sensor.uifpatchv);
@@ -1452,6 +1470,16 @@ void SmartmicroRadarNode::update_config_files_from_params()
           throw std::invalid_argument(
                   prefix_3 + ".frame_id '" + sensor.frame_id + "' duplicates sensors.sensor_" +
                   std::to_string(i) + " (each sensor needs its own TF frame)");
+        }
+      }
+      // The SDK keys Ethernet clients by address: a second sensor on one address fails
+      // its initialization whatever the port. (inet_pton accepted only canonical
+      // dotted-decimal text, so equal addresses are equal strings.)
+      for (size_t i = 0; i < index && sensor.link_type == kEthLinkType; ++i) {
+        if (m_sensors[i].link_type == kEthLinkType && m_sensors[i].ip == sensor.ip) {
+          throw std::invalid_argument(
+                  prefix_3 + ".ip " + sensor.ip + " duplicates sensors.sensor_" +
+                  std::to_string(i) + " (one Ethernet sensor per address, whatever the port)");
         }
       }
       const auto adapter = std::find_if(
