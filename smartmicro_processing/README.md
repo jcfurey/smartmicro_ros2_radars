@@ -125,7 +125,7 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
 | `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id, age (sensor frame). vx, vy and speed are velocity **relative to the radar** in sensor axes; they equal ground velocity only while the radar is stationary |
 | `track_markers` | RViz markers for the tracks (built only with subscribers); labels and arrows show the same radar-relative velocity |
-| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height`. Novel static returns beyond a track (`shadow_gap`) are dropped only once the background is learned (`background_warmup`) and never while the sensor moves |
+| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height`. Novel static returns more than `shadow_gap` beyond a confirmed track and within `shadow_half_angle_deg` (15°) of its bearing are dropped as its multipath, only once the background is learned (`background_warmup`) and never while the sensor moves (see [track shadow](#track-shadow-rule)) |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 
@@ -134,6 +134,19 @@ condition, residual RMSE, computation time, last velocity age and
 `calibrated=False`, `sensor_moving`, `background_ready` and `background_gap_resets`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
+
+### Track shadow rule
+
+A novel static return is dropped from `obstacles` as a confirmed track's
+multipath only when it lies within `shadow_half_angle_deg` of that track's
+bearing and more than `shadow_gap` beyond that track's range. The earlier rule
+dropped every novel static return beyond the nearest track at any bearing, so
+a second, standing person elsewhere in the field of view vanished while
+someone else was tracked. `shadow_half_angle_deg: 180` restores that rule. Its
+ghost suppression was measured on the `walk` capture (far ghost points
+1.97 → 0.14 per scan, [filtering](../docs/umrr96-filtering-20260924.md)); the
+effect of the 15° default on ghosts is unmeasured because that recording is no
+longer available. Synthetic checks cover the geometry only.
 
 ### Tracking on a moving radar
 

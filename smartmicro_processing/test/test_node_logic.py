@@ -103,6 +103,28 @@ def test_tracker_options_use_only_current_scan_positions(ros, evidence, standing
         node.destroy_node()
 
 
+def test_shadow_half_angle_parameter_reaches_the_obstacle_filter(ros):
+    ros()
+    node = RadarProcessing()
+    try:
+        assert node.obstacle_config.shadow_half_angle_deg == 15.0
+        descriptor = node.describe_parameter('shadow_half_angle_deg')
+        assert descriptor.read_only and descriptor.floating_point_range[0].to_value == 180
+    finally:
+        node.destroy_node()
+    rclpy.try_shutdown()
+    ros('shadow_half_angle_deg:=180')
+    node = RadarProcessing()
+    try:
+        assert node.obstacle_config.shadow_half_angle_deg == 180.0
+    finally:
+        node.destroy_node()
+    rclpy.try_shutdown()
+    ros('shadow_half_angle_deg:=0')
+    with pytest.raises(ValueError):
+        RadarProcessing()
+
+
 def test_standing_support_parameters_reach_the_tracker(ros):
     ros('standing_support:=true', 'standing_hold:=30')
     node = RadarProcessing()

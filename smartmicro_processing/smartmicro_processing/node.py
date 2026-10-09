@@ -89,8 +89,13 @@ OBSTACLE_PARAMETERS = {
     'track_radius': ('Moving returns this close to a confirmed track pass (m).', .05, 10),
     'obstacle_height': ('Output z in the sensor frame (m); negative keeps the measured z, '
                         'which is unreliable on this sensor.', -1, 10),
-    'shadow_gap': ('Novel static returns this far beyond the nearest confirmed track are '
-                   'treated as its multipath (m); <= 0 disables.', -1, 50),
+    'shadow_gap': ('Novel static returns this far beyond a confirmed track, near its '
+                   'bearing (shadow_half_angle_deg), are treated as its multipath (m); '
+                   '<= 0 disables.', -1, 50),
+    'shadow_half_angle_deg': ('Bearing half-width of the multipath shadow behind a track, '
+                              '(0, 180] (deg). 180 restores the original any-bearing rule, '
+                              'whose ghost suppression was measured; this default is not.',
+                              0, 180),
 }
 OBSTACLE_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
                    for i, n in enumerate('xyz')]
