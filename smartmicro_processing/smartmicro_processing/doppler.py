@@ -13,14 +13,17 @@ import numpy as np
 
 @dataclass(frozen=True)
 class FitConfig:
+    # Defaults equal config/umrr96_processing.yaml (tuned 2026-09-24; a test keeps them
+    # equal), so offline audits replay the deployed fit. Before 2026-10-09 they were
+    # 0.20 / 0.05 / 0.10 m/s (residual_threshold / noise_floor / velocity_std_floor).
     doppler_sign: int = 1  # +1: input positive receding; -1: positive approaching.
-    residual_threshold: float = 0.20
+    residual_threshold: float = 0.05
     min_inliers: int = 8
     min_inlier_fraction: float = 0.60
     max_condition: float = 30.0
     ransac_trials: int = 128
-    noise_floor: float = 0.05  # radial m/s, independently of near-zero fit residuals
-    velocity_std_floor: float = 0.10  # m/s, added to every estimated axis
+    noise_floor: float = 0.02  # radial m/s, independently of near-zero fit residuals
+    velocity_std_floor: float = 0.05  # m/s, added to every estimated axis
     max_velocity_std: float = 1.0
     max_speed: float = 15.0
 

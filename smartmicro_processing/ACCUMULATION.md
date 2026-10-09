@@ -205,8 +205,10 @@ ros2 run smartmicro_processing umrr96_accumulation_audit \
   --windows 0.3 0.5 1.0 --output /tmp/umrr96-accumulation-replay.json
 ```
 
-The audit calls the same quality adapter, Doppler fitter and accumulation core,
-records its parameters and source hashes, and refuses an existing output file.
+The audit calls the same quality adapter, Doppler fitter and accumulation core
+with the Python defaults (equal to the shipped YAMLs since 2026-10-09; the
+replay below predates that and used a 0.20 m/s residual threshold), records its
+parameters and source hashes, and refuses an existing output file.
 It never fabricates a trajectory. Cell-count gains include noise-driven boundary
 crossings and repeated observations; they are not an independent measurement of
 new surface coverage or accuracy. Compare windows at matched false-obstacle rates

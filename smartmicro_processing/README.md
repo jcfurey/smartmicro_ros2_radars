@@ -294,8 +294,10 @@ at most 30. Scans with inadequate 3D bearing diversity, excessive fitted speed
 or model uncertainty are rejected. There is no assumption of zero vertical
 velocity, and no integration to a position or orientation estimate.
 
-The 0.20 m/s residual threshold, 0.05 m/s Doppler noise floor and 0.10 m/s
-velocity floor are experimental settings, not manufacturer accuracy claims.
+The 0.05 m/s residual threshold, 0.02 m/s Doppler noise floor and 0.05 m/s
+velocity floor (shipped YAML and Python defaults alike; a test keeps every
+default equal to the shipped YAML) are experimental settings tuned on the
+2026-09-24 stationary captures, not manufacturer accuracy claims.
 Linear covariance uses the weighted bearing geometry and the larger of the
 weighted residual variance, `Σ wᵢrᵢ² / (n − 3)` with the Huber weights evaluated
 at the returned velocity, and the noise floor, plus the velocity-floor variance
@@ -349,8 +351,12 @@ ros2 run smartmicro_processing umrr96_processing_audit \
   --output /tmp/umrr96-processing-replay.json
 ```
 
-The audit uses the documented default gates/fit (or `--doppler-sign -1`), records
-configuration and input hashes, and refuses to overwrite an existing report.
+The audit uses the Python default gates/fit, which equal the shipped YAML (or
+`--doppler-sign -1`), records configuration and input hashes, and refuses to
+overwrite an existing report. Until 2026-10-09 the Python fit defaults were
+0.20 / 0.05 / 0.10 m/s (residual threshold / noise floor / velocity floor), so
+offline replays used a looser fit than the live node; the September replay
+reports below (and the accumulation replay) record those older values.
 Historical bags bypass the live freshness checks. Fit residuals are reported
 separately from accuracy; the current bag has no reference trajectory.
 

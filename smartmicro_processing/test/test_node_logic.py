@@ -2,6 +2,7 @@
 """In-process node checks: parameters, empty clouds, pose steps, stamps and diagnostics."""
 from itertools import product
 import math
+from pathlib import Path
 import time
 
 from diagnostic_msgs.msg import DiagnosticStatus
@@ -19,6 +20,7 @@ from smartmicro_processing.node import RadarProcessing, TRACK_FIELDS
 from smartmicro_processing.ros_support import as_float, DiagnosticsRateLimiter
 from std_msgs.msg import Header
 from umrr_ros2_msgs.msg import DetectionAudit
+import yaml
 
 FIELDS = [PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32, count=1)
           for i, name in enumerate(('x', 'y', 'z', 'radial_speed', 'snr'))]
@@ -55,6 +57,23 @@ class Recorder:
 
     def get_subscription_count(self):
         return 1
+
+
+@pytest.mark.parametrize('node_type,name', [(RadarProcessing, 'umrr96_processing.yaml'),
+                                            (RadarAccumulation, 'umrr96_accumulation.yaml')])
+def test_python_defaults_equal_the_shipped_yaml(ros, node_type, name):
+    # The audit CLIs use the Python defaults: they must replay the deployed settings.
+    with open(Path(__file__).parents[1] / 'config' / name) as stream:
+        (section,) = yaml.safe_load(stream).values()
+    ros()
+    node = node_type()
+    try:
+        for key, value in section['ros__parameters'].items():
+            assert node.has_parameter(key), key
+            default = node.get_parameter(key).value
+            assert type(default) is type(value) and default == value, (key, default, value)
+    finally:
+        node.destroy_node()
 
 
 def test_integer_overrides_are_accepted_for_float_parameters(ros):
