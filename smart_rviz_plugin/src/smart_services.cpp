@@ -86,12 +86,12 @@ void SmartRadarService::initialize()
 
 void SmartRadarService::setup_ros_clients()
 {
-  client_node = std::make_shared<rclcpp::Node>(
-    panel_util::unique_node_name("smart_service_gui"),
-    rclcpp::NodeOptions().use_global_arguments(false));
+  // Relative names resolve in RViz's namespace (C39).
+  const auto node_name = panel_util::unique_node_name("smart_service_gui");
+  client_node = std::make_shared<rclcpp::Node>(node_name, panel_util::node_options(node_name));
   mode_client = client_node->create_client<umrr_ros2_msgs::srv::SetMode>("smart_radar/set_radar_mode");
   command_client = client_node->create_client<umrr_ros2_msgs::srv::SendCommand>("smart_radar/send_command");
-  status_client = client_node->create_client<umrr_ros2_msgs::srv::GetStatus>("/smart_radar/get_radar_status");
+  status_client = client_node->create_client<umrr_ros2_msgs::srv::GetStatus>("smart_radar/get_radar_status");
   get_param_client = client_node->create_client<umrr_ros2_msgs::srv::GetMode>("smart_radar/get_radar_mode");
   executor_.add_node(client_node);
 }

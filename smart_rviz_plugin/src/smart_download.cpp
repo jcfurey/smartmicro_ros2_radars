@@ -33,9 +33,9 @@ void SmartDownloadService::initialize_ros()
     rclcpp::init(0, nullptr);
   }
 
-  download_node_ = std::make_shared<rclcpp::Node>(
-    panel_util::unique_node_name("smart_download_gui"),
-    rclcpp::NodeOptions().use_global_arguments(false));
+  // Relative names resolve in RViz's namespace (C39).
+  const auto node_name = panel_util::unique_node_name("smart_download_gui");
+  download_node_ = std::make_shared<rclcpp::Node>(node_name, panel_util::node_options(node_name));
   download_client_ = download_node_->create_client<FirmwareDownload>(
     "smart_radar/firmware_download");
   executor_.add_node(download_node_);

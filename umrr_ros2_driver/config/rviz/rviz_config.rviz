@@ -83,7 +83,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /smart_radar/port_targets_0
+        Value: smart_radar/port_targets_0
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
@@ -123,7 +123,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /smart_radar/can_targets_1
+        Value: smart_radar/can_targets_1
       Use Fixed Frame: true
       Use rainbow: true
       Value: true

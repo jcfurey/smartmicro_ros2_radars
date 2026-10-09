@@ -47,11 +47,13 @@ def generate_launch_description():
              ])),
              arguments=['-d', PathJoinSubstitution([share, 'rviz', 'umrr96_accumulation.rviz']),
                         '-f', LaunchConfiguration('expected_frame_id')],
+             # The configuration's names are relative (C39): RViz resolves them in this
+             # namespace, so only a different node name or input needs a remapping.
              remappings=[
-                 ('/umrr96_accumulation/stationary_preview/accumulated_targets',
+                 ('umrr96_accumulation/stationary_preview/accumulated_targets',
                   [LaunchConfiguration('node_name'), '/stationary_preview/accumulated_targets']),
-                 ('/umrr96_accumulation/stationary_preview/confirmed_targets',
+                 ('umrr96_accumulation/stationary_preview/confirmed_targets',
                   [LaunchConfiguration('node_name'), '/stationary_preview/confirmed_targets']),
-                 ('/umrr96_processing/doppler_inliers', LaunchConfiguration('input_topic'))],
+                 ('umrr96_processing/doppler_inliers', LaunchConfiguration('input_topic'))],
              parameters=[{'use_sim_time': use_sim_time}]),
     ])

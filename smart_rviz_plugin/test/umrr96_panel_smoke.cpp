@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <QApplication>
+#include <algorithm>
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QPixmap>
 #include <QTimer>
@@ -21,6 +23,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rcl_interfaces/srv/set_parameters_atomically.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <rviz_common/config.hpp>
 #include <rviz_common/panel.hpp>
 #include <umrr_ros2_msgs/srv/get_mode.hpp>
 #include <umrr_ros2_msgs/srv/get_status.hpp>
@@ -64,7 +67,7 @@ int main(int argc, char ** argv)
         return QJsonDocument(QJsonObject{{"success", true}, {"sensor_id", 230739},
           {"values", values}}).toJson(QJsonDocument::Compact).toStdString();
       };
-    auto getter = node->create_service<GetMode>("/smart_radar/get_radar_mode",
+    auto getter = node->create_service<GetMode>("smart_radar/get_radar_mode",
       [&](GetMode::Request::SharedPtr request, GetMode::Response::SharedPtr response) {
         check(request->params.size() <= 10, "Read exceeds SDK batch limit");
         QJsonObject values;
@@ -77,7 +80,7 @@ int main(int argc, char ** argv)
         }
         response->res = malformed_read ? "Request queued" : encode(values);
       });
-    auto setter = node->create_service<SetMode>("/smart_radar/set_radar_mode",
+    auto setter = node->create_service<SetMode>("smart_radar/set_radar_mode",
       [&](SetMode::Request::SharedPtr request, SetMode::Response::SharedPtr response) {
         check(request->sensor_id == 230739, "Wrong sensor ID");
         check(request->section_name == "auto_interface_0dim", "Wrong section");
@@ -115,7 +118,7 @@ int main(int argc, char ** argv)
         }
         response->res = encode(values);
       });
-    auto status = node->create_service<GetStatus>("/smart_radar/get_radar_status",
+    auto status = node->create_service<GetStatus>("smart_radar/get_radar_status",
       [&](GetStatus::Request::SharedPtr, GetStatus::Response::SharedPtr response) {
         response->res = encode({
           {"sw_version_major", QJsonObject{{"response_type", 1}, {"value", 5}}},
@@ -131,7 +134,7 @@ int main(int argc, char ** argv)
     double actual_snr = 6.0, actual_speed = .25;
     std::vector<std::string> filter_names;  // Parameter names of the last request.
     auto filter_publisher = node->create_publisher<std_msgs::msg::String>(
-      "/smart_radar/filter_status", rclcpp::QoS(1).transient_local());
+      "smart_radar/filter_status", rclcpp::QoS(1).transient_local());
     auto publish_filter = [&](const std::string & mode, double snr, double speed) {
         actual_mode = mode;
         actual_snr = snr;
@@ -144,7 +147,7 @@ int main(int argc, char ** argv)
         message.data = QJsonDocument(values).toJson(QJsonDocument::Compact).toStdString();
         filter_publisher->publish(message);
       };
-    auto filter_service = node->create_service<FilterService>("/umrr96_views/set_parameters_atomically",
+    auto filter_service = node->create_service<FilterService>("umrr96_views/set_parameters_atomically",
       [&](FilterService::Request::SharedPtr request, FilterService::Response::SharedPtr response) {
         // C68: only the changed fields, in one atomic request, all at full precision.
         check(!request->parameters.empty(), "Empty view settings request");
@@ -178,7 +181,7 @@ int main(int argc, char ** argv)
     publish_filter("off", 6.125, .1234);
     bool spin_server = true;
     auto publisher = node->create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
-      "/smart_radar/port_targetheader_0", rclcpp::SensorDataQoS());
+      "smart_radar/port_targetheader_0", rclcpp::SensorDataQoS());
     QTimer measurements;
     QObject::connect(&measurements, &QTimer::timeout, [&] {
         umrr_ros2_msgs::msg::PortTargetHeader message;
@@ -212,6 +215,53 @@ int main(int argc, char ** argv)
     wait([&] {return button("preset")->isEnabled() && identity->text().contains("5.2.2");});
     wait([&] {return panel->findChild<QLabel *>("metrics")->text().contains("31 targets");});
     check(writes == 0 && can->currentData().toInt() == 1, "Opening panel modified sensor");
+    // C39: the fixture's relative endpoints are in the process namespace, which the
+    // namespaced run sets like a launch file (-r __ns:=... -r __node:=umrr96_rviz). The
+    // panel node joins that namespace under its own name instead of the RViz node's.
+    const std::string ns = node->get_namespace();
+    const auto panel_prefix = (ns == "/" ? ns : ns + "/") + "umrr96_config_";
+    wait([&] {
+        const auto names = node->get_node_names();
+        return std::count(names.begin(), names.end(), node->get_fully_qualified_name()) == 1 &&
+          std::any_of(names.begin(), names.end(), [&](const std::string & name) {
+            return name.rfind(panel_prefix, 0) == 0;});
+      });
+    // The Namespace property replaces RViz's namespace for every endpoint, is saved
+    // with the configuration, and an empty value returns to RViz's namespace.
+    auto other = node->create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
+      "/umrr96_panel_other/smart_radar/port_targetheader_0", rclcpp::SensorDataQoS());
+    QTimer other_measurements;
+    QObject::connect(&other_measurements, &QTimer::timeout, [&] {
+        umrr_ros2_msgs::msg::PortTargetHeader message;
+        message.number_of_targets = 7;
+        message.cycle_time = .055;
+        other->publish(message);
+      });
+    other_measurements.start(50);
+    auto namespace_edit = panel->findChild<QLineEdit *>("namespace");
+    check(namespace_edit && namespace_edit->text().isEmpty() &&
+      namespace_edit->placeholderText().endsWith(QString::fromStdString(ns)),
+      "Namespace field does not show RViz's namespace");
+    rviz_common::Config config;
+    config.mapSetValue("Sensor ID", "230739");
+    config.mapSetValue("Namespace", "umrr96_panel_other");
+    panel->load(config);
+    wait([&] {return panel->findChild<QLabel *>("metrics")->text().contains("7 targets") &&
+        panel->findChild<QLabel *>("filter_actual")->text().contains("Waiting for view node");});
+    check(!button("preset")->isEnabled() && identity->text().contains("waiting"),
+      "Panel kept state from the previous namespace");
+    rviz_common::Config saved;
+    panel->save(saved);
+    QString saved_namespace;
+    check(saved.mapGetString("Namespace", &saved_namespace) &&
+      saved_namespace == "umrr96_panel_other", "Namespace not saved");
+    config.mapSetValue("Namespace", "");
+    panel->load(config);
+    other_measurements.stop();
+    wait([&] {return panel->findChild<QLabel *>("metrics")->text().contains("31 targets") &&
+        button("preset")->isEnabled() && button("filter_apply")->isEnabled() &&
+        identity->text().contains("5.2.2");});
+
     auto filter_mode = panel->findChild<QComboBox *>("filter_mode");
     auto filter_feedback = panel->findChild<QLabel *>("filter_feedback");
     auto filter_actual = panel->findChild<QLabel *>("filter_actual");
@@ -290,6 +340,14 @@ int main(int argc, char ** argv)
     button("apply")->click();
     wait([&] {return writes == 2 && feedback->text() == "Changes applied and verified.";});
     check(settings.at("output_control_target_list_can") == 1, "Starting values not restored");
+    if (std::getenv("UMRR96_PANEL_NAMESPACE_ONLY")) {
+      // The namespaced run has now used every endpoint; the advanced and timeout checks
+      // below do not depend on the namespace (and carry C42's load sensitivity).
+      panel.reset();
+      rclcpp::shutdown();
+      std::cout << "PASS: every endpoint in namespace " << ns << ", namespace property" << std::endl;
+      return 0;
+    }
 
     ignore_writes = true;
     button("preset")->click();
@@ -442,7 +500,8 @@ int main(int argc, char ** argv)
     rclcpp::shutdown();
     std::cout << "PASS: stage/apply/restore, readback mismatch, malformed response, "
       "advanced PRF/float controls, partial failure, conflict detection, precision-preserving restoration, "
-      "filter selection/rejection, responsive timeouts, recovery and pending-request shutdown" << std::endl;
+      "filter selection/rejection, namespace resolution and property, responsive timeouts, "
+      "recovery and pending-request shutdown" << std::endl;
     return 0;
   } catch (const std::exception & error) {
     std::cerr << error.what() << std::endl;

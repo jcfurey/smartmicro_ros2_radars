@@ -25,6 +25,7 @@ Panels:
   Name: Smart Status
 - Class: smart_rviz_plugin/UMRR-96 Configuration
   Name: UMRR-96 Configuration
+  Namespace: ''
   Sensor ID: 230739
 Visualization Manager:
   Class: ''
@@ -57,7 +58,7 @@ Visualization Manager:
       Durability Policy: Transient Local
       History Policy: Keep Last
       Reliability Policy: Reliable
-      Value: /umrr96/robot_description
+      Value: umrr96/robot_description
     Enabled: true
     Links:
       All Links Enabled: true
@@ -119,7 +120,7 @@ Visualization Manager:
       Filter size: 10
       History Policy: Keep Last
       Reliability Policy: Best Effort
-      Value: /umrr96_processing/classified_targets
+      Value: umrr96_processing/classified_targets
     Use Fixed Frame: true
     Use rainbow: true
     Value: true
@@ -153,7 +154,7 @@ Visualization Manager:
       Filter size: 10
       History Policy: Keep Last
       Reliability Policy: Best Effort
-      Value: /umrr96_processing/doppler_inliers
+      Value: umrr96_processing/doppler_inliers
     Use Fixed Frame: true
     Use rainbow: true
     Value: false
@@ -187,7 +188,7 @@ Visualization Manager:
       Filter size: 10
       History Policy: Keep Last
       Reliability Policy: Best Effort
-      Value: /umrr96_processing/moving_ghosts
+      Value: umrr96_processing/moving_ghosts
     Use Fixed Frame: true
     Use rainbow: true
     Value: false
@@ -221,7 +222,7 @@ Visualization Manager:
       Filter size: 10
       History Policy: Keep Last
       Reliability Policy: Best Effort
-      Value: /umrr96_processing/moving_targets
+      Value: umrr96_processing/moving_targets
     Use Fixed Frame: true
     Use rainbow: true
     Value: false
@@ -255,7 +256,7 @@ Visualization Manager:
       Filter size: 10
       History Policy: Keep Last
       Reliability Policy: Best Effort
-      Value: /umrr96_processing/tracked_targets
+      Value: umrr96_processing/tracked_targets
     Use Fixed Frame: true
     Use rainbow: true
     Value: false
@@ -289,7 +290,7 @@ Visualization Manager:
       Filter size: 10
       History Policy: Keep Last
       Reliability Policy: Best Effort
-      Value: /umrr96_processing/obstacles
+      Value: umrr96_processing/obstacles
     Use Fixed Frame: true
     Use rainbow: true
     Value: false
@@ -306,7 +307,7 @@ Visualization Manager:
       Durability Policy: Volatile
       History Policy: Keep Last
       Reliability Policy: Reliable
-      Value: /umrr96_processing/track_markers
+      Value: umrr96_processing/track_markers
     Value: false
   - Class: rviz_default_plugins/Image
     Enabled: false
@@ -321,7 +322,7 @@ Visualization Manager:
       History Policy: Keep Last
       Reliability Policy: Reliable
       Transport Override: ''
-      Value: /smart_radar/fan_image
+      Value: smart_radar/fan_image
     Value: false
   - Class: rviz_default_plugins/Marker
     Enabled: false
@@ -333,7 +334,7 @@ Visualization Manager:
       Filter size: 10
       History Policy: Keep Last
       Reliability Policy: Reliable
-      Value: /smart_radar/density_grid
+      Value: smart_radar/density_grid
     Value: false
   Enabled: true
   Global Options:

@@ -8,6 +8,42 @@ user-interface (UIF) serialization files under
 `smartmicro/user_interfaces/*/serialization`; where the vendor does not declare
 a unit, this page says so rather than guessing.
 
+## Robot integration
+
+A robot should consume only these topics (names relative to the radar's
+namespace; `N` is the sensor index). Start them with `smartmicro_processing`'s
+`umrr96_robot.launch.py` (see [launch files](#launch-files)).
+
+| Topic | Producer, type | Frame | Stamp | QoS | Rate | Intended consumer |
+|-------|----------------|-------|-------|-----|------|-------------------|
+| `smart_radar/port_targets_N` | driver, `PointCloud2` ([fields](#targets-smart_radarport_targets_n-smart_radarcan_targets_n-72-byte-stride)) | `sensors.sensor_N.frame_id` | ROS receive time in the SDK callback, minus `stamp_offset_s` when configured; device time in `timing_N` | reliable, `KEEP_LAST` `history_size`, [overridable](#qos) | every scan: 18.18 Hz with the sensor's CAN target output off, 8.33 Hz with it on | Own processing, radar-inertial estimation (per-point Doppler; sign unverified, O14), mapping |
+| `smart_radar/radar_scan_N` (optional) | driver, `radar_msgs/RadarScan` | as the cloud | as the cloud | as the cloud | as the cloud, only with subscribers | `radar_msgs` consumers; needs a radar_msgs build and `publish_radar_scan: true` ([details](#optional-radar_msgsradarscan)) |
+| `umrr96_processing/obstacles` | processing, `PointCloud2` x, y, z | `obstacle_frame` (a frame rigid to the radar, e.g. `base_link`; default the sensor frame) | input cloud's stamp | reliable, `KEEP_LAST` 5, `qos_overrides` | every accepted scan | Nav2 obstacle/STVL layer marking, collision monitor |
+| `umrr96_processing/tracks` | processing, `radar_msgs/RadarTracks` | sensor frame, or `tracking_frame` (velocities then over ground) | input cloud's stamp | as `obstacles` | every accepted scan | Track consumers (people, vehicles) |
+| `umrr96_processing/tracked_objects` | processing, `PointCloud2` x, y, z, vx, vy, speed, track_id, age | as `tracks` | as `tracks` | as `obstacles` | as `tracks` | The same tracks without radar_msgs |
+| `umrr96_processing/experimental_velocity` | processing, `TwistWithCovarianceStamped` | sensor frame, at the radar origin | input cloud's stamp | as `obstacles` | accepted Doppler fits only | Experimental ego velocity, e.g. `robot_localization` ([processing README](../../smartmicro_processing/README.md)) |
+
+All of them are in sensor or robot frames at receive time, so consumers look up
+TF at the stamp; the sensor's internal latency is not measured yet. Health is on
+`/diagnostics` under hardware ID `<model>@<ip>` (driver and readback; processing
+with its `hardware_id` parameter set).
+Processing outputs were best effort before 2026-10-09.
+
+**Visualization and debugging only.** Robots should not depend on these; their
+names, content and presence may change, and some exist only while another
+process (views, RViz) runs:
+
+- views node (`umrr96_live.launch.py`, `umrr96_viz.launch.py`):
+  `smart_radar/filtered_targets_0`, `filter_status`, `fan_image`,
+  `fan_image/compressed`, `fan_targets`, `fan_guides`, `density_grid`,
+  `density_cells`;
+- processing subsets and audit: `umrr96_processing/{quality_targets,
+  doppler_inliers, doppler_outliers, unclassified_targets, moving_targets,
+  moving_ghosts, tracked_targets, classified_targets, detection_audit,
+  track_markers}`;
+- accumulation evidence clouds (`umrr96_accumulation/...`) and the driver's
+  header, raw-quality and fault-report topics (sensor bring-up and support).
+
 ## Topics, services and namespaces
 
 Topic and service names are relative and keep their historical form, with a
@@ -22,7 +58,7 @@ Topic and service names are relative and keep their historical form, with a
 | `smart_radar/port_faultreport_N` | `PortFaultReportsMsg` (models with fault reports) |
 | `smart_radar/timing_N` | `RadarTiming` |
 | `smart_radar/umrr96_raw_quality_N` | `Umrr96RawQuality` (UMRR-96 Ethernet) |
-| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command`, `set_ip_address`, `firmware_download` | data node services; `umrr96_live.launch.py` moves the first three (see [service routing](#service-routing)) |
+| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command`, `set_ip_address`, `firmware_download` | data node services; `umrr96_live.launch.py` and the launches including it move the first three (see [service routing](#service-routing)) |
 
 ### Optional `radar_msgs/RadarScan`
 
@@ -228,16 +264,62 @@ initialization ("Only one ETH iface is allowed").
 `params_file` (default: the cam-ripper bench file, which hard-codes a host
 interface and addresses; supply your own elsewhere), `namespace` (default
 empty), `use_sim_time` (`false`), `rviz` (`true`; closing RViz ends the launch,
-use `false` headless), `targets_topic` (views input, default
+use `false` headless), `views` (`true`; `false` leaves the views node to
+`umrr96_viz.launch.py`), `targets_topic` (views input, default
 `smart_radar/port_targets_0`), `view`, `rviz_config`, `publish_description`
 (`false`; includes `smartmicro_description` in its own launch scope, without its
 viewer), `description_frame_id`, `description_sensor_name`. The readback node
 takes over the root mode/status service names; see
 [service routing](#service-routing).
 
+For a robot the same nodes are split into two launches (2026-10-09), each
+including its parts in their own launch scope (C52). Start both with the same
+`namespace`:
+
+- `smartmicro_processing`'s `umrr96_robot.launch.py` (headless: driver and
+  readback through `umrr96_live.launch.py rviz:=false views:=false`, plus
+  processing; no RViz, views node or other Qt process): `driver_params`
+  (required; the bench file is not a default), `processing_params`, `namespace`,
+  `frame_id` (`umrr96`; must match `sensor_0.frame_id`, used as processing's
+  `expected_frame_id` and the description frame), `use_sim_time`,
+  `publish_description` (`false`), `description_sensor_name`, and the
+  processing experiment switches. Services are routed as in
+  `umrr96_live.launch.py`. The packages still declare RViz and Qt as run
+  dependencies (S19).
+- `umrr96_viz.launch.py` (views node and RViz, on any machine in the robot's ROS
+  domain; starts no driver, readback or processing node and opens no sensor
+  connection): `namespace`, `views_params` (a file with an `umrr96_views`
+  section; default the bench file, of which only that section is read),
+  `use_sim_time`, `views` (`true`), `targets_topic`, `rviz` (`true`; closing
+  RViz ends only this launch), `view`, `rviz_config` (e.g.
+  `smartmicro_processing`'s `rviz/umrr96_classified.rviz`), `publish_description`
+  (`false`), `description_frame_id`, `description_sensor_name`.
+
 `radar.launch.py` (driver only): `params_file` (default
 `param/radar.params.template.yaml`), `namespace`, `node_name` (`smart_radar`),
 `use_sim_time`. All services are the data node's.
+
+## RViz configurations and panels
+
+The shipped configurations (`config/rviz/*.rviz` here and those of
+`smart_rviz_plugin`, `smartmicro_processing` and `smartmicro_description`) use
+relative names such as `smart_radar/fan_image`, `umrr96_processing/obstacles`
+and `umrr96/robot_description`, which RViz resolves in its node namespace. The
+launch files start RViz in their `namespace`; by hand use `rviz2 -d <config>
+--ros-args -r __ns:=/front`. The live and viz launches remap
+`umrr96/robot_description` to `<description_sensor_name>/robot_description`.
+Only RViz's tool topics (`/initialpose`, `/goal_pose`, `/clicked_point`) stay
+absolute. Before 2026-10-09 the names were absolute and displays stayed empty
+with a namespace (C39).
+
+The `smart_rviz_plugin` panels create their nodes in RViz's namespace under their
+own names (a launch file's RViz node name does not rename them) and use relative
+endpoints: `smart_radar/{set,get}_radar_mode`, `get_radar_status`,
+`send_command`, `firmware_download`, `filter_status`, `port_targetheader_0` and
+`umrr96_views/set_parameters_atomically`. The UMRR-96 Configuration panel's
+`Namespace` field (saved as `Namespace`; empty means RViz's namespace) points it
+at a radar in another namespace. The Status, Recorder and Fault Reports panels
+list matching topics of every namespace.
 
 ## Components and processes
 

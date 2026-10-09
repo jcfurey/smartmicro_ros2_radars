@@ -3,10 +3,12 @@
 """Offline density math and synthetic ROS topic checks; no radar required."""
 
 from collections import deque
+import importlib.util
 import json
 import math
 from pathlib import Path
 import sys
+import tempfile
 import time
 import unittest
 
@@ -16,7 +18,7 @@ from rcl_interfaces.srv import SetParametersAtomically
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.parameter import Parameter
-from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile
+from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import Image, PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
@@ -106,6 +108,27 @@ class FanImageTests(unittest.TestCase):
         self.assertEqual(float(bins.max()), 40)
         self.assertEqual(float(bins[-1, -1]), 25)
         self.assertEqual(float(bins[-1, 0]), -5)
+
+    def test_occupied_bin_render_matches_full_frame_reference(self):
+        # P9: only occupied bins are drawn over a cached base image; the result must
+        # equal the earlier full-frame rasterization pixel for pixel.
+        rng = np.random.default_rng(3)
+        for args in ((20, math.pi / 2), (20, math.pi), (5, math.pi / 4, .05, .25)):
+            renderer = views.FanImage(*args)
+            targets = list(zip(rng.uniform(-1, args[0] * 1.1, 60).tolist(),
+                               rng.uniform(-args[1] * 1.1, args[1] * 1.1, 60).tolist(),
+                               rng.uniform(-10, 60, 60).tolist()))
+            image = renderer.background.copy()
+            values = renderer.bin_targets(targets)[renderer.pixel_bins]
+            observed = np.isfinite(values)
+            colors = image[renderer.mask]
+            colors[observed] = renderer.palette[
+                np.rint(np.clip(values[observed], 0, 50) * 255 / 50).astype(int)]
+            image[renderer.mask] = colors
+            image[renderer.ink] = renderer.overlay[renderer.ink]
+            renderer.text(image, f'LIVE | {len(targets)} targets | filter: off', (28, 81),
+                          .5, (115, 211, 170))
+            np.testing.assert_array_equal(renderer.render(targets), image)
 
     def test_rear_quadrants_and_image_limits(self):
         renderer = views.FanImage(20, math.pi)
@@ -675,6 +698,170 @@ class ViewsNodeTests(unittest.TestCase):
             self.assertFalse(radar_views.grid_pub.messages)
         finally:
             radar_views.destroy_node()
+
+    def scan(self, radar_views, stamp):
+        header = Header(frame_id='umrr96')
+        header.stamp.sec = stamp
+        radar_views.receive(point_cloud2.create_cloud(
+            header, self.LAYOUT, [(3, 0, 0, 3, 0, 20, 0), (5, 1, 0, 5.1, .2, 30, 1)]))
+
+    def test_fan_image_is_drawn_only_for_new_scans_states_and_filters(self):
+        # P9: before, every tick redrew and republished the full 960x640 frame.
+        radar_views = make_views()
+        try:
+            now = [100.0]
+            radar_views.now_seconds = lambda: now[0]
+            for name in ('grid_pub', 'cells_pub', 'fan_pub', 'filtered_pub'):
+                setattr(radar_views, name, Recorder(subscribers=0))
+            image = radar_views.image_pub = Recorder()
+            radar_views.compressed_pub = Recorder(subscribers=0)
+            renders = []
+            renderer = radar_views.image_renderer
+            draw = renderer.render
+            renderer.render = lambda *args: renders.append(args[1:]) or draw(*args)
+
+            def ticks(count=3, step=.1):
+                for _ in range(count):
+                    now[0] += step
+                    radar_views.publish()
+
+            ticks()
+            self.assertEqual((len(renders), len(image.messages)), (1, 1))  # Waiting once.
+            self.scan(radar_views, 100)
+            ticks()
+            self.assertEqual((len(renders), len(image.messages)), (2, 2))
+            self.assertEqual(image.messages[-1].header.stamp.sec, 100)  # The scan's stamp.
+            self.scan(radar_views, 101)
+            self.scan(radar_views, 102)  # Two scans in one tick: one image.
+            ticks()
+            self.assertEqual((len(renders), len(image.messages)), (3, 3))
+            ticks(2, step=.6)  # Stale after one second without input: drawn once.
+            self.assertEqual((len(renders), len(image.messages)), (4, 4))
+            self.assertEqual(renders[-1][0], 'NO RECENT SCAN')
+            image.subscribers = 2  # A newly matched subscriber gets the current image.
+            ticks()
+            self.assertEqual((len(renders), len(image.messages)), (4, 5))
+            self.assertTrue(radar_views.set_parameters_atomically(
+                [Parameter('filter_mode', value='quality')]).successful)
+            self.assertEqual((len(renders), len(image.messages)), (5, 6))
+            self.assertEqual(renders[-1][:2], ('WAITING FOR DATA', 'quality'))
+            self.assertTrue(radar_views.set_parameters_atomically(
+                [Parameter('decay_seconds', value=1.0)]).successful)
+            ticks()
+            self.assertEqual((len(renders), len(image.messages)), (5, 6))
+        finally:
+            radar_views.destroy_node()
+
+    def test_compressed_fan_image_only_with_subscribers(self):
+        import cv2
+        for compression in ('jpeg', 'png'):
+            radar_views = make_views(f'image_compression:={compression}')
+            try:
+                radar_views.image_pub = Recorder(subscribers=0)
+                compressed = radar_views.compressed_pub = Recorder(subscribers=0)
+                self.scan(radar_views, 100)
+                radar_views.publish()
+                self.assertIsNone(radar_views._image_renderer)  # Nothing drawn or encoded.
+                compressed.subscribers = 1
+                radar_views.publish()
+                radar_views.publish()
+                self.assertEqual(len(compressed.messages), 1)
+                message = compressed.messages[0]
+                # image_transport's compressed format: original; codec compressed target.
+                self.assertEqual(message.format, f'rgb8; {compression} compressed bgr8')
+                self.assertEqual(message.header.stamp.sec, 100)
+                decoded = cv2.cvtColor(cv2.imdecode(
+                    np.frombuffer(bytes(message.data), np.uint8), cv2.IMREAD_COLOR),
+                    cv2.COLOR_BGR2RGB)
+                expected = radar_views.image[2]
+                error = np.abs(decoded.astype(int) - expected.astype(int)).mean()
+                self.assertLess(error, 2.0 if compression == 'jpeg' else 1e-9)
+                self.assertLess(len(message.data), expected.nbytes / 10)
+            finally:
+                radar_views.destroy_node()
+                rclpy.try_shutdown()
+        with self.assertRaises(ValueError):
+            make_views('image_compression:=bmp')
+
+    def test_without_opencv_the_compressed_topic_is_not_created(self):
+        find_spec = importlib.util.find_spec
+        importlib.util.find_spec = lambda name, *args: (
+            None if name == 'cv2' else find_spec(name, *args))
+        try:
+            radar_views = make_views()
+        finally:
+            importlib.util.find_spec = find_spec
+        try:
+            self.assertIsNone(radar_views.compressed_pub)
+            topics = dict(radar_views.get_publisher_names_and_types_by_node(
+                'umrr96_views', '/'))
+            self.assertIn('/smart_radar/fan_image', topics)
+            self.assertNotIn('/smart_radar/fan_image/compressed', topics)
+            radar_views.image_pub = Recorder()
+            radar_views.publish()
+            self.assertEqual(len(radar_views.image_pub.messages), 1)
+        finally:
+            radar_views.destroy_node()
+
+    def test_outputs_are_reliable_and_overridable(self):
+        # O2: a default (reliable) subscriber received nothing from the best-effort
+        # filtered cloud; every output now accepts qos_overrides.
+        radar_views = make_views()
+        try:
+            self.assertEqual(radar_views.subscription.qos_profile.reliability,
+                             ReliabilityPolicy.BEST_EFFORT)
+            filtered = radar_views.filtered_pub.qos_profile
+            self.assertEqual((filtered.reliability, filtered.depth),
+                             (ReliabilityPolicy.RELIABLE, 5))
+            for topic in ('filtered_targets_0', 'fan_image', 'fan_image/compressed',
+                          'density_grid', 'density_cells', 'fan_targets', 'filter_status',
+                          'fan_guides'):
+                self.assertTrue(radar_views.has_parameter(
+                    f'qos_overrides./smart_radar/{topic}.publisher.reliability'), topic)
+        finally:
+            radar_views.destroy_node()
+            rclpy.try_shutdown()
+        with tempfile.TemporaryDirectory() as directory:
+            overrides = Path(directory) / 'qos.yaml'
+            overrides.write_text(
+                '/**:\n  ros__parameters:\n    qos_overrides:\n'
+                '      /smart_radar/filtered_targets_0:\n'
+                '        publisher: {reliability: best_effort, depth: 2}\n')
+            rclpy.init(args=['--ros-args', '--params-file', str(overrides)])
+            radar_views = views.RadarViews()
+        try:
+            filtered = radar_views.filtered_pub.qos_profile
+            self.assertEqual((filtered.reliability, filtered.depth),
+                             (ReliabilityPolicy.BEST_EFFORT, 2))
+        finally:
+            radar_views.destroy_node()
+
+    def test_default_qos_subscriber_receives_filtered_targets(self):
+        radar_views = make_views()
+        peer = rclpy.create_node('umrr96_reliable_fixture')
+        executor = SingleThreadedExecutor()
+        executor.add_node(radar_views)
+        executor.add_node(peer)
+        received = []
+        peer.create_subscription(PointCloud2, '/smart_radar/filtered_targets_0',
+                                 received.append, 10)
+        publisher = peer.create_publisher(PointCloud2, '/smart_radar/port_targets_0',
+                                          qos_profile_sensor_data)
+        try:
+            deadline = time.monotonic() + 5
+            while not received and time.monotonic() < deadline:
+                if publisher.get_subscription_count():
+                    header = Header(frame_id='umrr96', stamp=peer.get_clock().now().to_msg())
+                    publisher.publish(point_cloud2.create_cloud(
+                        header, self.LAYOUT, [(1, 0, 0, 1, 0, 20, 0)]))
+                executor.spin_once(timeout_sec=.05)
+            self.assertTrue(received, 'Reliable subscriber received no filtered targets')
+        finally:
+            executor.remove_node(peer)
+            executor.remove_node(radar_views)
+            peer.destroy_node()
+            radar_views.destroy_node()
+            executor.shutdown()
 
 
 if __name__ == '__main__':

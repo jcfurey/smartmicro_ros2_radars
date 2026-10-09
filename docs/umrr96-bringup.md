@@ -249,8 +249,15 @@ or interpolate energy between detected targets. It says **WAITING FOR DATA**
 before the first scan, then **NO RECENT SCAN** and clears detections after one
 second without input. A valid empty scan is shown as **LIVE | 0 targets**.
 Fresh images carry the source scan timestamp; waiting/stale images carry the
-render time. Rasterization runs at `publish_hz` only while an image subscriber
-is present, so faster scans may be skipped for display.
+render time. Rasterization runs at most at `publish_hz`, only while an image
+subscriber is present, and only for a new scan, a state change or a filter
+change; an unchanged image is sent again only to a newly matched subscriber
+(since 2026-10-09: previously every tick redrew and republished it). Faster
+scans may be skipped for display. `/smart_radar/fan_image/compressed`
+(`sensor_msgs/CompressedImage`, image_transport's format `rgb8; jpeg compressed
+bgr8`) carries the same image as JPEG of `image_jpeg_quality` (default 90, about
+60 kB instead of 1.8 MB) or, with `image_compression: png`, lossless PNG; it
+exists only when OpenCV is importable and is encoded only for its subscribers.
 
 The **Radar fan image** dock can be resized or floated independently of the
 grid. To view only the image in a separate image viewer (installed on this host):
@@ -291,6 +298,7 @@ before enabling it.
 | `/smart_radar/density_cells` | `sensor_msgs/PointCloud2` | Observed cell centers and float `density` |
 | `/smart_radar/fan_targets` | `sensor_msgs/PointCloud2` | Flat range/azimuth points with `snr` |
 | `/smart_radar/fan_image` | `sensor_msgs/Image` | Annotated RGB range/azimuth raster |
+| `/smart_radar/fan_image/compressed` | `sensor_msgs/CompressedImage` | The same raster as JPEG or PNG |
 | `/smart_radar/fan_guides` | `visualization_msgs/MarkerArray` | Range and angle labels; available to late subscribers |
 
 For an existing driver or rosbag replay, run only the derived views:

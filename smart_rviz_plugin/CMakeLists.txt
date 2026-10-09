@@ -165,6 +165,15 @@ if(BUILD_TESTING)
     ENV QT_QPA_PLATFORM=offscreen ROS_DOMAIN_ID=174 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
     GENERATE_RESULT_FOR_RETURN_CODE_ZERO
   )
+  # Every endpoint again under the namespace and node name a launch file gives RViz (C39).
+  ament_add_test(umrr96_panel_smoke_namespace
+    COMMAND $<TARGET_FILE:umrr96_panel_smoke>
+      --ros-args -r __ns:=/umrr96_panel_front -r __node:=umrr96_rviz
+    TIMEOUT 60
+    ENV QT_QPA_PLATFORM=offscreen ROS_DOMAIN_ID=175 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      UMRR96_PANEL_NAMESPACE_ONLY=1
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+  )
   add_executable(generic_panels_smoke test/generic_panels_smoke.cpp)
   target_link_libraries(generic_panels_smoke
     ${umrr_ros2_msgs_TARGETS}

@@ -35,6 +35,8 @@ ros2 launch smartmicro_processing umrr96_tracking.launch.py
 # driver_params:=... / processing_params:=... for other hosts or tuning.
 ```
 
+Robots: headless `umrr96_robot.launch.py` plus the driver's `umrr96_viz.launch.py` ([launch files](../umrr_ros2_driver/doc/interfaces.md#launch-files)).
+
 The default view is now `rviz/umrr96_classified.rviz`: one cloud containing only
 the latest scan, colored by the current filter decisions. All point-cloud decay
 times in that preset are zero. Track estimates and the older stage displays are

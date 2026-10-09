@@ -36,6 +36,8 @@ From a separate terminal and after sourcing workspace
 ```
 rviz2 -d umrr_ros2_driver/config/rviz/rviz_config.rviz
 ```
+The configurations use relative topic names: for a radar in a namespace add
+`--ros-args -r __ns:=/<namespace>` (the launch files do this for their RViz).
 
 ![Recorder](smart_rviz_plugin/config/images/rviz_plugin.png "Rviz Outlook")
 
@@ -128,6 +130,11 @@ These inputs are processed through the Smart Access C++ API and trigger a callba
 callback is triggered a new point cloud message is created and published.
 
 ### The outputs:
+A robot should use only the topics of the
+[robot integration contract](umrr_ros2_driver/doc/interfaces.md#robot-integration)
+(raw targets, optional `radar_msgs/RadarScan`, obstacles, tracks and the experimental
+ego velocity), started headless by `smartmicro_processing`'s `umrr96_robot.launch.py`;
+everything else is metadata, diagnostics or visualization.
 The driver publishes the following topics per sensor, where `<N>` is the sensor index
 (`sensors.sensor_<N>`, 0–9: up to 10 sensors). Field units, stamps and QoS are in
 [`umrr_ros2_driver/doc/interfaces.md`](umrr_ros2_driver/doc/interfaces.md):
@@ -149,9 +156,10 @@ The driver publishes the following topics per sensor, where `<N>` is the sensor 
 
 The driver also reports stream, SDK and UDP health on `/diagnostics`.
 
-Derived topics come from other nodes: `umrr96_live.launch.py` starts the
-`umrr96_views` node (`smart_radar/filtered_targets_0`, `density_grid`,
-`density_cells`, `fan_targets`, `fan_image`, `fan_guides`, `filter_status`; see the
+Derived topics come from other nodes: `umrr96_live.launch.py` and
+`umrr96_viz.launch.py` start the `umrr96_views` node (`smart_radar/filtered_targets_0`,
+`density_grid`, `density_cells`, `fan_targets`, `fan_image`, `fan_image/compressed`,
+`fan_guides`, `filter_status`: visualization only; see the
 [UMRR-96 bring-up](docs/umrr96-bringup.md#view-parameters-and-topics)), and
 [`smartmicro_processing`](smartmicro_processing/README.md) publishes Doppler,
 classification and tracking outputs.
@@ -246,7 +254,8 @@ The service names are the same in both launch files, but not the node behind the
 
 The data node accepts any configured sensor (`sensors.sensor_<N>.id`) and any
 section of its interface, and replies when the sensor answers. The readback node
-(also used by `smartmicro_processing`'s `umrr96_tracking.launch.py`) answers
+(also used by `smartmicro_processing`'s `umrr96_tracking.launch.py` and
+`umrr96_robot.launch.py`) answers
 synchronously, within `smart_radar_readback.timeout_ms` (default 2 s), and only
 for its own `smart_radar_readback.sensor_id`; it reads `auto_interface_0dim`
 parameters and `auto_interface` statuses and writes only the UMRR-96 tuning

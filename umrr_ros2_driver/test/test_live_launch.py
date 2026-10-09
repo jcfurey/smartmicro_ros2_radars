@@ -53,3 +53,13 @@ def test_description_arguments_stay_in_the_include():
     context, _ = resolve({'publish_description': 'true', 'description_sensor_name': 'front'})
     for name in ('frame_id', 'sensor_name', 'measurement_xyz'):
         assert name not in context.launch_configurations, name
+
+
+def test_views_can_run_elsewhere():
+    # O11: the robot launch includes this file with views:=false; the default keeps them.
+    _, processes = resolve({})
+    assert ('umrr_ros2_driver', 'umrr96_views') in processes, processes
+    _, processes = resolve({'views': 'false', 'rviz': 'false'})
+    assert ('umrr_ros2_driver', 'umrr96_views') not in processes, processes
+    assert ('rviz2', 'rviz2') not in processes, processes
+    assert ('umrr_ros2_driver', 'smartmicro_radar_readback_node') in processes

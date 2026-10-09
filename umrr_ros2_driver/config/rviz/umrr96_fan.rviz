@@ -10,6 +10,7 @@ Panels:
   Name: Views
 - Class: smart_rviz_plugin/UMRR-96 Configuration
   Name: UMRR-96 Configuration
+  Namespace: ''
   Sensor ID: '230739'
 Visualization Manager:
   Class: ''
@@ -24,7 +25,7 @@ Visualization Manager:
       Durability Policy: Transient Local
       History Policy: Keep Last
       Reliability Policy: Reliable
-      Value: /umrr96/robot_description
+      Value: umrr96/robot_description
     Visual Enabled: true
     Collision Enabled: false
     TF Prefix: ''
@@ -57,7 +58,7 @@ Visualization Manager:
       Durability Policy: Volatile
       History Policy: Keep Last
       Reliability Policy: Best Effort
-      Value: /smart_radar/fan_targets
+      Value: smart_radar/fan_targets
     Use Fixed Frame: true
     Use rainbow: true
     Value: true
@@ -68,7 +69,7 @@ Visualization Manager:
     Namespaces:
       detection_density: true
     Topic:
-      Value: /smart_radar/density_grid
+      Value: smart_radar/density_grid
       Depth: 1
       Reliability Policy: Reliable
       Durability Policy: Volatile
@@ -80,7 +81,7 @@ Visualization Manager:
     Namespaces:
       fan_guides: true
     Topic:
-      Value: /smart_radar/fan_guides
+      Value: smart_radar/fan_guides
       Depth: 1
       Reliability Policy: Reliable
       Durability Policy: Transient Local
@@ -98,7 +99,7 @@ Visualization Manager:
       History Policy: Keep Last
       Reliability Policy: Reliable
       Transport Hint: raw
-      Value: /smart_radar/fan_image
+      Value: smart_radar/fan_image
     Value: true
   Enabled: true
   Global Options:
