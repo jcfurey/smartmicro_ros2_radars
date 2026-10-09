@@ -208,6 +208,21 @@ fallback): `obstacle_tf_failures` counts it, `obstacles_published` is false and
 the diagnostic turns WARN. Clears use the same frame. Do not use a fixed frame
 such as `odom` here.
 
+### Nav2 consumers
+
+[`config/nav2_obstacle_layer.example.yaml`](config/nav2_obstacle_layer.example.yaml)
+feeds `obstacles` to Nav2 in three ways; set `obstacle_frame: base_link` for all:
+
+- **Radar only:** a `spatio_temporal_voxel_layer` that marks only and forgets
+  each mark after `voxel_decay` (1.5 s, linear), with `clear_after_reading` so
+  every scan marks once and `obstacle_range` 20 m (STVL's default is 2.5 m).
+- **With a lidar:** an ObstacleLayer that marks from radar and clears with the
+  lidar's raytracing; a radar-only ObstacleLayer never clears.
+- **Per scan:** a `pointcloud` source for Nav2's `collision_monitor`, which sees
+  each scan's points without a costmap's memory. Upstream persistence decides
+  what reaches it: on the 2026-10-09 static capture it kept 94.5% of the
+  detections in persistent structure cells and 37% of the flicker detections.
+
 ### Track shadow rule
 
 A novel static return is dropped from `obstacles` as a confirmed track's

@@ -165,7 +165,10 @@ pair radar marking with a clearing lidar source, or use STVL decay. The
 accumulator source below remains available.
 
 [`config/nav2_obstacle_layer.example.yaml`](config/nav2_obstacle_layer.example.yaml)
-is a starting point for an `ObstacleLayer` observation source:
+holds a complete radar-only `spatio_temporal_voxel_layer` with decay (the
+primary radar-only configuration), the ObstacleLayer with lidar clearing and a
+`collision_monitor` source (see [Nav2 consumers](README.md#nav2-consumers)).
+For the accumulator, an `ObstacleLayer` observation source looks like this:
 
 ```yaml
 radar_layer:

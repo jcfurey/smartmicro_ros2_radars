@@ -1,15 +1,62 @@
-# Example only: merge into your Nav2 costmap parameters; not loaded by this package.
+# Example only: merge into your Nav2 parameters; not loaded by this package.
 # Radar evidence marks obstacles but never clears: empty cells mean "unknown", and
 # sparse radar returns cannot justify free-space ray clearing.
 #
-# ObstacleLayer keeps a marked cell until some source raytraces it clear, so a
-# radar-only ObstacleLayer accumulates a trail behind every moving person.
-# Pair radar marking with a lidar (or depth) source that has clearing: true on
-# the same layer, or use spatio_temporal_voxel_layer with decay (below).
+# Two costmap variants read /umrr96_processing/obstacles; enable one of them:
+#   stvl_radar_layer  radar only: spatio_temporal_voxel_layer forgets each mark
+#                     after voxel_decay (the primary radar-only configuration).
+#   radar_layer       ObstacleLayer, which keeps a marked cell until some source
+#                     raytraces it clear: pair it with a lidar (or depth) source
+#                     with clearing: true on the same layer, or a radar-only
+#                     ObstacleLayer accumulates a trail behind every moving person.
+#
+# Set the processing parameter obstacle_frame: base_link (any frame rigidly
+# attached to the radar): obstacles then have z = obstacle_height (0.3) in
+# base_link, inside the height limits below, whatever the radar's pitch.
+#
+# The costmap layers keep marks over time. Nav2's collision_monitor (at the end)
+# is a per-scan consumer instead: it sees every scan's obstacle points and nothing
+# else. Upstream persistence decides what reaches it: on the 2026-10-09 static
+# capture it kept 94.5% of the detections in persistent structure cells and 37%
+# of the flicker detections (69% of all detections in that room).
 local_costmap:
   local_costmap:
     ros__parameters:
-      plugins: ["voxel_layer", "radar_layer", "inflation_layer"]
+      # Radar only. With a clearing lidar instead:
+      # plugins: ["voxel_layer", "radar_layer", "inflation_layer"]
+      plugins: ["stvl_radar_layer", "inflation_layer"]
+      stvl_radar_layer:
+        # Parameter names follow the spatio_temporal_voxel_layer README and
+        # source (ros2 branch): https://github.com/SteveMacenski/spatio_temporal_voxel_layer
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+        enabled: true
+        voxel_decay: 1.5          # s (linear model); a walking person's trail fades
+        decay_model: 0            # 0 linear, 1 exponential, 2 persistent (never decays)
+        voxel_size: 0.05          # m; match the costmap resolution
+        track_unknown_space: true
+        mark_threshold: 0         # one voxel in a column marks the cell (z is flattened)
+        update_footprint_enabled: true
+        combination_method: 1     # max with the layers below
+        origin_z: 0.0
+        publish_voxel_map: false  # true to inspect the voxels in RViz
+        transform_tolerance: 0.2
+        mapping_mode: false
+        observation_sources: radar_obstacles
+        radar_obstacles:
+          data_type: PointCloud2
+          topic: /umrr96_processing/obstacles
+          marking: true
+          clearing: false         # marking only: voxel_decay is the only clearing
+          min_obstacle_height: 0.10  # in the costmap's global frame
+          max_obstacle_height: 2.0
+          obstacle_range: 20.0    # STVL's per-source default is 2.5 m
+          observation_persistence: 0.0  # persistence is applied upstream
+          # Use each scan once: re-marking the last scan on every costmap update
+          # would refresh its decay while no new scan arrives (e.g. withheld scans).
+          clear_after_reading: true
+          # A scan every 55 ms (120 ms with CAN output on); 0.5 s tolerates a few
+          # rejected or dropped scans before the costmap stops being current.
+          expected_update_rate: 0.5
       radar_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
@@ -45,20 +92,6 @@ local_costmap:
           marking: false
           clearing: true
           raytrace_max_range: 20.0
-
-      # Radar-only alternative with time decay instead of lidar clearing:
-      # stvl_radar_layer:
-      #   plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
-      #   observation_sources: radar_obstacles
-      #   voxel_decay: 1.5          # s; a walking person's trail fades
-      #   decay_model: 0            # linear
-      #   radar_obstacles:
-      #     data_type: PointCloud2
-      #     topic: /umrr96_processing/obstacles
-      #     marking: true
-      #     clearing: false
-      #     min_obstacle_height: 0.10
-      #     max_obstacle_height: 2.0
 
       # Previous option, kept for reference: pose-compensated accumulator cells.
       # radar_confirmed:
@@ -96,3 +129,16 @@ local_costmap:
       #   max_obstacle_height: 2.0
       #   obstacle_max_range: 20.0
       #   observation_persistence: 0.5   # match the accumulator's window
+
+# Per-scan stop/slow-down zones: add "radar" to your collision_monitor's
+# observation_sources. Points are checked in base_frame_id; keep obstacle_height
+# (0.3 m in obstacle_frame) between min_height and max_height there.
+collision_monitor:
+  ros__parameters:
+    observation_sources: ["radar"]
+    radar:
+      type: "pointcloud"
+      topic: "/umrr96_processing/obstacles"
+      min_height: 0.1
+      max_height: 0.5
+      enabled: true
