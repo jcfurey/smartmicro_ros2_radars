@@ -13,17 +13,19 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <unistd.h>
 #include <rclcpp/qos.hpp>
 
 namespace smart_rviz_plugin
 {
 namespace panel_util
 {
-/// Unique node name per panel instance, so two copies of a panel never share a name.
+/// Unique node name per panel instance: the process ID separates RViz processes that
+/// load the same configuration, the counter separates copies of a panel in one process.
 inline std::string unique_node_name(const std::string & base)
 {
   static std::atomic<unsigned> counter{0};
-  return base + "_" + std::to_string(counter++);
+  return base + "_" + std::to_string(::getpid()) + "_" + std::to_string(counter++);
 }
 
 /// Subscription QoS for driver data topics: best effort matches both the default reliable

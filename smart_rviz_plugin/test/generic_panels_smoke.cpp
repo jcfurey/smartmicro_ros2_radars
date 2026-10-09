@@ -24,6 +24,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unistd.h>
 #include <pluginlib/class_loader.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/panel.hpp>
@@ -150,22 +151,32 @@ int main(int argc, char ** argv)
       "smart_rviz_plugin/Smart Fault Reports"};
 
     // C17: two instances of every panel must not produce duplicate node names.
+    // S29: names carry the process ID, so a second RViz with the same config
+    // cannot collide either.
     {
       std::vector<std::shared_ptr<rviz_common::Panel>> twins;
-      for (const auto & name : generic) {
+      auto all = generic;
+      all.push_back("smart_rviz_plugin/UMRR-96 Configuration");
+      for (const auto & name : all) {
         twins.push_back(loader.createSharedInstance(name));
         twins.push_back(loader.createSharedInstance(name));
       }
+      const auto pid = "_" + std::to_string(::getpid()) + "_";
       std::vector<std::string> names;
       wait([&] {
           names.clear();
           for (const auto & n : node->get_node_names()) {
-            if (n.find("gui") != std::string::npos) {names.push_back(n);}
+            if (n.find("gui") != std::string::npos || n.find("umrr96_config") != std::string::npos) {
+              names.push_back(n);
+            }
           }
-          return names.size() >= 10;
+          return names.size() >= 12;
         }, 10, "panel nodes in the graph");
       check(std::set<std::string>(names.begin(), names.end()).size() == names.size(),
         "Duplicate panel node names");
+      for (const auto & n : names) {
+        check(n.find(pid) != std::string::npos, "Panel node name without the process ID: " + n);
+      }
     }
 
     // --- Command Configurator (C11, C12, C13) ---

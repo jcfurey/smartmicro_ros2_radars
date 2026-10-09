@@ -8,10 +8,11 @@
 #include <QJsonObject>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
-#include <atomic>
 #include <cmath>
 #include <stdexcept>
 #include <pluginlib/class_list_macros.hpp>
+
+#include "panel_util.hpp"
 
 namespace smart_rviz_plugin
 {
@@ -206,8 +207,7 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   filter_apply_->setEnabled(false);
   layout->addStretch();
 
-  static std::atomic<unsigned> instance{0};
-  node_ = std::make_shared<rclcpp::Node>("umrr96_config_" + std::to_string(instance++),
+  node_ = std::make_shared<rclcpp::Node>(panel_util::unique_node_name("umrr96_config"),
     rclcpp::NodeOptions().use_global_arguments(false));
   getter_ = node_->create_client<GetMode>("/smart_radar/get_radar_mode");
   status_ = node_->create_client<GetStatus>("/smart_radar/get_radar_status");
