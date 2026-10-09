@@ -26,7 +26,7 @@ def main():
     """Use a silent UDP peer to exercise the installed node's failure paths."""
     executable = Path(get_package_prefix('umrr_ros2_driver')) / (
         'lib/umrr_ros2_driver/smartmicro_radar_readback_node')
-    before = set(Path('/tmp').glob('smartmicro-readback-*'))
+    before = set(Path(tempfile.gettempdir()).glob('smartmicro-readback-*'))
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
         peer.bind(('127.0.0.1', 0))
         sensor_port = peer.getsockname()[1]
@@ -185,7 +185,8 @@ def main():
                     log.seek(0)
                     print(log.read())
             assert process.returncode == 0, process.returncode
-    assert set(Path('/tmp').glob('smartmicro-readback-*')) == before, 'SDK config leaked'
+    leaked = set(Path(tempfile.gettempdir()).glob('smartmicro-readback-*')) - before
+    assert not leaked, f'SDK config leaked: {leaked}'
     print('PASS: read/write validation, repeated timeouts, clean shutdown and config cleanup')
 
 
@@ -254,6 +255,72 @@ def test_startup_can_output():
                 raise AssertionError('Readback node did not stop')
         assert process.returncode == 0, output
         assert 'retrying every 5 s' in output, output
+
+
+def test_requests_answered_while_startup_write_retries():
+    """Control requests are answered within timeout_ms while the startup write retries (C58)."""
+    executable = Path(get_package_prefix('umrr_ros2_driver')) / (
+        'lib/umrr_ros2_driver/smartmicro_radar_readback_node')
+    timeout = 2.0
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+        peer.bind(('127.0.0.1', 0))  # A silent sensor.
+        sensor_port = peer.getsockname()[1]
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as available:
+            available.bind(('127.0.0.1', 0))
+            host_port = available.getsockname()[1]
+        process = subprocess.Popen([
+            str(executable), '--ros-args', '-r', '__node:=umrr96_readback_busy',
+            '-r', '__ns:=/rb_busy', '-p', 'sensor_id:=230739', '-p', 'interface_name:=lo',
+            '-p', 'host_ip:=127.0.0.1', '-p', 'sensor_ip:=127.0.0.1',
+            '-p', f'host_port:={host_port}', '-p', f'sensor_port:={sensor_port}',
+            '-p', f'timeout_ms:={int(timeout * 1000)}'],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        rclpy.init()
+        node = rclpy.create_node('umrr96_readback_busy_client')
+        states = []
+        node.create_subscription(DiagnosticArray, '/diagnostics', lambda m: states.extend(
+            {v.key: v.value for v in s.values}.get('startup_can_target_output')
+            for s in m.status if s.name == '/rb_busy/umrr96_readback_busy: Control requests'), 10)
+        mode = node.create_client(GetMode, '/rb_busy/smart_radar/get_radar_mode')
+        try:
+            assert mode.wait_for_service(timeout_sec=10)
+            # Back to back over the first attempt (about 1 s after startup) and its retry
+            # 5 s after it timed out. Previously a request waited for the blocking attempt
+            # first: up to 2 x timeout_ms, beyond the panel's 5 s deadline at 4000 ms.
+            latencies = []
+            started = time.monotonic()
+            while time.monotonic() - started < 9:
+                sent = time.monotonic()
+                future = mode.call_async(GetMode.Request(
+                    sensor_id=230739, section_name='auto_interface_0dim',
+                    params=['frequency_sweep_idx'], param_types=[3]))
+                rclpy.spin_until_future_complete(node, future, timeout_sec=10)
+                assert future.done(), 'ROS service did not finish'
+                latencies.append(time.monotonic() - sent)
+                assert 'Timed out' in json.loads(future.result().res)['error']
+            assert max(latencies) < timeout + .8, latencies
+            assert any((state or '').startswith('retrying: Timed out') for state in states), states
+            # The startup write and the service reads were all sent to the sensor.
+            peer.setblocking(False)
+            packets = 0
+            while True:
+                try:
+                    peer.recvfrom(65535)
+                except BlockingIOError:
+                    break
+                packets += 1
+            assert packets >= len(latencies) + 2, (packets, len(latencies))
+        finally:
+            node.destroy_node()
+            rclpy.shutdown()
+            process.send_signal(signal.SIGINT)
+            try:
+                output, _ = process.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate()
+                raise AssertionError('Readback node did not stop')
+        assert process.returncode == 0, output
 
 
 def test_component_registered():

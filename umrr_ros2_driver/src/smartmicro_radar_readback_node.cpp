@@ -14,6 +14,7 @@
 #include <umrr_ros2_msgs/srv/get_status.hpp>
 #include <umrr_ros2_msgs/srv/set_mode.hpp>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <charconv>
@@ -25,6 +26,7 @@
 #include <memory>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -65,6 +67,9 @@ class ReplyTimeout : public std::runtime_error
 public:
   using std::runtime_error::runtime_error;
 };
+
+constexpr char kCanOutputName[] = "output_control_target_list_can";
+constexpr char kCanOutputSection[] = "auto_interface_0dim";
 
 struct PendingResponse
 {
@@ -165,7 +170,9 @@ public:
     set_service_ = create_service<SetMode>(
       "smart_radar/set_radar_mode",
       [this](const SetMode::Request::SharedPtr request, SetMode::Response::SharedPtr response) {
-        response->res = write(*request).dump(2);
+        const auto result = write(*request);
+        end_startup_after_service_write(*request, result);
+        response->res = result.dump(2);
       });
     declare_diagnostic_names(*this);
     diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
@@ -191,39 +198,106 @@ public:
           std::chrono::duration<double>(std::chrono::steady_clock::now() - last_response_).count() :
           -1.0);
         stat.add("startup_can_target_output", startup_can_state_);
+        stat.add("startup_can_target_attempts", startup_can_attempts_);
       });
     if (startup_can_output_ >= 0) {
       startup_can_state_ = "pending";
+      next_startup_attempt_ = Clock::now() + std::chrono::seconds(1);
       startup_timer_ = create_wall_timer(
-        std::chrono::seconds(1), [this]() {apply_startup_can_output();});
+        std::chrono::milliseconds(100), [this]() {step_startup_can_output();});
     }
     RCLCPP_INFO(get_logger(), "Readback ready for sensor %u on %s:%s", sensor_id_,
       host_ip.c_str(), std::to_string(host_port).c_str());
   }
 
 private:
-  // Volatile write (no EEPROM save) verified by a separate read. Retried every 5 s
-  // until confirmed, because the sensor may still be booting. Startup only: a later
-  // change through the panel or the service is never overridden, and a sensor power
-  // cycle while this node runs restores the stored value until the node restarts.
-  void apply_startup_can_output()
+  using Clock = std::chrono::steady_clock;
+
+  // An allocated batch with its requests added, ready to send.
+  struct Prepared
   {
-    static const std::string kName = "output_control_target_list_can";
-    static const std::string kSection = "auto_interface_0dim";
-    ++startup_can_attempts_;
-    SetMode::Request request;
-    request.sensor_id = sensor_id_;
-    request.section_name = kSection;
-    request.params = {kName};
-    request.values = {std::to_string(startup_can_output_)};
-    request.value_types = {SetMode::Request::TYPE_UINT8};
-    auto result = write(request);
-    if (result.value("success", false)) {
-      result = read(sensor_id_, kSection, {kName}, {GetMode::Request::TYPE_UINT8}, false);
+    std::unique_ptr<InstructionBatchLease> lease;
+    std::vector<InstructionItem> items;
+    std::string section;
+  };
+
+  // A sent batch awaiting the sensor's reply; the batch stays allocated until then.
+  struct InFlight
+  {
+    Prepared request;
+    std::shared_ptr<PendingResponse> pending;
+    Clock::time_point deadline;
+  };
+
+  // Volatile write (no EEPROM save) verified by a separate read, retried every 5 s
+  // until confirmed because the sensor may still be booting. Both are sent without
+  // waiting on the executor, so control requests are still answered within their
+  // own timeout_ms while the sensor is unreachable (previously each attempt blocked
+  // the executor for up to two timeouts). Startup only: a successful write of the
+  // same parameter through the service ends it, and a sensor power cycle while this
+  // node runs restores the stored value until the node restarts.
+  void step_startup_can_output()
+  {
+    const auto now = Clock::now();
+    if (startup_exchange_) {
+      std::optional<Json> reply;
+      {
+        std::lock_guard<std::mutex> lock(startup_exchange_->pending->mutex);
+        if (startup_exchange_->pending->received) {
+          reply = startup_exchange_->pending->result;
+        }
+      }
+      if (!reply && now < startup_exchange_->deadline) {
+        return;
+      }
+      startup_exchange_.reset();  // Releases the batch.
+      Json result;
+      if (reply) {
+        result = accept(std::move(*reply));
+      } else {
+        ++timeouts_;
+        last_error_ = "Timed out waiting for the sensor reply";
+        result = {{"success", false}, {"error", last_error_}};
+      }
+      if (!startup_verifying_ && result.value("success", false)) {
+        start_startup_exchange(true);
+      } else {
+        finish_startup_attempt(result);
+      }
+      return;
     }
-    const bool confirmed = result.value("success", false) && result.contains("values") &&
-      result["values"].contains(kName) &&
-      result["values"][kName].value("value", int64_t{-1}) == startup_can_output_;
+    if (now >= next_startup_attempt_) {
+      ++startup_can_attempts_;
+      start_startup_exchange(false);
+    }
+  }
+
+  // Sends the startup write (verify = false) or its readback.
+  void start_startup_exchange(bool verify)
+  {
+    startup_verifying_ = verify;
+    startup_can_state_ = std::string(verify ? "verifying" : "writing") + " (attempt " +
+      std::to_string(startup_can_attempts_) + ")";
+    const auto sent = guarded(sensor_id_, kCanOutputSection, [&]() -> Json {
+          auto request = verify ?
+          prepare_read(sensor_id_, kCanOutputSection, {kCanOutputName},
+          {GetMode::Request::TYPE_UINT8}, false) :
+          prepare_write(startup_can_request());
+          auto pending = send(request);
+          startup_exchange_ = InFlight{std::move(request), std::move(pending),
+            Clock::now() + timeout_};
+          return {{"success", true}};
+        });
+    if (!sent.value("success", false)) {
+      finish_startup_attempt(sent);
+    }
+  }
+
+  void finish_startup_attempt(const Json & result)
+  {
+    const bool confirmed = startup_verifying_ && result.value("success", false) &&
+      result.contains("values") && result["values"].contains(kCanOutputName) &&
+      result["values"][kCanOutputName].value("value", int64_t{-1}) == startup_can_output_;
     if (confirmed) {
       startup_timer_->cancel();
       startup_can_state_ = startup_can_output_ ? "on (confirmed)" : "off (confirmed)";
@@ -236,135 +310,161 @@ private:
     startup_can_state_ = "retrying: " + error;
     RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 30000,
       "Could not set CAN target output at startup (%s); retrying every 5 s", error.c_str());
-    if (startup_can_attempts_ == 1) {
-      startup_timer_->cancel();
-      startup_timer_ = create_wall_timer(
-        std::chrono::seconds(5), [this]() {apply_startup_can_output();});
+    next_startup_attempt_ = Clock::now() + kStartupRetryPeriod;
+  }
+
+  SetMode::Request startup_can_request() const
+  {
+    SetMode::Request request;
+    request.sensor_id = sensor_id_;
+    request.section_name = kCanOutputSection;
+    request.params = {kCanOutputName};
+    request.values = {std::to_string(startup_can_output_)};
+    request.value_types = {SetMode::Request::TYPE_UINT8};
+    return request;
+  }
+
+  // A service write of the CAN output accepted by the sensor takes precedence.
+  void end_startup_after_service_write(const SetMode::Request & request, const Json & result)
+  {
+    if (!startup_timer_ || startup_timer_->is_canceled() || !result.value("success", false) ||
+      std::find(request.params.begin(), request.params.end(), kCanOutputName) ==
+      request.params.end())
+    {
+      return;
+    }
+    startup_timer_->cancel();
+    startup_exchange_.reset();
+    startup_can_state_ = "superseded by a set_radar_mode request";
+    RCLCPP_INFO(get_logger(), "Startup CAN target output write superseded by a service request");
+  }
+
+  // Runs one request's validation and exchange; errors become the reply JSON and
+  // are counted once (invalid request, timeout or failure).
+  template<typename Exchange>
+  Json guarded(uint32_t sensor_id, const std::string & section, Exchange && exchange)
+  {
+    const auto failure = [&](const char * error) {
+        return Json{{"sensor_id", sensor_id}, {"section", section}, {"success", false},
+        {"error", error}};
+      };
+    try {
+      return exchange();
+    } catch (const std::invalid_argument & error) {
+      ++invalid_requests_;
+      return failure(error.what());
+    } catch (const ReplyTimeout & error) {
+      last_error_ = error.what();  // Counted once, in timeouts_.
+      return failure(error.what());
+    } catch (const std::exception & error) {
+      ++failed_requests_;
+      last_error_ = error.what();
+      return failure(error.what());
     }
   }
 
   Json write(const SetMode::Request & request)
   {
-    try {
-      if (request.sensor_id != sensor_id_ || request.section_name != "auto_interface_0dim") {
-        throw std::invalid_argument("Invalid tuning sensor ID or section");
-      }
-      const auto values = smartmicro::drivers::radar::validate_umrr96_tuning(
-        request.params, request.values, request.value_types);
-      auto instructions = services_->GetInstructionService();
-      std::shared_ptr<InstructionBatch> batch;
-      if (!instructions || !instructions->AllocateInstructionBatch(sensor_id_, batch)) {
-        throw std::runtime_error("Could not allocate SDK tuning request");
-      }
-      const InstructionBatchLease lease{instructions, batch};
-      std::vector<ValueType> types;
-      for (size_t i = 0; i < request.params.size(); ++i) {
-        const bool floating = std::holds_alternative<float>(values[i]);
-        types.push_back(floating ? ValueType::kF32 : ValueType::kU8);
-        const bool added = std::visit([&](auto value) {
-              return batch->AddRequest(
-              std::make_shared<com::master::SetParamRequest<decltype(value)>>(
-              request.section_name, request.params[i], value));
-          }, values[i]);
-        if (!added) {
-          throw std::invalid_argument("SDK rejected tuning parameter: " + request.params[i]);
-        }
-      }
-      return exchange(batch, request.params, types, request.section_name);
-    } catch (const std::invalid_argument & error) {
-      ++invalid_requests_;
-      return {{"sensor_id", request.sensor_id}, {"section", request.section_name},
-        {"success", false}, {"error", error.what()}};
-    } catch (const ReplyTimeout & error) {
-      last_error_ = error.what();  // Counted once, in timeouts_.
-      return {{"sensor_id", request.sensor_id}, {"section", request.section_name},
-        {"success", false}, {"error", error.what()}};
-    } catch (const std::exception & error) {
-      ++failed_requests_;
-      last_error_ = error.what();
-      return {{"sensor_id", request.sensor_id}, {"section", request.section_name},
-        {"success", false}, {"error", error.what()}};
-    }
+    return guarded(request.sensor_id, request.section_name, [&] {
+               return exchange(prepare_write(request));
+             });
   }
 
   Json read(
     uint32_t sensor_id, const std::string & section, const std::vector<std::string> & names,
     const std::vector<uint8_t> & requested_types, bool status)
   {
-    try {
-      if (sensor_id != sensor_id_) {
-        throw std::invalid_argument("Sensor ID does not match this readback node");
-      }
-      if (section != (status ? "auto_interface" : "auto_interface_0dim")) {
-        throw std::invalid_argument("Invalid UMRR-96 readback section");
-      }
-      if (names.empty() || names.size() > 10 || names.size() != requested_types.size()) {
-        throw std::invalid_argument("Supply 1–10 names and an equal number of data types");
-      }
-      if (std::set<std::string>(names.begin(), names.end()).size() != names.size()) {
-        throw std::invalid_argument("Readback names must be unique");
-      }
-      constexpr std::array<ValueType, 4> param_types = {
-        ValueType::kF32, ValueType::kU32, ValueType::kU16, ValueType::kU8};
-      constexpr std::array<ValueType, 4> status_types = {
-        ValueType::kU32, ValueType::kU16, ValueType::kU8, ValueType::kI32};
-      std::vector<ValueType> types;
-      auto instructions = services_->GetInstructionService();
-      std::shared_ptr<InstructionBatch> batch;
-      if (!instructions || !instructions->AllocateInstructionBatch(sensor_id_, batch)) {
-        throw std::runtime_error("Could not allocate SDK read request");
-      }
-      const InstructionBatchLease lease{instructions, batch};
-      for (size_t i = 0; i < names.size(); ++i) {
-        if (requested_types[i] > 3) {
-          throw std::invalid_argument("Invalid readback data type");
-        }
-        const auto type = (status ? status_types : param_types)[requested_types[i]];
-        types.push_back(type);
-        bool added = false;
-        switch (type) {
-          case ValueType::kF32: added = add_read<float>(batch, status, section, names[i]); break;
-          case ValueType::kU32: added = add_read<uint32_t>(batch, status, section, names[i]); break;
-          case ValueType::kU16: added = add_read<uint16_t>(batch, status, section, names[i]); break;
-          case ValueType::kU8: added = add_read<uint8_t>(batch, status, section, names[i]); break;
-          case ValueType::kI32: added = add_read<int32_t>(batch, status, section, names[i]); break;
-        }
-        if (!added) {
-          throw std::invalid_argument("Unknown, duplicate, or incorrectly typed read: " + names[i]);
-        }
-      }
-      return exchange(batch, names, types, section);
-    } catch (const std::invalid_argument & error) {
-      ++invalid_requests_;
-      return {{"sensor_id", sensor_id}, {"section", section},
-        {"success", false}, {"error", error.what()}};
-    } catch (const ReplyTimeout & error) {
-      last_error_ = error.what();  // Counted once, in timeouts_.
-      return {{"sensor_id", sensor_id}, {"section", section},
-        {"success", false}, {"error", error.what()}};
-    } catch (const std::exception & error) {
-      ++failed_requests_;
-      last_error_ = error.what();
-      return {{"sensor_id", sensor_id}, {"section", section},
-        {"success", false}, {"error", error.what()}};
-    }
+    return guarded(sensor_id, section, [&] {
+               return exchange(prepare_read(sensor_id, section, names, requested_types, status));
+             });
   }
 
-  Json exchange(
-    const std::shared_ptr<InstructionBatch> & batch, const std::vector<std::string> & names,
-    const std::vector<ValueType> & types, const std::string & section)
+  Prepared prepare_write(const SetMode::Request & request)
+  {
+    if (request.sensor_id != sensor_id_ || request.section_name != "auto_interface_0dim") {
+      throw std::invalid_argument("Invalid tuning sensor ID or section");
+    }
+    const auto values = smartmicro::drivers::radar::validate_umrr96_tuning(
+      request.params, request.values, request.value_types);
+    auto instructions = services_->GetInstructionService();
+    std::shared_ptr<InstructionBatch> batch;
+    if (!instructions || !instructions->AllocateInstructionBatch(sensor_id_, batch)) {
+      throw std::runtime_error("Could not allocate SDK tuning request");
+    }
+    Prepared prepared{std::make_unique<InstructionBatchLease>(instructions, batch), {},
+      request.section_name};
+    for (size_t i = 0; i < request.params.size(); ++i) {
+      const bool floating = std::holds_alternative<float>(values[i]);
+      prepared.items.push_back(
+        {request.section_name, request.params[i], floating ? ValueType::kF32 : ValueType::kU8});
+      const bool added = std::visit([&](auto value) {
+            return batch->AddRequest(
+            std::make_shared<com::master::SetParamRequest<decltype(value)>>(
+            request.section_name, request.params[i], value));
+        }, values[i]);
+      if (!added) {
+        throw std::invalid_argument("SDK rejected tuning parameter: " + request.params[i]);
+      }
+    }
+    return prepared;
+  }
+
+  Prepared prepare_read(
+    uint32_t sensor_id, const std::string & section, const std::vector<std::string> & names,
+    const std::vector<uint8_t> & requested_types, bool status)
+  {
+    if (sensor_id != sensor_id_) {
+      throw std::invalid_argument("Sensor ID does not match this readback node");
+    }
+    if (section != (status ? "auto_interface" : "auto_interface_0dim")) {
+      throw std::invalid_argument("Invalid UMRR-96 readback section");
+    }
+    if (names.empty() || names.size() > 10 || names.size() != requested_types.size()) {
+      throw std::invalid_argument("Supply 1–10 names and an equal number of data types");
+    }
+    if (std::set<std::string>(names.begin(), names.end()).size() != names.size()) {
+      throw std::invalid_argument("Readback names must be unique");
+    }
+    constexpr std::array<ValueType, 4> param_types = {
+      ValueType::kF32, ValueType::kU32, ValueType::kU16, ValueType::kU8};
+    constexpr std::array<ValueType, 4> status_types = {
+      ValueType::kU32, ValueType::kU16, ValueType::kU8, ValueType::kI32};
+    auto instructions = services_->GetInstructionService();
+    std::shared_ptr<InstructionBatch> batch;
+    if (!instructions || !instructions->AllocateInstructionBatch(sensor_id_, batch)) {
+      throw std::runtime_error("Could not allocate SDK read request");
+    }
+    Prepared prepared{std::make_unique<InstructionBatchLease>(instructions, batch), {}, section};
+    for (size_t i = 0; i < names.size(); ++i) {
+      if (requested_types[i] > 3) {
+        throw std::invalid_argument("Invalid readback data type");
+      }
+      const auto type = (status ? status_types : param_types)[requested_types[i]];
+      prepared.items.push_back({section, names[i], type});
+      bool added = false;
+      switch (type) {
+        case ValueType::kF32: added = add_read<float>(batch, status, section, names[i]); break;
+        case ValueType::kU32: added = add_read<uint32_t>(batch, status, section, names[i]); break;
+        case ValueType::kU16: added = add_read<uint16_t>(batch, status, section, names[i]); break;
+        case ValueType::kU8: added = add_read<uint8_t>(batch, status, section, names[i]); break;
+        case ValueType::kI32: added = add_read<int32_t>(batch, status, section, names[i]); break;
+      }
+      if (!added) {
+        throw std::invalid_argument("Unknown, duplicate, or incorrectly typed read: " + names[i]);
+      }
+    }
+    return prepared;
+  }
+
+  // Sends a prepared batch; the reply arrives on an SDK thread in the returned state.
+  std::shared_ptr<PendingResponse> send(const Prepared & request)
   {
     ++exchanges_;
-    const auto sensor_id = sensor_id_;
-    auto instructions = services_->GetInstructionService();
     // Capture owned state only: a late reply must remain safe after a timeout.
     const auto pending = std::make_shared<PendingResponse>();
-    std::vector<InstructionItem> items;
-    for (size_t i = 0; i < names.size(); ++i) {
-      items.push_back({section, names[i], types[i]});
-    }
-    const auto sent = instructions->SendInstructionBatch(
-      batch, [pending, items, section, sensor_id](
+    const auto sent = services_->GetInstructionService()->SendInstructionBatch(
+      request.lease->get(), [pending, items = request.items, section = request.section,
+      sensor_id = sensor_id_](
         com::types::ClientId, const std::shared_ptr<ResponseBatch> response) {
         auto result = smartmicro::drivers::radar::decode_instruction_reply(
           response, sensor_id, section, items);
@@ -378,24 +478,40 @@ private:
     if (sent != com::types::ERROR_CODE_OK) {
       throw std::runtime_error("SDK could not send instruction request");
     }
+    return pending;
+  }
+
+  // Sends a service request and waits for the reply, at most timeout_ms (C25).
+  Json exchange(Prepared request)
+  {
+    const auto pending = send(request);
     std::unique_lock<std::mutex> lock(pending->mutex);
     if (!pending->ready.wait_for(lock, timeout_, [&pending] {return pending->received;})) {
       ++timeouts_;
       throw ReplyTimeout("Timed out waiting for the sensor reply");
     }
+    return accept(pending->result);
+  }
+
+  // Counts a received reply; returns it unchanged.
+  Json accept(Json result)
+  {
     ++responses_;
-    last_response_ = std::chrono::steady_clock::now();
+    last_response_ = Clock::now();
     last_error_.clear();
-    if (!pending->result["success"].get<bool>()) {
+    if (!result["success"].get<bool>()) {
       ++sensor_rejections_;
       last_error_ = "Sensor rejected one or more instructions";
     }
-    return pending->result;
+    return result;
   }
 
   static constexpr int64_t kMaxTimeoutMs = 4000;
+  static constexpr auto kStartupRetryPeriod = std::chrono::seconds(5);
   int64_t startup_can_output_{-1};
   unsigned startup_can_attempts_{};
+  bool startup_verifying_{false};
+  Clock::time_point next_startup_attempt_{};
   std::string startup_can_state_{"unchanged"};
   rclcpp::TimerBase::SharedPtr startup_timer_;
   rclcpp::Clock steady_clock_{RCL_STEADY_TIME};  // Log throttling independent of sim time.
@@ -411,6 +527,8 @@ private:
   rclcpp::Service<GetMode>::SharedPtr mode_service_;
   rclcpp::Service<GetStatus>::SharedPtr status_service_;
   rclcpp::Service<SetMode>::SharedPtr set_service_;
+  // Declared last: releases its batch before the SDK services above.
+  std::optional<InFlight> startup_exchange_;
 };
 
 std::shared_ptr<rclcpp::Node> make_readback_node(const rclcpp::NodeOptions & options)

@@ -141,6 +141,14 @@ acquisition time of their list header instead: `TimeStamp` [s] +
 2026-10-09 CAN lists reported the SDK receive time as device time. Header stamps
 remain ROS receive time throughout.
 
+The readback node's `Control requests` status counts requests, timeouts and
+rejections and reports the startup CAN target-output write as
+`startup_can_target_output` (`pending`, `writing (attempt N)`, `verifying (attempt
+N)`, `retrying: <error>`, `on (confirmed)`/`off (confirmed)` or `superseded by a
+set_radar_mode request`) with `startup_can_target_attempts`. The startup write and
+its readback run without blocking the executor, so control requests and the
+diagnostics are served while the sensor is unreachable.
+
 `UDP adapter N` reports the kernel's drop counter of the Ethernet adapter's socket
 (`/proc/net/udp`). Only the process's own sockets are considered, matched by local
 port and, when `hw_ip_address` is set, by local address; the status is `WARN`
