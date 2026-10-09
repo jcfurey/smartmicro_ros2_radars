@@ -431,6 +431,11 @@ class RosViewTests(unittest.TestCase):
             wait(lambda: guides)
             self.assertTrue({'5 m', '10 m', '15 m', '20 m'}.issubset(
                 {marker.text for marker in guides[-1].markers}))
+            # C66: latched once, so they must not pin RViz to the startup TF time.
+            for marker in guides[-1].markers:
+                self.assertEqual(marker.header.frame_id, 'umrr96')
+                self.assertEqual((marker.header.stamp.sec, marker.header.stamp.nanosec), (0, 0))
+                self.assertTrue(marker.frame_locked)
             wait(lambda: fan[-1].width == 0)
             wait(lambda: images[-1].header.stamp != cloud.header.stamp)
             np.testing.assert_array_equal(
