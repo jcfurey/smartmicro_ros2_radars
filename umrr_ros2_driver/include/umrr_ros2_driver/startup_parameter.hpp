@@ -3,7 +3,10 @@
 #define UMRR_ROS2_DRIVER__STARTUP_PARAMETER_HPP_
 
 #include <rclcpp/rclcpp.hpp>
+#include <cmath>
 #include <cstdint>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 
@@ -33,6 +36,35 @@ auto startup_parameter(
   } else {
     return node.declare_parameter<std::string>(name, std::string(default_value), descriptor);
   }
+}
+
+// A floating-point startup parameter. An integer is accepted too (`5` for `5.0` in YAML,
+// as in the Python nodes); a non-number, NaN or a value outside [minimum, maximum] is
+// rejected with the parameter named.
+inline double startup_number(
+  rclcpp::Node & node, const std::string & name, double default_value, double minimum,
+  double maximum, const std::string & description, const std::string & unit = {})
+{
+  std::ostringstream range;
+  range << minimum << ".." << maximum << unit;
+  auto descriptor = startup_descriptor();
+  descriptor.description = description;
+  descriptor.additional_constraints = "Number within [" + range.str() + "]";
+  descriptor.dynamic_typing = true;
+  const auto value =
+    node.declare_parameter(name, rclcpp::ParameterValue(default_value), descriptor);
+  double number{};
+  if (value.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER) {
+    number = static_cast<double>(value.get<int64_t>());
+  } else if (value.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+    number = value.get<double>();
+  } else {
+    throw std::invalid_argument(name + " must be a number");
+  }
+  if (!std::isfinite(number) || number < minimum || number > maximum) {
+    throw std::invalid_argument(name + " must be within " + range.str());
+  }
+  return number;
 }
 
 // diagnostic_updater names statuses "<node name>: <task>", so radars in different

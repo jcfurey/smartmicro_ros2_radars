@@ -89,6 +89,10 @@ struct SensorConfig
   std::uint32_t uifminorv{};
   std::uint32_t uifpatchv{};
   std::string pub_type{};
+  // Subtracted from the receive time for every header stamp of this sensor [s].
+  double stamp_offset_s{};
+  // Target field also published as `intensity` (empty: none).
+  std::string intensity_field{};
 };
 
 struct HWConfig
@@ -240,7 +244,8 @@ private:
 
   ///
   /// @brief      Publishes the RadarTiming of a received list, updates the stream's
-  ///             health and returns the ROS receive time used as header stamp.
+  ///             health and returns the header stamp: the ROS receive time minus the
+  ///             sensor's stamp_offset_s (not earlier than time zero).
   ///
   /// @param[in]  timestamp_us  Device timestamp [us], or none if the list has none.
   ///

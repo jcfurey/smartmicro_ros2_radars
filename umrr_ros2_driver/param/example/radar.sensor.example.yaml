@@ -15,6 +15,9 @@
               id: 500
               # Adapter id to which sensor is connected
               dev_id: 2
+              # Serialization of instructions and data: "can_based" on CAN, "port_based" on Ethernet.
+              inst_type: "can_based"
+              data_type: "can_based"
               # The interface name of the sensor
               uifname: "umrr9d_t152_automotive"
               # The major version of the interface
@@ -37,6 +40,9 @@
               id: 600
               # Adapter id to which sensor is connected
               dev_id: 4
+              # Serialization of instructions and data: "can_based" on CAN, "port_based" on Ethernet.
+              inst_type: "can_based"
+              data_type: "can_based"
               # The interface name of the sensor
               uifname: "umrr9f_t169_automotive"
               # The major version of the interface
@@ -115,6 +121,9 @@
               id: 900
               # Adapter id to which sensor is connected
               dev_id: 5
+              # Serialization of instructions and data: "can_based" on CAN, "port_based" on Ethernet.
+              inst_type: "can_based"
+              data_type: "can_based"
               # The interface name of the sensor
               uifname: "umrr9d_t152_automotive"
               # The major version of the interface

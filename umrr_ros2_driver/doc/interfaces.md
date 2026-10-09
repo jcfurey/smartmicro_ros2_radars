@@ -27,7 +27,7 @@ Topic and service names are relative and keep their historical form, with a
 ### Optional `radar_msgs/RadarScan`
 
 When the package is built with [radar_msgs](https://index.ros.org/p/radar_msgs/)
-available (`apt install ros-lyrical-radar-msgs`; CMake option
+available (`rosdep install` or `apt install ros-lyrical-radar-msgs`; CMake option
 `SMARTMICRO_WITH_RADAR_MSGS`, default ON, detects it) and the startup parameter
 `publish_radar_scan: true` is set, every target cloud is also published as
 `radar_msgs/RadarScan` on `smart_radar/radar_scan_N`: same header and detection
@@ -36,8 +36,13 @@ radial speed [m/s] without sign conversion (see `radial_speed` below) and
 `amplitude` = power [dB]. A cycle without targets gives an empty scan (before
 2026-10-09 such a cycle was undefined behaviour and aborted builds with
 `_GLIBCXX_ASSERTIONS`). The scan is only built while it has subscribers.
-Setting the parameter on a build without radar_msgs fails at startup. radar_msgs
-is not a declared package dependency, so rosdep does not install it.
+`publish_radar_scan` stays `false` by default until the Doppler sign is verified
+on hardware (O14). radar_msgs is a declared dependency since 2026-10-09, so
+`rosdep install` provides it and a default build includes the output; it is still
+optional at build time: without it, or with `-DSMARTMICRO_WITH_RADAR_MSGS=OFF`,
+the driver builds without the output, and setting the parameter then fails at
+startup. Unless the option is OFF, a build that finds radar_msgs links and exports
+it.
 
 To run several radars or place one under a robot namespace, set the node
 namespace instead of renaming topics: `ros2 run ... --ros-args -r __ns:=/front`
@@ -149,6 +154,20 @@ two sensors share an `id`, a `frame_id` (two devices in one TF frame; since
 differs from its adapter's `hw_type`, or a `frame_id` starts with `/` (tf2
 rejects such frames). Each of these previously started a node that published
 nothing for that sensor.
+
+It also names the parameter for configurations that the SDK refused only with
+"Communication Service initialization failed" (since 2026-10-09): two Ethernet
+sensors with the same `ip` (the SDK identifies Ethernet sensors by address, so a
+different `port` does not help), a sensor `inst_type` or `data_type` other than
+`port_based` or `can_based` (empty included; the shipped CAN example now sets
+`can_based`), a second `eth` adapter (SDK 3.13.0: "Only one ETH iface is
+allowed"; several Ethernet sensors share one adapter) and an adapter `hw_type`
+other than `eth` or `can`. `master_data_serial_type` and
+`master_inst_serial_type` may stay empty, which the SDK accepts with its own
+default (loopback reception was unaffected), but any other value than
+`port_based` or `can_based` is rejected as a typo. Use `port_based` for Ethernet
+sensors: on loopback an Ethernet sensor with `inst_type: can_based` started but
+never received data (not rejected; unverified on hardware).
 
 `uifname`, `uifmajorv`, `uifminorv` and `uifpatchv` must name the user interface
 of the sensor's `model` (see `param/model_uif_catalogue.yaml`; the version is the
@@ -267,8 +286,24 @@ fails with a message unless `-DSMARTMICRO_LIB_DIR=` names vendor libraries for i
 
 All clouds are `sensor_msgs/PointCloud2`, little-endian, `height = 1`,
 `is_dense = false`, `frame_id` = `sensors.sensor_N.frame_id`, stamped with ROS
-receive time (see `RadarTiming`). Values a model does not provide are NaN for
-float fields and the maximum value for unsigned integer fields.
+receive time minus the sensor's `stamp_offset_s` (default 0; see
+[latency offset](#latency-offset) and `RadarTiming`). Values a model does not
+provide are NaN for float fields and the maximum value for unsigned integer fields.
+
+### Latency offset
+
+The startup parameter `sensors.sensor_N.stamp_offset_s` (seconds, default 0,
+0..1; an integer such as `0` is accepted) is subtracted from the receive time for
+every header stamp of that sensor: target and object clouds, their header
+messages, `RadarTiming`, `Umrr96RawQuality`, fault reports and `RadarScan`, so
+they still match by stamp (a stamp is never earlier than time zero). Stamps are
+then "receive time minus a configured constant", not acquisition time (S21 stays
+open): the constant removes a mean latency measured elsewhere, not the callback
+jitter. No message changed: `RadarTiming.timestamp_source` stays
+`ROS_RECEIVE_TIME`, and the sensor's stream statuses report the value as
+`stamp_offset_s`. A negative value (data dated after its reception), a value above
+1 s (many 55–120 ms scan periods; most likely a unit mistake), NaN or a
+non-number is rejected at startup with the parameter named.
 
 ### Targets: `smart_radar/port_targets_N`, `smart_radar/can_targets_N` (72-byte stride)
 
@@ -286,6 +321,20 @@ float fields and the maximum value for unsigned integer fields.
 | `false_alarm_probability` | float32 | Probability as reported. NaN for UMRR-96 (raw values in `umrr96_raw_quality_N`). |
 | `flags` | uint32 | Vendor bit field; UINT32_MAX where unavailable. |
 | `peak_idx` | uint16 | Index into the vendor peak list; UINT16_MAX where unavailable. |
+| `intensity` | float32 | Only with `intensity_field` set: a second name for that field (below). |
+
+`sensors.sensor_N.intensity_field` (startup, default empty: no alias) set to
+`power`, `rcs`, `snr` or `noise` adds a field named `intensity` to the target
+clouds (port and CAN) with the same offset and datatype as the chosen field: the
+same bytes under a second name, listed after `peak_idx`, so `point_step` stays 72
+and every other field is unchanged. PCL point types with `intensity`, LiDAR
+odometry front ends and RViz's Intensity channel pick it up. Any other value is
+rejected at startup with the parameter named. Since 2026-10-09.
+
+`is_dense` stays `false` even when every `x`, `y`, `z` is finite: PCL defines a
+dense cloud as one without NaN in any float field, and the clouds do carry NaN
+(UMRR-96 `false_alarm_probability` on every target; unavailable attributes on
+other models).
 
 ### Objects: `smart_radar/port_objects_N`, `smart_radar/can_objects_N` (48-byte stride)
 

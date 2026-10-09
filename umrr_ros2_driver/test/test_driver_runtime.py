@@ -29,6 +29,12 @@ try:  # Optional: the driver publishes RadarScan only when built with radar_msgs
     from radar_msgs.msg import RadarScan
 except ImportError:
     RadarScan = None
+# Set by CMake: radar_msgs can be importable while the driver was built without the
+# output (SMARTMICRO_WITH_RADAR_MSGS=OFF).
+RADAR_SCAN_BUILT = os.environ.get(
+    'SMARTMICRO_RADAR_SCAN_BUILT', '0' if RadarScan is None else '1') == '1'
+if not RADAR_SCAN_BUILT:
+    RadarScan = None
 
 
 def unused_port():
@@ -47,9 +53,13 @@ def test_driver_runtime():
     rclpy.init()
     node = rclpy.create_node('driver_runtime_test')
     clouds, headers, timing, statuses = [], [], [], []
-    quality = []
+    quality, arrivals = [], []
     topic = '/driver_runtime/a/smart_radar/'
-    node.create_subscription(PointCloud2, topic + 'port_targets_0', clouds.append, 10)
+
+    def on_cloud(cloud):
+        clouds.append(cloud)
+        arrivals.append(node.get_clock().now().nanoseconds)
+    node.create_subscription(PointCloud2, topic + 'port_targets_0', on_cloud, 10)
     node.create_subscription(PortTargetHeader, topic + 'port_targetheader_0', headers.append, 10)
     node.create_subscription(RadarTiming, topic + 'timing_0', timing.append, 10)
     node.create_subscription(Umrr96RawQuality, topic + 'umrr96_raw_quality_0', quality.append, 10)
@@ -109,8 +119,10 @@ def test_driver_runtime():
                     link_type='eth', pub_type='target', model='umrr96_v1_2_2', dev_id=4,
                     id=200, frame_id='umrr96_test', history_size=10, ip='127.0.0.1',
                     port=peer_port, inst_type='port_based', data_type='port_based',
-                    uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2, uifpatchv=2)},
+                    uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2, uifpatchv=2,
+                    stamp_offset_s=.5, intensity_field='snr')},
                 instruction_timeout_ms=300, **{'diagnostics.stale_timeout': .5})
+            offset_ns = 500_000_000  # Stamps are receive time minus stamp_offset_s (O6).
             driver_processes = []
             for name, port in (('a', port_a), ('b', port_b)):
                 parameters['adapters']['adapter_0']['port'] = port
@@ -124,6 +136,8 @@ def test_driver_runtime():
                     # An unset user interface is taken from the model (C64).
                     for key in ('uifname', 'uifmajorv', 'uifminorv', 'uifpatchv'):
                         del parameters['sensors']['sensor_0'][key]
+                    parameters['sensors']['sensor_0']['stamp_offset_s'] = 0  # An integer.
+                    del parameters['sensors']['sensor_0']['intensity_field']
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
@@ -212,6 +226,13 @@ def test_driver_runtime():
                 int({v.key: v.value for v in s.values}.get('instruction_timeouts', '0')) >= 2
                 for s in statuses))
             wait(lambda: any(s.name == 'runtime_b: Target stream 0' for s in statuses))
+
+            def offset_of(status):
+                return float({v.key: v.value for v in status.values}.get('stamp_offset_s', 'nan'))
+            wait(lambda: any(s.name == status_a + 'Target stream 0' and offset_of(s) == .5
+                             for s in statuses))
+            wait(lambda: any(s.name == 'runtime_b: Target stream 0' and offset_of(s) == 0
+                             for s in statuses))
             # Firmware download replies are deferred to a worker thread (C4).
             download = node.create_client(FirmwareDownload, topic + 'firmware_download')
             response = call(download, FirmwareDownload.Request(sensor_id=0, file_path='/none'))
@@ -256,10 +277,12 @@ def test_driver_runtime():
             wait(lambda: len(clouds) >= 5 and len(timing) >= 5 and len(headers) >= 5
                  and len(quality) >= 5)
             matched = 0
-            for cloud in clouds:
+            for cloud, arrival in zip(clouds, arrivals):
                 stamp = cloud.header.stamp
                 ros_ns = stamp.sec * 10**9 + stamp.nanosec
-                assert started_ns <= ros_ns <= node.get_clock().now().nanoseconds
+                # Received after started_ns and before its arrival here, minus the offset.
+                assert started_ns - offset_ns <= ros_ns <= arrival - offset_ns, (
+                    started_ns, ros_ns, arrival)
                 found = [t for t in timing if t.header == cloud.header]
                 if not found:
                     continue  # Independent DDS topics may be delivered in different orders.
@@ -270,6 +293,9 @@ def test_driver_runtime():
                 assert raw.device_timestamp_us * 1000 != ros_ns
                 assert any(h.header == cloud.header for h in headers)
                 assert cloud.point_step == 72 and cloud.width == 17
+                # intensity_field: snr's bytes also published as `intensity` (O9).
+                alias = next(f for f in cloud.fields if f.name == 'intensity')
+                assert (alias.offset, alias.datatype) == (28, alias.FLOAT32), alias
                 metadata = next(h for h in headers if h.header == cloud.header)
                 assert metadata.acquisition_setup_valid and metadata.acquisition_setup == 0x1234
                 raw_values = next((q for q in quality if q.header == cloud.header), None)
@@ -287,6 +313,8 @@ def test_driver_runtime():
                         expected = struct.unpack('<f', struct.pack('<f', base + index))[0]
                         assert float(record[field]) == expected, (field, index, record[field])
                     assert int(record['peak_idx']) == index + 100
+                    assert struct.pack('<f', record['intensity']) == struct.pack(
+                        '<f', record['snr'])
             if RadarScan is not None:
                 wait(lambda: scans)
                 scan = scans[-1]
@@ -354,7 +382,7 @@ def test_driver_runtime():
 
 def test_radar_scan_requires_radar_msgs():
     """Without radar_msgs, enabling the RadarScan output fails at startup."""
-    if RadarScan is not None:
+    if RADAR_SCAN_BUILT:
         return
     prefix = Path(get_package_prefix('umrr_ros2_driver'))
     with tempfile.TemporaryDirectory(prefix='umrr-radar-scan-test-') as directory:
@@ -392,9 +420,16 @@ def _startup_failure(parameters, directory):
 
 def _eth_sensor(**overrides):
     sensor = {'link_type': 'eth', 'pub_type': 'target', 'model': 'umrr96_v1_2_2',
-              'dev_id': 4, 'id': 200, 'ip': '127.0.0.1', 'port': 55555}
+              'dev_id': 4, 'id': 200, 'ip': '127.0.0.1', 'port': 55555,
+              'inst_type': 'port_based', 'data_type': 'port_based'}
     sensor.update(overrides)
     return sensor
+
+
+def _eth_adapter(**overrides):
+    adapter = {'hw_type': 'eth', 'hw_dev_id': 4, 'hw_iface_name': 'lo', 'port': unused_port()}
+    adapter.update(overrides)
+    return adapter
 
 
 @pytest.mark.parametrize('sensors, extra, message', [
@@ -405,6 +440,17 @@ def _eth_sensor(**overrides):
     ({'sensor_0': _eth_sensor(link_type='can', model='umrr96_can_v1_2_2')}, {},
      "does not match the 'eth' adapter"),
     ({'sensor_0': _eth_sensor()}, {'instruction_timeout_ms': 50}, 'instruction_timeout_ms'),
+    ({'sensor_0': _eth_sensor(stamp_offset_s=-.01)}, {},
+     'sensors.sensor_0.stamp_offset_s must be within 0..1 s'),
+    ({'sensor_0': _eth_sensor(stamp_offset_s=1.5)}, {},
+     'sensors.sensor_0.stamp_offset_s must be within 0..1 s'),
+    ({'sensor_0': _eth_sensor(stamp_offset_s=float('nan'))}, {},
+     'sensors.sensor_0.stamp_offset_s must be within 0..1 s'),
+    ({'sensor_0': _eth_sensor(stamp_offset_s='50ms')}, {},
+     'sensors.sensor_0.stamp_offset_s must be a number'),
+    ({'sensor_0': _eth_sensor(intensity_field='intensity')}, {},
+     "sensors.sensor_0.intensity_field must be empty, 'power', 'rcs', 'snr' or 'noise', got "
+     "'intensity'"),
     ({'sensor_0': _eth_sensor(frame_id='radar'),
       'sensor_1': _eth_sensor(id=201, frame_id='radar')}, {},
      "sensor_1.frame_id 'radar' duplicates sensors.sensor_0"),
@@ -414,26 +460,71 @@ def _eth_sensor(**overrides):
     ({'sensor_0': _eth_sensor(uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2,
                               uifpatchv=1)}, {},
      "sensor_0.uifpatchv 1 does not match model 'umrr96_v1_2_2' (expects 2)"),
+    # C71: each of these failed only with "Communication Service initialization failed".
+    ({'sensor_0': _eth_sensor(frame_id='umrr_0'),
+      'sensor_1': _eth_sensor(id=201, frame_id='umrr_1', port=55556)}, {},
+     'sensor_1.ip 127.0.0.1 duplicates sensors.sensor_0'),
+    ({'sensor_0': _eth_sensor(inst_type='')}, {},
+     "sensor_0.inst_type must be 'port_based' or 'can_based', got ''"),
+    ({'sensor_0': _eth_sensor(data_type='port')}, {},
+     "sensor_0.data_type must be 'port_based' or 'can_based', got 'port'"),
+    ({'sensor_0': _eth_sensor()}, {'master_data_serial_type': 'portbased'},
+     "master_data_serial_type must be 'port_based' or 'can_based' (or empty)"),
+    ({'sensor_0': _eth_sensor()},
+     {'adapters': {'adapter_0': _eth_adapter(), 'adapter_1': _eth_adapter(hw_dev_id=5)}},
+     "adapters.adapter_1.hw_type 'eth': the SDK accepts one Ethernet adapter per process"),
+    ({'sensor_0': _eth_sensor()},
+     {'adapters': {'adapter_0': _eth_adapter(), 'adapter_1': _eth_adapter(
+         hw_type='ethernet', hw_dev_id=5)}},
+     "adapters.adapter_1.hw_type must be 'eth' or 'can', got 'ethernet'"),
 ])
 def test_invalid_startup_configuration_is_rejected(sensors, extra, message):
     """Configurations that would silently deliver nothing fail at startup instead."""
     with tempfile.TemporaryDirectory(prefix='umrr-startup-test-') as directory:
-        output = _startup_failure(dict(
-            adapters={'adapter_0': {'hw_type': 'eth', 'hw_dev_id': 4, 'hw_iface_name': 'lo',
-                                    'port': unused_port()}},
-            sensors=sensors, **extra), directory)
+        parameters = {'adapters': {'adapter_0': _eth_adapter()}, 'sensors': sensors}
+        parameters.update(extra)
+        output = _startup_failure(parameters, directory)
         assert message in output, output
 
 
-def _shipped_sensors():
-    """Yield the file name and sensors of every shipped driver parameter file."""
+def _shipped_sections():
+    """Yield the file name and ros__parameters of every shipped driver parameter section."""
     for path in sorted((Path(__file__).resolve().parents[1] / 'param').rglob('*.yaml')):
         for section in yaml.safe_load(path.read_text()).values():
             if not isinstance(section, dict):
                 continue  # model_uif_catalogue.yaml
-            sensors = (section.get('ros__parameters') or {}).get('sensors')
-            if isinstance(sensors, dict):
-                yield path.name, sensors
+            yield path.name, section.get('ros__parameters') or {}
+
+
+def _shipped_sensors():
+    """Yield the file name and sensors of every shipped driver parameter file."""
+    for name, parameters in _shipped_sections():
+        sensors = parameters.get('sensors')
+        if isinstance(sensors, dict):
+            yield name, sensors
+
+
+def test_shipped_parameter_files_pass_the_sdk_checks():
+    """Shipped files satisfy the C71 startup checks (adapters and sensors may be split)."""
+    serialization = {'port_based', 'can_based'}
+    checked = 0
+    for name, parameters in _shipped_sections():
+        adapters = parameters.get('adapters')
+        if isinstance(adapters, dict):
+            types = [adapter['hw_type'] for adapter in adapters.values()]
+            assert set(types) <= {'eth', 'can'} and types.count('eth') <= 1, (name, types)
+            for key in ('master_data_serial_type', 'master_inst_serial_type'):
+                assert parameters.get(key, '') in serialization | {''}, (name, key)
+            checked += 1
+        sensors = parameters.get('sensors')
+        if isinstance(sensors, dict):
+            ips = [s['ip'] for s in sensors.values() if s['link_type'] == 'eth']
+            assert len(set(ips)) == len(ips), (name, ips)
+            for key, sensor in sensors.items():
+                assert {sensor.get('inst_type'), sensor.get('data_type')} <= serialization, (
+                    name, key)
+                checked += 1
+    assert checked >= 14, checked
 
 
 def test_shipped_parameter_files_match_the_model_catalogue():

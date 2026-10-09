@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -82,7 +83,9 @@ using smartmicro::drivers::radar::kEthernetModels;
 using smartmicro::drivers::radar::kMsePubType;
 using smartmicro::drivers::radar::kTargetPubType;
 using smartmicro::drivers::radar::resolve_user_interface;
+using smartmicro::drivers::radar::validate_intensity_field;
 using smartmicro::drivers::radar::validate_sensor_config;
+using smartmicro::drivers::radar::validate_serialization_type;
 
 constexpr auto kDefaultClientId = 0;
 constexpr auto kDefaultPort = 55555;
@@ -219,7 +222,11 @@ builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
 {
   auto timing_ptr = std::make_unique<umrr_ros2_msgs::msg::RadarTiming>();
   auto & timing = *timing_ptr;
-  timing.header.stamp = now();
+  // A configured constant latency (O6); acquisition time stays unknown (S21).
+  const auto received = now();
+  const auto offset_ns = std::llround(m_sensors[sensor_idx].stamp_offset_s * 1e9);
+  timing.header.stamp = rclcpp::Time(
+    std::max<int64_t>(received.nanoseconds() - offset_ns, 0), received.get_clock_type());
   timing.header.frame_id = m_sensors[sensor_idx].frame_id;
   timing.sensor_id = m_sensors[sensor_idx].id;
   timing.device_timestamp_us = timestamp_us.value_or(0);  // 0: the list carries none.
@@ -249,26 +256,9 @@ typename rclcpp::Publisher<MsgT>::SharedPtr SmartmicroRadarNode::create_data_pub
 
 void SmartmicroRadarNode::setup_diagnostics()
 {
-  auto descriptor = startup_descriptor();
-  descriptor.description =
-    "Target stream silence threshold in seconds (0.1..3600); restart to change.";
-  descriptor.additional_constraints = "Number within [0.1, 3600]";
-  // Dynamic typing: an integer such as `stale_timeout: 5` is accepted, as in the Python nodes.
-  descriptor.dynamic_typing = true;
-  const auto stale_timeout =
-    declare_parameter("diagnostics.stale_timeout", rclcpp::ParameterValue(2.0), descriptor);
-  if (stale_timeout.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER) {
-    stale_timeout_seconds_ = static_cast<double>(stale_timeout.get<int64_t>());
-  } else if (stale_timeout.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-    stale_timeout_seconds_ = stale_timeout.get<double>();
-  } else {
-    throw std::invalid_argument("diagnostics.stale_timeout must be a number");
-  }
-  if (!std::isfinite(stale_timeout_seconds_) || stale_timeout_seconds_ < 0.1 ||
-    stale_timeout_seconds_ > 3600.0)
-  {
-    throw std::invalid_argument("diagnostics.stale_timeout must be within 0.1..3600 s");
-  }
+  stale_timeout_seconds_ = startup_number(
+    *this, "diagnostics.stale_timeout", 2.0, 0.1, 3600.0,
+    "Target stream silence threshold in seconds (0.1..3600); restart to change.", " s");
   declare_diagnostic_names(*this);
   diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
   // hardware_id identifies the physical device: <model>@<ip> for Ethernet,
@@ -378,6 +368,7 @@ void SmartmicroRadarNode::add_stream_status(
       status.add("relative_delay_change_seconds", snapshot.relative_delay_change_seconds);
       status.add("max_positive_delay_change_seconds", snapshot.max_positive_delay_change_seconds);
       status.add("timestamp_source", "ros_receive_time");
+      status.add("stamp_offset_s", m_sensors[sensor_idx].stamp_offset_s);
       status.add("sensor_clock_synchronized", false);
     });
 }
@@ -1242,7 +1233,8 @@ void SmartmicroRadarNode::on_port_targets(
   auto & msg = *msg_ptr;
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::PortTargetHeader>();
   auto & header = *header_ptr;
-  RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
+  RadarCloudBuilder modifier{
+    msg, m_sensors[sensor_idx].frame_id, m_sensors[sensor_idx].intensity_field};
   fill_ros_header_stamp(msg, header, codec::port_timestamp_us(*list), sensor_idx);
   if constexpr (Model::kTargetOptions.raw_quality) {
     auto raw_quality_ptr = std::make_unique<umrr_ros2_msgs::msg::Umrr96RawQuality>();
@@ -1302,7 +1294,8 @@ void SmartmicroRadarNode::on_can_targets(
   auto & msg = *msg_ptr;
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::CanTargetHeader>();
   auto & header = *header_ptr;
-  RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
+  RadarCloudBuilder modifier{
+    msg, m_sensors[sensor_idx].frame_id, m_sensors[sensor_idx].intensity_field};
   fill_ros_header_stamp(msg, header, codec::can_target_timestamp_us(*list), sensor_idx);
   codec::convert_can_targets(*list, header, modifier);
   publish_radar_scan(sensor_idx, msg);
@@ -1355,6 +1348,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
 
   const auto master_inst_serial_type = startup_parameter(*this, kInstSerialTypeTag, std::string{});
   const auto master_data_serial_type = startup_parameter(*this, kDataSerialTypeTag, std::string{});
+  validate_serialization_type(kInstSerialTypeTag, master_inst_serial_type, true);
+  validate_serialization_type(kDataSerialTypeTag, master_data_serial_type, true);
 
   auto read_adapter_params_if_possible = [&](const std::uint32_t index) {
       auto & current_adapter = m_adapters[index];
@@ -1374,6 +1369,13 @@ void SmartmicroRadarNode::update_config_files_from_params()
       current_adapter.baudrate = startup_parameter(*this, prefix_2 + ".baudrate", 500000);
       current_adapter.port = startup_parameter(*this, prefix_2 + ".port", kDefaultPort, 0, 65535);
 
+      // Sensors use only Ethernet and CAN adapters; the SDK fails initialization on an
+      // unknown type ("Obtained Undefined type hwItem") without naming the adapter.
+      if (current_adapter.hw_type != kEthLinkType && current_adapter.hw_type != kCanLinkType) {
+        throw std::invalid_argument(
+                prefix_2 + ".hw_type must be 'eth' or 'can', got '" + current_adapter.hw_type +
+                "'");
+      }
       if (current_adapter.port > 65535 ||
         (current_adapter.hw_type == "eth" && current_adapter.port == 0))
       {
@@ -1388,6 +1390,12 @@ void SmartmicroRadarNode::update_config_files_from_params()
         if (m_adapters[i].hw_dev_id == current_adapter.hw_dev_id) {
           throw std::invalid_argument(
                   prefix_2 + ".hw_dev_id duplicates adapters.adapter_" + std::to_string(i));
+        }
+        // SDK 3.13.0: "Only one ETH iface is allowed"; several sensors share one adapter.
+        if (current_adapter.hw_type == kEthLinkType && m_adapters[i].hw_type == kEthLinkType) {
+          throw std::invalid_argument(
+                  prefix_2 + ".hw_type 'eth': the SDK accepts one Ethernet adapter per process, "
+                  "and adapters.adapter_" + std::to_string(i) + " is one");
         }
       }
       return true;
@@ -1413,11 +1421,22 @@ void SmartmicroRadarNode::update_config_files_from_params()
       sensor.frame_id = startup_parameter(*this, prefix_3 + ".frame_id", kDefaultFrameId);
       sensor.history_size =
         startup_parameter(*this, prefix_3 + ".history_size", kDefaultHistorySize, 1, UINT32_MAX);
+      // A latency is never negative (that would date data after its reception). The scan
+      // period is 55-120 ms, so 1 s leaves room for several cycles of sensor latency
+      // while catching unit mistakes such as 50 meant as milliseconds.
+      sensor.stamp_offset_s = startup_number(
+        *this, prefix_3 + ".stamp_offset_s", 0.0, 0.0, 1.0,
+        "Constant latency subtracted from the receive time for this sensor's header "
+        "stamps [s]; restart to change.", " s");
       sensor.inst_type = startup_parameter(*this, prefix_3 + ".inst_type", "");
       sensor.data_type = startup_parameter(*this, prefix_3 + ".data_type", "");
       sensor.link_type = startup_parameter(*this, prefix_3 + ".link_type", kDefaultHwLinkType);
       sensor.pub_type = startup_parameter(*this, prefix_3 + ".pub_type", "");
       validate_sensor_config(prefix_3, sensor.link_type, sensor.model, sensor.pub_type);
+      validate_serialization_type(prefix_3 + ".inst_type", sensor.inst_type);
+      validate_serialization_type(prefix_3 + ".data_type", sensor.data_type);
+      sensor.intensity_field = startup_parameter(*this, prefix_3 + ".intensity_field", "");
+      validate_intensity_field(prefix_3 + ".intensity_field", sensor.intensity_field);
       const auto interface = resolve_user_interface(
         prefix_3, sensor.model, sensor.uifname, sensor.uifmajorv, sensor.uifminorv,
         sensor.uifpatchv);
@@ -1452,6 +1471,16 @@ void SmartmicroRadarNode::update_config_files_from_params()
           throw std::invalid_argument(
                   prefix_3 + ".frame_id '" + sensor.frame_id + "' duplicates sensors.sensor_" +
                   std::to_string(i) + " (each sensor needs its own TF frame)");
+        }
+      }
+      // The SDK keys Ethernet clients by address: a second sensor on one address fails
+      // its initialization whatever the port. (inet_pton accepted only canonical
+      // dotted-decimal text, so equal addresses are equal strings.)
+      for (size_t i = 0; i < index && sensor.link_type == kEthLinkType; ++i) {
+        if (m_sensors[i].link_type == kEthLinkType && m_sensors[i].ip == sensor.ip) {
+          throw std::invalid_argument(
+                  prefix_3 + ".ip " + sensor.ip + " duplicates sensors.sensor_" +
+                  std::to_string(i) + " (one Ethernet sensor per address, whatever the port)");
         }
       }
       const auto adapter = std::find_if(
