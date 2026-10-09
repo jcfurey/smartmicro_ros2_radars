@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -220,7 +221,11 @@ builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
 {
   auto timing_ptr = std::make_unique<umrr_ros2_msgs::msg::RadarTiming>();
   auto & timing = *timing_ptr;
-  timing.header.stamp = now();
+  // A configured constant latency (O6); acquisition time stays unknown (S21).
+  const auto received = now();
+  const auto offset_ns = std::llround(m_sensors[sensor_idx].stamp_offset_s * 1e9);
+  timing.header.stamp = rclcpp::Time(
+    std::max<int64_t>(received.nanoseconds() - offset_ns, 0), received.get_clock_type());
   timing.header.frame_id = m_sensors[sensor_idx].frame_id;
   timing.sensor_id = m_sensors[sensor_idx].id;
   timing.device_timestamp_us = timestamp_us.value_or(0);  // 0: the list carries none.
@@ -250,26 +255,9 @@ typename rclcpp::Publisher<MsgT>::SharedPtr SmartmicroRadarNode::create_data_pub
 
 void SmartmicroRadarNode::setup_diagnostics()
 {
-  auto descriptor = startup_descriptor();
-  descriptor.description =
-    "Target stream silence threshold in seconds (0.1..3600); restart to change.";
-  descriptor.additional_constraints = "Number within [0.1, 3600]";
-  // Dynamic typing: an integer such as `stale_timeout: 5` is accepted, as in the Python nodes.
-  descriptor.dynamic_typing = true;
-  const auto stale_timeout =
-    declare_parameter("diagnostics.stale_timeout", rclcpp::ParameterValue(2.0), descriptor);
-  if (stale_timeout.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER) {
-    stale_timeout_seconds_ = static_cast<double>(stale_timeout.get<int64_t>());
-  } else if (stale_timeout.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-    stale_timeout_seconds_ = stale_timeout.get<double>();
-  } else {
-    throw std::invalid_argument("diagnostics.stale_timeout must be a number");
-  }
-  if (!std::isfinite(stale_timeout_seconds_) || stale_timeout_seconds_ < 0.1 ||
-    stale_timeout_seconds_ > 3600.0)
-  {
-    throw std::invalid_argument("diagnostics.stale_timeout must be within 0.1..3600 s");
-  }
+  stale_timeout_seconds_ = startup_number(
+    *this, "diagnostics.stale_timeout", 2.0, 0.1, 3600.0,
+    "Target stream silence threshold in seconds (0.1..3600); restart to change.", " s");
   declare_diagnostic_names(*this);
   diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
   // hardware_id identifies the physical device: <model>@<ip> for Ethernet,
@@ -379,6 +367,7 @@ void SmartmicroRadarNode::add_stream_status(
       status.add("relative_delay_change_seconds", snapshot.relative_delay_change_seconds);
       status.add("max_positive_delay_change_seconds", snapshot.max_positive_delay_change_seconds);
       status.add("timestamp_source", "ros_receive_time");
+      status.add("stamp_offset_s", m_sensors[sensor_idx].stamp_offset_s);
       status.add("sensor_clock_synchronized", false);
     });
 }
@@ -1429,6 +1418,13 @@ void SmartmicroRadarNode::update_config_files_from_params()
       sensor.frame_id = startup_parameter(*this, prefix_3 + ".frame_id", kDefaultFrameId);
       sensor.history_size =
         startup_parameter(*this, prefix_3 + ".history_size", kDefaultHistorySize, 1, UINT32_MAX);
+      // A latency is never negative (that would date data after its reception). The scan
+      // period is 55-120 ms, so 1 s leaves room for several cycles of sensor latency
+      // while catching unit mistakes such as 50 meant as milliseconds.
+      sensor.stamp_offset_s = startup_number(
+        *this, prefix_3 + ".stamp_offset_s", 0.0, 0.0, 1.0,
+        "Constant latency subtracted from the receive time for this sensor's header "
+        "stamps [s]; restart to change.", " s");
       sensor.inst_type = startup_parameter(*this, prefix_3 + ".inst_type", "");
       sensor.data_type = startup_parameter(*this, prefix_3 + ".data_type", "");
       sensor.link_type = startup_parameter(*this, prefix_3 + ".link_type", kDefaultHwLinkType);

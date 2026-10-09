@@ -281,8 +281,24 @@ fails with a message unless `-DSMARTMICRO_LIB_DIR=` names vendor libraries for i
 
 All clouds are `sensor_msgs/PointCloud2`, little-endian, `height = 1`,
 `is_dense = false`, `frame_id` = `sensors.sensor_N.frame_id`, stamped with ROS
-receive time (see `RadarTiming`). Values a model does not provide are NaN for
-float fields and the maximum value for unsigned integer fields.
+receive time minus the sensor's `stamp_offset_s` (default 0; see
+[latency offset](#latency-offset) and `RadarTiming`). Values a model does not
+provide are NaN for float fields and the maximum value for unsigned integer fields.
+
+### Latency offset
+
+The startup parameter `sensors.sensor_N.stamp_offset_s` (seconds, default 0,
+0..1; an integer such as `0` is accepted) is subtracted from the receive time for
+every header stamp of that sensor: target and object clouds, their header
+messages, `RadarTiming`, `Umrr96RawQuality`, fault reports and `RadarScan`, so
+they still match by stamp (a stamp is never earlier than time zero). Stamps are
+then "receive time minus a configured constant", not acquisition time (S21 stays
+open): the constant removes a mean latency measured elsewhere, not the callback
+jitter. No message changed: `RadarTiming.timestamp_source` stays
+`ROS_RECEIVE_TIME`, and the sensor's stream statuses report the value as
+`stamp_offset_s`. A negative value (data dated after its reception), a value above
+1 s (many 55–120 ms scan periods; most likely a unit mistake), NaN or a
+non-number is rejected at startup with the parameter named.
 
 ### Targets: `smart_radar/port_targets_N`, `smart_radar/can_targets_N` (72-byte stride)
 
