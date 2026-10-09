@@ -131,7 +131,7 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 
 `/diagnostics` includes `/umrr96_processing/doppler`, rejection reasons, counts,
 condition, residual RMSE, computation time, last velocity age and
-`calibrated=False`, `sensor_moving` and `background_ready`. An OK diagnostic means numerical checks passed, not measured
+`calibrated=False`, `sensor_moving`, `background_ready` and `background_gap_resets`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
 
@@ -145,6 +145,10 @@ from the static scene and feeds the same-speed ghost rules (`moving_ghosts` and
 the track-level rule). On a stationary radar the two agree to within the fit's
 velocity noise; in synthetic stationary scenes the change left track identities
 unchanged and moved track states by at most 5 mm.
+
+The background also restarts its warm-up when the input-stamp gap between valid
+fits exceeds `stale_timeout` (a data gap or a run of failed fits leaves sensor
+motion unknown); `background_gap_resets` counts these restarts.
 
 While the radar is moving (`sensor_moving`), the background is reset and every
 static return would be novel, so confirmed tracks get no zero-Doppler

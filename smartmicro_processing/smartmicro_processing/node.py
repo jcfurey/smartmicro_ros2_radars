@@ -127,7 +127,9 @@ class RadarProcessing(Node):
             'Reject input stamps further than this ahead of the ROS clock (s).', 0, 1)
         self.stale_timeout = declare(
             self, 'stale_timeout', .5,
-            'Wall-clock time without input before outputs clear and input is stale (s).', .1, 10)
+            'Wall-clock time without input before outputs clear and input is stale (s). '
+            'Also the input-stamp gap after which static persistence (between accepted '
+            'scans) and the background (between valid fits) restart.', .1, 10)
         diagnostics_period = declare(
             self, 'diagnostics_period', 1.0,
             'Minimum period between unchanged /diagnostics messages (s); state changes '
@@ -150,6 +152,8 @@ class RadarProcessing(Node):
             'the sensor-frame background is reset and not used, and tracks get no '
             'zero-Doppler support (m/s).', .005, 10)
         self.fast_scans = 0
+        self.last_fit_stamp = None  # input stamp of the last valid fit (ns)
+        self.background_gap_resets = 0
         self.track_pub = self.create_publisher(PointCloud2, '~/tracked_objects',
                                                qos_profile_sensor_data)
         self.marker_pub = self.create_publisher(MarkerArray, '~/track_markers', 10)
@@ -190,6 +194,7 @@ class RadarProcessing(Node):
         if self.last_now is not None and now < self.last_now:
             self.clear_clouds('clock_reset')
             self.last_stamp = None
+            self.last_fit_stamp = None
             self.last_fit_wall = None
             self.last_receipt_wall = None
             self.state = 'clock_reset'
@@ -277,6 +282,13 @@ class RadarProcessing(Node):
             local = np.flatnonzero(movers)[~ghosts]
             speed = float(np.linalg.norm(result.velocity))
             self.fast_scans = self.fast_scans + 1 if speed > self.sensor_moving_speed else 0
+            if (self.last_fit_stamp is not None
+                    and (stamp - self.last_fit_stamp) * 1e-9 > self.stale_timeout):
+                # Sensor motion is unknown across a data gap or a run of failed fits:
+                # the old scene may no longer be background, so warm-up restarts.
+                self.tracker.reset_background()
+                self.background_gap_resets += 1
+            self.last_fit_stamp = stamp
             static = selected[result.inliers, :3]
             # The EKF runs in the sensor frame, where positions move at the velocity
             # relative to the radar: feed it the sign-adapted measured Doppler. The
@@ -429,6 +441,7 @@ class RadarProcessing(Node):
                       association_doppler=self.tracker.config.association_doppler,
                       received=self.received, valid_fits=self.valid_fits,
                       rejected_inputs=self.rejected_inputs, last_velocity_age_seconds=age,
+                      background_gap_resets=self.background_gap_resets,
                       **self.stats)
         status = DiagnosticStatus(
             level=level, name=self.get_fully_qualified_name() + '/doppler', hardware_id=self.frame,

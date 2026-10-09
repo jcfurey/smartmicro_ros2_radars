@@ -328,6 +328,45 @@ def test_processing_moving_sensor_disables_background(ros):
         node.destroy_node()
 
 
+@pytest.mark.parametrize('gap,failed_fits,reset', [
+    (.3, False, False), (8., False, True), (2., True, True)])
+def test_processing_restarts_background_after_a_gap_between_valid_fits(ros, gap, failed_fits,
+                                                                       reset):
+    # The platform may have moved during a data gap or a run of failed fits; the old
+    # scene used to stay "background" and the shadow rule dropped real new structure.
+    ros()
+    node = RadarProcessing()
+    try:
+        node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
+        for name in ('track_pub', 'obstacle_pub', 'audit_pub', 'diagnostics_pub'):
+            setattr(node, name, Recorder())
+        start = node.get_clock().now().nanoseconds
+
+        def send(t, points=None):
+            ns = start + round(t * 1e9)
+            node.now_ns = lambda: ns + 5_000_000
+            node.receive(moving_sensor_cloud(ns, np.zeros(3)) if points is None
+                         else cloud(ns, points))
+
+        t = 0.
+        while t < 3.5:  # stationary: background learned after the 3 s warm-up
+            send(t)
+            t += .055
+        assert node.tracker.background.ready and node.tracker.static_novel is not None
+        end = t + gap
+        while failed_fits and t < end:
+            send(t, [[2, 1, 0, 0, 30]] * 3)
+            assert node.state == 'insufficient_points'
+            t += .055
+        send(max(t, end))
+        assert node.state == 'valid'
+        assert node.tracker.background.ready != reset
+        assert (node.tracker.static_novel is None) == reset
+        assert node.background_gap_resets == int(reset)
+    finally:
+        node.destroy_node()
+
+
 LANDMARKS = np.array([[14 * math.cos(a), 14 * math.sin(a), z]
                       for a in np.radians([-50, -35, -20, -8, 5, 15, 28, 40, 55, 65])
                       for z in (-.8, 0., .8)])
