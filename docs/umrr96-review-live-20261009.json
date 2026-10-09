@@ -969,5 +969,111 @@
    "message": "Last request succeeded; no automatic polling",
    "hardware_id": "umrr96_v1_2_2@192.168.11.11"
   }
+ },
+ "output_batch_namespaced_live": {
+  "port_targets_0": {
+   "count": 223,
+   "fields": {
+    "x": 0,
+    "y": 4,
+    "z": 8,
+    "radial_speed": 12,
+    "power": 16,
+    "rcs": 20,
+    "noise": 24,
+    "snr": 28,
+    "azimuth_angle": 32,
+    "elevation_angle": 36,
+    "range": 40,
+    "variance_range": 44,
+    "variance_speed": 48,
+    "variance_azimuth_angle": 52,
+    "variance_elevation_angle": 56,
+    "false_alarm_probability": 60,
+    "flags": 64,
+    "peak_idx": 68,
+    "intensity": 28
+   },
+   "point_step": 72,
+   "frame": "umrr96",
+   "rate_hz": 18.46
+  },
+  "obstacles_reliable_sub": {
+   "count": 222,
+   "fields": {
+    "x": 0,
+    "y": 4,
+    "z": 8
+   },
+   "point_step": 12,
+   "frame": "umrr96",
+   "rate_hz": 18.44
+  },
+  "filtered_targets_reliable_sub": {
+   "count": 222,
+   "fields": {
+    "x": 0,
+    "y": 4,
+    "z": 8,
+    "radial_speed": 12,
+    "power": 16,
+    "rcs": 20,
+    "noise": 24,
+    "snr": 28,
+    "azimuth_angle": 32,
+    "elevation_angle": 36,
+    "range": 40,
+    "variance_range": 44,
+    "variance_speed": 48,
+    "variance_azimuth_angle": 52,
+    "variance_elevation_angle": 56,
+    "false_alarm_probability": 60,
+    "flags": 64,
+    "peak_idx": 68,
+    "intensity": 28
+   },
+   "point_step": 72,
+   "frame": "umrr96",
+   "rate_hz": 18.46
+  },
+  "fan_image_compressed": {
+   "count": 125,
+   "format": "rgb8; jpeg compressed bgr8",
+   "bytes": 56753,
+   "rate_hz": 10.39
+  },
+  "tracks_reliable_sub": {
+   "count": 222,
+   "frame": "umrr96",
+   "max_tracks": 2,
+   "rate_hz": 18.44
+  },
+  "diagnostics_hardware_ids": {
+   "/front/smart_radar: SDK callbacks": "umrr96_v1_2_2@192.168.11.11",
+   "/front/smart_radar: Target stream 0": "umrr96_v1_2_2@192.168.11.11",
+   "/front/smart_radar: UDP adapter 0": "udp@192.168.11.17:55555",
+   "/front/smart_radar_readback: Control requests": "umrr96_v1_2_2@192.168.11.11",
+   "/front/umrr96_processing/doppler": "umrr96_v1_2_2@192.168.11.11"
+  },
+  "publisher_reliability": {
+   "umrr96_processing/obstacles": [
+    "1"
+   ],
+   "umrr96_processing/tracks": [
+    "1"
+   ],
+   "smart_radar/filtered_targets_0": [
+    "1"
+   ],
+   "smart_radar/port_targets_0": [
+    "1"
+   ]
+  },
+  "port_targets_subscriber_nodes": [
+   "/front/umrr96_processing",
+   "/front/umrr96_views",
+   "/output_batch_probe"
+  ],
+  "note": "robot launch + viz launch in namespace /front; RViz node /front/umrr96_rviz subscribed to /front/smart_radar/{fan_image,fan_guides,density_grid}; publisher_reliability 1 = RELIABLE; 2 transient tracks in the first window, none (and no moving detections) in a later 15 s window"
  }
 }

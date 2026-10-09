@@ -92,6 +92,15 @@ From the stationary live session and its 2,206-scan static recording
 - **RadarScan (O9)** works live at 18.18 Hz when built against radar_msgs; it is
   still not a declared dependency.
 
+**Output batch, live (2026-10-09).** `umrr96_robot.launch.py` and
+`umrr96_viz.launch.py` in namespace `/front`: everything under `/front`, RViz
+subscribed to the relative display topics (O10), default reliable subscribers
+received `obstacles`, `tracks` and `filtered_targets_0` at 18.4 Hz (O2), the
+`intensity` alias shared `snr`'s offset 28 with a 72-byte stride (O9),
+`fan_image/compressed` delivered 57 kB JPEGs at 10 Hz (O12), and every radar
+status used `umrr96_v1_2_2@192.168.11.11` (O7). Fixed-frame tracking (O4) needs
+odometry and was not exercised.
+
 ## Planned changes
 
 Status: `planned`, `in progress`, `done`, `deferred`. Quick wins first.
