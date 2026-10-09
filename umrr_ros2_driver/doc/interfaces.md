@@ -121,6 +121,14 @@ node is started (`ros2 run ... -r __ns:=/front`, a launch file or a component
 container); setting the parameter explicitly overrides it. Before 2026-10-09 only
 the launch files set it.
 
+Each configured data stream has its own liveness status: `Target stream N` for
+every sensor and `Object stream N` for sensors with `pub_type: mse` (object lists
+are subscribed to only then). A stream is `STALE` before its first list ("Waiting
+for ...") and after `diagnostics.stale_timeout` without one, `WARN` after a device
+timestamp anomaly (repeated, backwards or zero) and `OK` otherwise. Before
+2026-10-09 only target lists were tracked: an MSE sensor whose object stream stopped
+still reported `OK`.
+
 `UDP adapter N` reports the kernel's drop counter of the Ethernet adapter's socket
 (`/proc/net/udp`). The socket is matched by local port and, when `hw_ip_address` is
 set, by local address, so adapters sharing a port on different addresses each get

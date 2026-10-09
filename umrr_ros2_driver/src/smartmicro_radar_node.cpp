@@ -216,6 +216,8 @@ builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
   timing.timestamp_source = umrr_ros2_msgs::msg::RadarTiming::ROS_RECEIVE_TIME;
   if (stream == umrr_ros2_msgs::msg::RadarTiming::TARGETS) {
     target_health_[sensor_idx].receive(timestamp_us);
+  } else if (stream == umrr_ros2_msgs::msg::RadarTiming::OBJECTS) {
+    object_health_[sensor_idx].receive(timestamp_us);
   }
   const auto stamp = timing.header.stamp;
   timing_publishers_[sensor_idx]->publish(std::move(timing_ptr));
@@ -271,35 +273,16 @@ void SmartmicroRadarNode::setup_diagnostics()
       raw_quality_publishers_[i] = create_data_publisher<umrr_ros2_msgs::msg::Umrr96RawQuality>(
         "smart_radar/umrr96_raw_quality_" + std::to_string(i), m_sensors[i].history_size);
     }
-    diagnostics_->add("Target stream " + std::to_string(i),
-      [this, i, hardware_id = sensor_hardware_id(i)](
-        diagnostic_updater::DiagnosticStatusWrapper & status) {
-        using Status = diagnostic_msgs::msg::DiagnosticStatus;
-        const auto health = target_health_[i].snapshot();
-        status.hardware_id = hardware_id;
-        status.add("sensor_id", m_sensors[i].id);
-        if (!health.frames || health.age_seconds > stale_timeout_seconds_) {
-          status.summary(Status::STALE,
-                health.frames ? "No recent targets" : "Waiting for targets");
-        } else if (health.timestamp_warning) {
-          status.summary(Status::WARN, "Device timestamp anomaly; headers use ROS receive time");
-        } else {
-          status.summary(Status::OK, "Receiving targets");
-        }
-        status.add("frames_received", health.frames);
-        status.add("last_receive_age_seconds", health.age_seconds);
-        status.add("frequency_hz", health.frequency_hz);
-        status.add("device_timestamp_us", health.device_timestamp_us);
-        status.add("timestamp_repeats", health.repeated);
-        status.add("timestamp_backwards", health.backwards);
-        status.add("timestamp_zero", health.zero);
-        status.add("receive_interval_seconds", health.receive_interval_seconds);
-        status.add("device_interval_seconds", health.device_interval_seconds);
-        status.add("relative_delay_change_seconds", health.relative_delay_change_seconds);
-        status.add("max_positive_delay_change_seconds", health.max_positive_delay_change_seconds);
-        status.add("timestamp_source", "ros_receive_time");
-        status.add("sensor_clock_synchronized", false);
-      });
+    add_stream_status(
+      "Target stream " + std::to_string(i), target_health_[i], i, "targets",
+      sensor_hardware_id(i));
+    // Object lists are registered for pub_type mse only; no status for a stream the
+    // node does not subscribe to.
+    if (m_sensors[i].pub_type == kMsePubType) {
+      add_stream_status(
+        "Object stream " + std::to_string(i), object_health_[i], i, "objects",
+        sensor_hardware_id(i));
+    }
   }
   for (size_t i = 0; i < m_number_of_adapters; ++i) {
     if (m_adapters[i].hw_type != "eth") {continue;}
@@ -347,6 +330,40 @@ void SmartmicroRadarNode::setup_diagnostics()
       std::lock_guard<std::mutex> lock(instructions_mutex_);
       status.add("instruction_requests_pending", pending_instructions_.size());
       status.add("instruction_timeouts", instruction_timeouts_);
+    });
+}
+
+void SmartmicroRadarNode::add_stream_status(
+  const std::string & name, StreamHealth & health, size_t sensor_idx, const std::string & items,
+  const std::string & hardware_id)
+{
+  diagnostics_->add(name,
+    [this, &health, sensor_idx, items, hardware_id](
+      diagnostic_updater::DiagnosticStatusWrapper & status) {
+      using Status = diagnostic_msgs::msg::DiagnosticStatus;
+      const auto snapshot = health.snapshot();
+      status.hardware_id = hardware_id;
+      status.add("sensor_id", m_sensors[sensor_idx].id);
+      if (!snapshot.frames || snapshot.age_seconds > stale_timeout_seconds_) {
+        status.summary(Status::STALE, (snapshot.frames ? "No recent " : "Waiting for ") + items);
+      } else if (snapshot.timestamp_warning) {
+        status.summary(Status::WARN, "Device timestamp anomaly; headers use ROS receive time");
+      } else {
+        status.summary(Status::OK, "Receiving " + items);
+      }
+      status.add("frames_received", snapshot.frames);
+      status.add("last_receive_age_seconds", snapshot.age_seconds);
+      status.add("frequency_hz", snapshot.frequency_hz);
+      status.add("device_timestamp_us", snapshot.device_timestamp_us);
+      status.add("timestamp_repeats", snapshot.repeated);
+      status.add("timestamp_backwards", snapshot.backwards);
+      status.add("timestamp_zero", snapshot.zero);
+      status.add("receive_interval_seconds", snapshot.receive_interval_seconds);
+      status.add("device_interval_seconds", snapshot.device_interval_seconds);
+      status.add("relative_delay_change_seconds", snapshot.relative_delay_change_seconds);
+      status.add("max_positive_delay_change_seconds", snapshot.max_positive_delay_change_seconds);
+      status.add("timestamp_source", "ros_receive_time");
+      status.add("sensor_clock_synchronized", false);
     });
 }
 

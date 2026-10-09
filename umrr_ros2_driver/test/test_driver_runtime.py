@@ -453,3 +453,65 @@ def test_shipped_parameter_files_match_the_model_catalogue():
                 name, key)
             checked += 1
     assert checked >= 10, checked
+
+
+def test_status_per_configured_stream():
+    """Object streams get their own status, only where configured (C62)."""
+    executable = Path(get_package_prefix('umrr_ros2_driver')) / (
+        'lib/umrr_ros2_driver/smartmicro_radar_node_exe')
+    rclpy.init()
+    node = rclpy.create_node('driver_streams_test')
+    statuses = {}
+    node.create_subscription(DiagnosticArray, '/diagnostics', lambda msg: statuses.update(
+        {s.name: s for s in msg.status}), 10)
+    serialization = {'inst_type': 'port_based', 'data_type': 'port_based'}
+    process = None
+    try:
+        with tempfile.TemporaryDirectory(prefix='umrr-streams-test-') as directory:
+            params = Path(directory) / 'params.yaml'
+            params.write_text(yaml.safe_dump({'/**': {'ros__parameters': {
+                'master_data_serial_type': 'port_based', 'master_inst_serial_type': 'port_based',
+                'adapters': {'adapter_0': {
+                    'hw_type': 'eth', 'hw_dev_id': 4, 'hw_iface_name': 'lo',
+                    'hw_ip_address': '127.0.0.1', 'port': unused_port()}},
+                'sensors': {
+                    'sensor_0': _eth_sensor(pub_type='mse', model='umrra4_mse_v3_0_0',
+                                            frame_id='umrr_0', port=unused_port(),
+                                            **serialization),
+                    # The SDK fails to initialize with two clients on one address.
+                    'sensor_1': _eth_sensor(id=201, frame_id='umrr_1', ip='127.0.0.2',
+                                            port=unused_port(), **serialization)}}}}))
+            process = subprocess.Popen(
+                [str(executable), '--ros-args', '-r', '__ns:=/driver_streams',
+                 '-r', '__node:=streams', '--params-file', str(params)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                env=dict(os.environ, TMPDIR=directory))
+            prefix = '/driver_streams/streams: '
+            expected = [prefix + name for name in (
+                'Object stream 0', 'SDK callbacks', 'Target stream 0', 'Target stream 1',
+                'UDP adapter 0')]
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline and process.poll() is None and not all(
+                    name in statuses and statuses[name].message != 'Node starting up'
+                    for name in expected):
+                rclpy.spin_once(node, timeout_sec=.1)
+            assert process.poll() is None, 'driver exited'
+            assert sorted(name for name in statuses if name.startswith(prefix)) == expected
+            objects = statuses[prefix + 'Object stream 0']
+            assert objects.level == DiagnosticStatus.STALE, objects
+            assert objects.message == 'Waiting for objects', objects
+            assert objects.hardware_id == 'umrra4_mse_v3_0_0@127.0.0.1', objects
+            assert statuses[prefix + 'Target stream 1'].message == 'Waiting for targets'
+    finally:
+        output = ''
+        if process is not None:
+            process.send_signal(signal.SIGINT)
+            try:
+                output, _ = process.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate()
+            print(output)
+        node.destroy_node()
+        rclpy.shutdown()
+    assert process.returncode == 0, output

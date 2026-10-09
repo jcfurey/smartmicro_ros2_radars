@@ -231,6 +231,19 @@ private:
   void setup_diagnostics();
 
   ///
+  /// @brief      Adds the liveness and device-timestamp status of one data stream.
+  ///
+  /// @param[in]  name         Status name, e.g. "Target stream 0".
+  /// @param[in]  health       The stream's health, updated by receive_stamp().
+  /// @param[in]  sensor_idx   The sensor index.
+  /// @param[in]  items        What the stream delivers ("targets", "objects").
+  /// @param[in]  hardware_id  The sensor's hardware id.
+  ///
+  void add_stream_status(
+    const std::string & name, StreamHealth & health, size_t sensor_idx,
+    const std::string & items, const std::string & hardware_id);
+
+  ///
   /// @brief Fills the ROS timestamp for the PointCloud2 message and the custom header message.
   ///
   /// @tparam HeaderMsgT One of the custom header message types:
@@ -357,7 +370,9 @@ private:
   // Declared first so its directory outlives the node's publishers/services.
   RuntimeConfig runtime_config_{"smartmicro-data"};
   SdkCallbackGate callback_gate_;
+  // Liveness per configured stream: target lists, and object lists (pub_type mse).
   std::array<StreamHealth, detail::kMaxSensorCount> target_health_;
+  std::array<StreamHealth, detail::kMaxSensorCount> object_health_;
   std::array<rclcpp::Publisher<umrr_ros2_msgs::msg::RadarTiming>::SharedPtr,
     detail::kMaxSensorCount> timing_publishers_;
   std::array<rclcpp::Publisher<umrr_ros2_msgs::msg::Umrr96RawQuality>::SharedPtr,
