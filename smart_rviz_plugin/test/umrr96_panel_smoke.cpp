@@ -226,6 +226,42 @@ int main(int argc, char ** argv)
           std::any_of(names.begin(), names.end(), [&](const std::string & name) {
             return name.rfind(panel_prefix, 0) == 0;});
       });
+    // The Namespace property replaces RViz's namespace for every endpoint, is saved
+    // with the configuration, and an empty value returns to RViz's namespace.
+    auto other = node->create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
+      "/umrr96_panel_other/smart_radar/port_targetheader_0", rclcpp::SensorDataQoS());
+    QTimer other_measurements;
+    QObject::connect(&other_measurements, &QTimer::timeout, [&] {
+        umrr_ros2_msgs::msg::PortTargetHeader message;
+        message.number_of_targets = 7;
+        message.cycle_time = .055;
+        other->publish(message);
+      });
+    other_measurements.start(50);
+    auto namespace_edit = panel->findChild<QLineEdit *>("namespace");
+    check(namespace_edit && namespace_edit->text().isEmpty() &&
+      namespace_edit->placeholderText().endsWith(QString::fromStdString(ns)),
+      "Namespace field does not show RViz's namespace");
+    rviz_common::Config config;
+    config.mapSetValue("Sensor ID", "230739");
+    config.mapSetValue("Namespace", "umrr96_panel_other");
+    panel->load(config);
+    wait([&] {return panel->findChild<QLabel *>("metrics")->text().contains("7 targets") &&
+        panel->findChild<QLabel *>("filter_actual")->text().contains("Waiting for view node");});
+    check(!button("preset")->isEnabled() && identity->text().contains("waiting"),
+      "Panel kept state from the previous namespace");
+    rviz_common::Config saved;
+    panel->save(saved);
+    QString saved_namespace;
+    check(saved.mapGetString("Namespace", &saved_namespace) &&
+      saved_namespace == "umrr96_panel_other", "Namespace not saved");
+    config.mapSetValue("Namespace", "");
+    panel->load(config);
+    other_measurements.stop();
+    wait([&] {return panel->findChild<QLabel *>("metrics")->text().contains("31 targets") &&
+        button("preset")->isEnabled() && button("filter_apply")->isEnabled() &&
+        identity->text().contains("5.2.2");});
+
     auto filter_mode = panel->findChild<QComboBox *>("filter_mode");
     auto filter_feedback = panel->findChild<QLabel *>("filter_feedback");
     auto filter_actual = panel->findChild<QLabel *>("filter_actual");
@@ -304,6 +340,14 @@ int main(int argc, char ** argv)
     button("apply")->click();
     wait([&] {return writes == 2 && feedback->text() == "Changes applied and verified.";});
     check(settings.at("output_control_target_list_can") == 1, "Starting values not restored");
+    if (std::getenv("UMRR96_PANEL_NAMESPACE_ONLY")) {
+      // The namespaced run has now used every endpoint; the advanced and timeout checks
+      // below do not depend on the namespace (and carry C42's load sensitivity).
+      panel.reset();
+      rclcpp::shutdown();
+      std::cout << "PASS: every endpoint in namespace " << ns << ", namespace property" << std::endl;
+      return 0;
+    }
 
     ignore_writes = true;
     button("preset")->click();
@@ -430,41 +474,6 @@ int main(int argc, char ** argv)
     if (const auto screenshot = std::getenv("UMRR96_PANEL_SCREENSHOT")) {
       check(panel->grab().save(QString::fromLocal8Bit(screenshot)), "Screenshot failed");
     }
-    // The Namespace property replaces RViz's namespace for every endpoint, is saved
-    // with the configuration, and an empty value returns to RViz's namespace.
-    auto other = node->create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
-      "/umrr96_panel_other/smart_radar/port_targetheader_0", rclcpp::SensorDataQoS());
-    QTimer other_measurements;
-    QObject::connect(&other_measurements, &QTimer::timeout, [&] {
-        umrr_ros2_msgs::msg::PortTargetHeader message;
-        message.number_of_targets = 7;
-        message.cycle_time = .055;
-        other->publish(message);
-      });
-    other_measurements.start(50);
-    auto namespace_edit = panel->findChild<QLineEdit *>("namespace");
-    check(namespace_edit && namespace_edit->text().isEmpty() &&
-      namespace_edit->placeholderText().endsWith(QString::fromStdString(ns)),
-      "Namespace field does not show RViz's namespace");
-    rviz_common::Config config;
-    config.mapSetValue("Sensor ID", "230739");
-    config.mapSetValue("Namespace", "umrr96_panel_other");
-    panel->load(config);
-    wait([&] {return panel->findChild<QLabel *>("metrics")->text().contains("7 targets") &&
-        filter_actual->text().contains("Waiting for view node");});
-    check(!button("preset")->isEnabled() && identity->text().contains("waiting"),
-      "Panel kept state from the previous namespace");
-    rviz_common::Config saved;
-    panel->save(saved);
-    QString saved_namespace;
-    check(saved.mapGetString("Namespace", &saved_namespace) &&
-      saved_namespace == "umrr96_panel_other", "Namespace not saved");
-    config.mapSetValue("Namespace", "");
-    panel->load(config);
-    other_measurements.stop();
-    wait([&] {return panel->findChild<QLabel *>("metrics")->text().contains("31 targets") &&
-        button("preset")->isEnabled() && button("filter_apply")->isEnabled();});
-
     // Keep Qt running but stop servicing requests: the panel must remain
     // responsive, clean up the timed-out request, and allow a subsequent read.
     unsigned heartbeats = 0;

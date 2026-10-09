@@ -277,7 +277,9 @@ bool Umrr96Config::connect_ros(const QString & ns)
     });
   executor_.add_node(node_);
   applied_namespace_ = ns.trimmed();
-  namespace_->setPlaceholderText(QString("RViz namespace: %1").arg(node_->get_namespace()));
+  if (applied_namespace_.isEmpty()) {
+    namespace_->setPlaceholderText(QString("RViz namespace: %1").arg(node_->get_namespace()));
+  }
   // Nothing measured or reported on the previous endpoints applies any more.
   arrivals_.clear();
   filter_ready_ = decay_ready_ = filter_dirty_ = false;
