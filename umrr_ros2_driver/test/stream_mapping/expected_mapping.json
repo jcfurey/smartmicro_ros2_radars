@@ -1,5 +1,6 @@
 {
  "Umrr11V112/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -26,6 +27,7 @@
   "point.z": "computed"
  },
  "Umrr11V112/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -56,6 +58,7 @@
   "point.z": "computed"
  },
  "Umrr96V122/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -82,6 +85,7 @@
   "point.z": "computed"
  },
  "Umrr96V122/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.acquisition_setup_valid": "true",
   "header.body_endianness": "port_header.GetBodyEndianness",
@@ -116,6 +120,7 @@
   "raw.flags_raw": "item.GetFlags"
  },
  "Umrr9dV103/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -142,6 +147,7 @@
   "point.z": "computed"
  },
  "Umrr9dV103/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -176,6 +182,7 @@
   "point.z": "computed"
  },
  "Umrr9dV122/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -202,6 +209,7 @@
   "point.z": "computed"
  },
  "Umrr9dV122/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -239,6 +247,7 @@
   "point.z": "computed"
  },
  "Umrr9dV141/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -265,6 +274,7 @@
   "point.z": "computed"
  },
  "Umrr9dV141/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -302,6 +312,7 @@
   "point.z": "computed"
  },
  "Umrr9dV150/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -328,6 +339,7 @@
   "point.z": "computed"
  },
  "Umrr9dV150/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -365,6 +377,7 @@
   "point.z": "computed"
  },
  "Umrr9dV170/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -391,6 +404,7 @@
   "point.z": "computed"
  },
  "Umrr9dV170/fault_reports": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.faults_time_line": "list_header.GetFaultsTimeline",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -414,6 +428,7 @@
   "report.occurrence_count": "item.GetOccurrenceCount"
  },
  "Umrr9dV170/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -476,6 +491,7 @@
   "point.z": "item.GetZPoint1"
  },
  "Umrr9fMseV100/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -502,6 +518,7 @@
   "point.z": "computed"
  },
  "Umrr9fMseV100/port_objects": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -529,6 +546,7 @@
   "point.z": "item.GetPosZ"
  },
  "Umrr9fMseV100/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -590,6 +608,7 @@
   "point.z": "item.GetZPoint1"
  },
  "Umrr9fMseV110/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -616,6 +635,7 @@
   "point.z": "computed"
  },
  "Umrr9fMseV110/port_objects": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -643,6 +663,7 @@
   "point.z": "item.GetPosZ"
  },
  "Umrr9fMseV110/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -704,6 +725,7 @@
   "point.z": "item.GetZPoint1"
  },
  "Umrr9fMseV130/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -730,6 +752,7 @@
   "point.z": "computed"
  },
  "Umrr9fMseV130/port_objects": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -757,6 +780,7 @@
   "point.z": "item.GetPosZ"
  },
  "Umrr9fMseV130/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -818,6 +842,7 @@
   "point.z": "item.GetZPoint1"
  },
  "Umrr9fMseV200/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -844,6 +869,7 @@
   "point.z": "computed"
  },
  "Umrr9fMseV200/fault_reports": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.faults_time_line": "list_header.GetFaultsTimeline",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -867,6 +893,7 @@
   "report.occurrence_count": "item.GetOccurrenceCount"
  },
  "Umrr9fMseV200/port_objects": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -894,6 +921,7 @@
   "point.z": "item.GetPosZ"
  },
  "Umrr9fMseV200/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -931,6 +959,7 @@
   "point.z": "computed"
  },
  "Umrr9fV111/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -961,6 +990,7 @@
   "point.z": "computed"
  },
  "Umrr9fV200/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionTxAnt",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweep",
@@ -995,6 +1025,7 @@
   "point.z": "computed"
  },
  "Umrr9fV211/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1021,6 +1052,7 @@
   "point.z": "computed"
  },
  "Umrr9fV211/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1055,6 +1087,7 @@
   "point.z": "computed"
  },
  "Umrr9fV221/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1081,6 +1114,7 @@
   "point.z": "computed"
  },
  "Umrr9fV221/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1118,6 +1152,7 @@
   "point.z": "computed"
  },
  "Umrr9fV241/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1144,6 +1179,7 @@
   "point.z": "computed"
  },
  "Umrr9fV241/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1181,6 +1217,7 @@
   "point.z": "computed"
  },
  "Umrr9fV300/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1207,6 +1244,7 @@
   "point.z": "computed"
  },
  "Umrr9fV300/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1244,6 +1282,7 @@
   "point.z": "computed"
  },
  "Umrr9fV320/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1270,6 +1309,7 @@
   "point.z": "computed"
  },
  "Umrr9fV320/fault_reports": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.faults_time_line": "list_header.GetFaultsTimeline",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -1293,6 +1333,7 @@
   "report.occurrence_count": "item.GetOccurrenceCount"
  },
  "Umrr9fV320/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1331,6 +1372,7 @@
   "point.z": "computed"
  },
  "Umrra1V100/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1368,6 +1410,7 @@
   "point.z": "computed"
  },
  "Umrra1V200/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1405,6 +1448,7 @@
   "point.z": "computed"
  },
  "Umrra1V201/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1442,6 +1486,7 @@
   "point.z": "computed"
  },
  "Umrra1V300/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1503,6 +1548,7 @@
   "point.z": "item.GetZPoint1"
  },
  "Umrra4MseV100/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1529,6 +1575,7 @@
   "point.z": "computed"
  },
  "Umrra4MseV100/port_objects": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -1556,6 +1603,7 @@
   "point.z": "item.GetPosZ"
  },
  "Umrra4MseV100/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1617,6 +1665,7 @@
   "point.z": "item.GetZPoint1"
  },
  "Umrra4MseV210/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1643,6 +1692,7 @@
   "point.z": "computed"
  },
  "Umrra4MseV210/port_objects": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -1670,6 +1720,7 @@
   "point.z": "item.GetPosZ"
  },
  "Umrra4MseV210/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1731,6 +1782,7 @@
   "point.z": "item.GetZPoint1"
  },
  "Umrra4MseV300/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1757,6 +1809,7 @@
   "point.z": "computed"
  },
  "Umrra4MseV300/fault_reports": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.faults_time_line": "list_header.GetFaultsTimeline",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -1780,6 +1833,7 @@
   "report.occurrence_count": "item.GetOccurrenceCount"
  },
  "Umrra4MseV300/port_objects": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.cycle_time": "list_header.GetCycleTime",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -1807,6 +1861,7 @@
   "point.z": "item.GetPosZ"
  },
  "Umrra4MseV300/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1844,6 +1899,7 @@
   "point.z": "computed"
  },
  "Umrra4V101/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1870,6 +1926,7 @@
   "point.z": "computed"
  },
  "Umrra4V101/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1907,6 +1964,7 @@
   "point.z": "computed"
  },
  "Umrra4V121/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1933,6 +1991,7 @@
   "point.z": "computed"
  },
  "Umrra4V121/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -1970,6 +2029,7 @@
   "point.z": "computed"
  },
  "Umrra4V140/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -1996,6 +2056,7 @@
   "point.z": "computed"
  },
  "Umrra4V140/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",
@@ -2033,6 +2094,7 @@
   "point.z": "computed"
  },
  "Umrra4V160/can_targets": {
+  "device_timestamp_us": "list_header.GetTimeStamp*1e6",
   "header.acq_ts_fraction": "list_header.GetAcqTimeStampFraction",
   "header.acquisition_setup": "list_header.GetAcquisitionSetup",
   "header.cycle_count": "list_header.GetCycleCount",
@@ -2059,6 +2121,7 @@
   "point.z": "computed"
  },
  "Umrra4V160/fault_reports": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.body_endianness": "port_header.GetBodyEndianness",
   "header.faults_time_line": "list_header.GetFaultsTimeline",
   "header.header_ver_major": "port_header.GetHeaderVersionMajor",
@@ -2082,6 +2145,7 @@
   "report.occurrence_count": "item.GetOccurrenceCount"
  },
  "Umrra4V160/port_targets": {
+  "device_timestamp_us": "port_header.GetTimestamp",
   "header.acquisition_cf_idx": "list_header.GetAcquisitionCfIdx",
   "header.acquisition_start": "list_header.GetAcquisitionStart",
   "header.acquisition_sweep_idx": "list_header.GetAcquisitionSweepIdx",

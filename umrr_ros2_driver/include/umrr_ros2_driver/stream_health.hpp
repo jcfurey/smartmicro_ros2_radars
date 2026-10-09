@@ -50,6 +50,19 @@ public:
     last_receipt_ = receipt;
   }
 
+  // A list without a device timestamp (CAN object lists): liveness and receive
+  // interval only; the device timestamp fields and anomaly counters are unchanged.
+  void receive_untimed(Clock::time_point receipt = Clock::now())
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (state_.frames) {
+      state_.receive_interval_seconds = std::chrono::duration<double>(receipt -
+          last_receipt_).count();
+    }
+    ++state_.frames;
+    last_receipt_ = receipt;
+  }
+
   Snapshot snapshot(Clock::time_point now = Clock::now())
   {
     std::lock_guard<std::mutex> lock(mutex_);

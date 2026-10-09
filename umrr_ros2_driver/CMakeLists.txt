@@ -239,6 +239,9 @@ if(BUILD_TESTING)
     target_include_directories(test_umrr96_tuning PRIVATE include)
     ament_add_gtest(test_service_parsing test/test_service_parsing.cpp)
     target_include_directories(test_service_parsing PRIVATE include)
+    target_compile_definitions(test_service_parsing PRIVATE
+      SMARTMICRO_MODEL_CATALOGUE="${CMAKE_CURRENT_SOURCE_DIR}/param/model_uif_catalogue.yaml"
+      SMARTMICRO_SDK_INCLUDE_DIR="${SMARTMICRO_SDK_DIR}/include")
     ament_add_gtest(test_udp_socket_health test/test_udp_socket_health.cpp)
     target_include_directories(test_udp_socket_health PRIVATE include)
     ament_add_gtest(test_instruction_reply test/test_instruction_reply.cpp)
@@ -249,11 +252,17 @@ if(BUILD_TESTING)
     ament_add_gtest(test_point_cloud_builder test/test_point_cloud_builder.cpp)
     target_include_directories(test_point_cloud_builder PRIVATE include)
     target_link_libraries(test_point_cloud_builder ${sensor_msgs_TARGETS})
+    # Container precondition checks, e.g. front() on an empty PointCloud2 data vector.
+    target_compile_definitions(test_point_cloud_builder PRIVATE _GLIBCXX_ASSERTIONS)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(test_point_cloud_builder PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
         set_property(TARGET test_point_cloud_builder APPEND_STRING PROPERTY LINK_FLAGS " -fsanitize=address,undefined")
         set_tests_properties(test_point_cloud_builder PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
     endif()
+
+    ament_add_gtest(test_stream_codecs test/test_stream_codecs.cpp)
+    target_include_directories(test_stream_codecs PRIVATE include)
+    target_link_libraries(test_stream_codecs ${umrr_ros2_msgs_TARGETS} ${sensor_msgs_TARGETS})
 
     ament_add_gtest(test_sdk_float test/test_sdk_float.cpp)
     target_include_directories(test_sdk_float PRIVATE "${SMARTMICRO_SDK_DIR}/include")
@@ -266,6 +275,9 @@ if(BUILD_TESTING)
 
     add_executable(radar_test_sender test/radar_test_sender.cpp)
     target_link_libraries(radar_test_sender ${smartmicro_core_targets})
+    # LD_PRELOAD probe: thread count when the SDK configuration path is set (C65).
+    add_library(setenv_probe MODULE test/setenv_probe.cpp)
+    target_link_libraries(setenv_probe ${CMAKE_DL_LIBS})
 
     # Field-mapping regression test for the templated stream codecs (M1): mocked
     # SDK lists, generated from the SDK headers, run through every model's codecs.
@@ -309,7 +321,8 @@ if(BUILD_TESTING)
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py
         TIMEOUT 90 ENV ${offline_environment}
-        "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>")
+        "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>"
+        "SMARTMICRO_SETENV_PROBE=$<TARGET_FILE:setenv_probe>")
     set_tests_properties(test_umrr96_views test_umrr96_measure test_readback test_driver_runtime PROPERTIES RUN_SERIAL TRUE)
 
     # Linters run explicitly on first-party files: automatic discovery would

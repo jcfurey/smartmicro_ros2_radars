@@ -424,7 +424,11 @@ sensor settings, but power cycling can restore the sensor's saved settings.
 writes `output_control_target_list_can` = `startup_can_target_output` (default 0)
 as a volatile setting (no EEPROM save) and confirms it with a separate read. It
 retries every 5 s until the sensor answers and reports the result as
-`startup_can_target_output` in the *Control requests* diagnostic. With CAN output
+`startup_can_target_output` (with `startup_can_target_attempts`) in the *Control
+requests* diagnostic. The write and its readback do not block the node: panel
+and service requests are answered within `timeout_ms` meanwhile (before
+2026-10-09 each attempt blocked them for up to two timeouts), and a service write
+of `output_control_target_list_can` that the sensor accepts ends the retries. With CAN output
 on, this sensor's Ethernet target stream runs at 8.33 Hz instead of 18.18 Hz
 (2026-09-25). The value is applied at startup only: panel or service changes
 made later are not overridden, and a sensor power cycle while the node runs

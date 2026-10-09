@@ -24,7 +24,7 @@
               # The pathc version of the interface
               uifpatchv: 3
               # The frame_id to be set to the published messages.
-              frame_id: "umrr"
+              frame_id: "umrr_0"
               # Specify the history size.
               history_size: 10
           sensor_1:
@@ -46,7 +46,7 @@
               # The pathc version of the interface
               uifpatchv: 1
               # The frame_id to be set to the published messages.
-              frame_id: "umrr"
+              frame_id: "umrr_1"
               # Specify the history size.
               history_size: 10
           sensor_2:
@@ -64,7 +64,7 @@
               # The port to be used.
               port: 55555
               # The frame_id to be set to the published messages.
-              frame_id: "umrr"
+              frame_id: "umrr_2"
               # Specify the history size.
               history_size: 10
               inst_type: "port_based"
@@ -92,7 +92,7 @@
               # The port to be used.
               port: 55555
               # The frame_id to be set to the published messages.
-              frame_id: "umrr"
+              frame_id: "umrr_3"
               # Specify the history size.
               history_size: 10
               inst_type: "port_based"
@@ -124,6 +124,6 @@
               # The pathc version of the interface
               uifpatchv: 3
               # The frame_id to be set to the published messages.
-              frame_id: "umrr"
+              frame_id: "umrr_4"
               # Specify the history size.
               history_size: 10

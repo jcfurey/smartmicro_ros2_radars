@@ -119,11 +119,18 @@ def test_driver_runtime():
                     parameters['qos_overrides'] = {
                         '/driver_runtime/b/smart_radar/port_targets_0': {
                             'publisher': {'reliability': 'best_effort', 'depth': 3}}}
+                    # An explicit value wins over the namespaced default (C57).
+                    parameters['diagnostic_updater'] = {'use_fqn': False}
+                    # An unset user interface is taken from the model (C64).
+                    for key in ('uifname', 'uifmajorv', 'uifminorv', 'uifpatchv'):
+                        del parameters['sensors']['sensor_0'][key]
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
                     str(executable), '--ros-args', '-r', f'__ns:=/driver_runtime/{name}',
                     '-r', f'__node:=runtime_{name}', '--params-file', str(params)]))
+            # Namespaced nodes report fully qualified status names by default (C57).
+            status_a = '/driver_runtime/a/runtime_a: '
             wait(lambda: node.count_publishers(topic + 'port_targets_0') and
                  node.count_publishers('/driver_runtime/b/smart_radar/port_targets_0'))
             qos_a = node.get_publishers_info_by_topic(topic + 'port_targets_0')[0].qos_profile
@@ -136,6 +143,10 @@ def test_driver_runtime():
             assert {json.loads((p / 'hw_inventory.json').read_text())['hwItems'][0]['port']
                     for p in dirs} == {port_a, port_b}
             for path in dirs:
+                client = json.loads((path / 'routing_table.json').read_text())['clients'][0]
+                assert [client['user_interface_name'], client['user_interface_major_v'],
+                        client['user_interface_minor_v'], client['user_interface_patch_v']] == [
+                    'umrr96_t153_automotive', 1, 2, 2], client
                 sdk_config = json.loads((path / 'smart_access_config.json').read_text())
                 assert sdk_config['config_path'] == str(path)
                 assert sdk_config['shared_lib_path'] == str(path / 'sdk-lib')
@@ -197,9 +208,10 @@ def test_driver_runtime():
                 section_name='auto_interface_0dim', sensor_id=200, params=[], param_types=[]))
             assert 'non-empty' in response.res, response.res
             wait(lambda: any(
-                s.name == 'runtime_a: SDK callbacks' and s.level == DiagnosticStatus.OK and
+                s.name == status_a + 'SDK callbacks' and s.level == DiagnosticStatus.OK and
                 int({v.key: v.value for v in s.values}.get('instruction_timeouts', '0')) >= 2
                 for s in statuses))
+            wait(lambda: any(s.name == 'runtime_b: Target stream 0' for s in statuses))
             # Firmware download replies are deferred to a worker thread (C4).
             download = node.create_client(FirmwareDownload, topic + 'firmware_download')
             response = call(download, FirmwareDownload.Request(sensor_id=0, file_path='/none'))
@@ -284,28 +296,44 @@ def test_driver_runtime():
                     ranges = [float(r['range']) for r in point_cloud2.read_points(cloud)]
                     assert [r.range for r in scan.returns] == ranges
             wait(lambda: any(
-                s.name == 'runtime_a: UDP adapter 0' and
+                s.name == status_a + 'UDP adapter 0' and
                 {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
                 for s in statuses))
             assert matched >= 3
             # The fixture deliberately repeats its original counter. ROS stamps still advance.
             assert len({t.device_timestamp_us for t in timing}) == 1
             assert len({(c.header.stamp.sec, c.header.stamp.nanosec) for c in clouds}) >= 5
-            wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
+            wait(lambda: any(s.name == status_a + 'Target stream 0' and
                              s.level == DiagnosticStatus.WARN and
                              int({v.key: v.value for v in s.values}.get(
                                  'timestamp_repeats', '0')) > 0 for s in statuses))
             stop(sender)
             statuses.clear()
-            wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
+            wait(lambda: any(s.name == status_a + 'Target stream 0' and
                              s.level == DiagnosticStatus.STALE for s in statuses))
             restarted_sender = launch(
                 [os.environ['SMARTMICRO_TEST_SENDER'], str(fixture_path)],
                 SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
             previous_count = len(clouds)
             wait(lambda: len(clouds) >= previous_count + 3)
-            stop(driver_processes[0])
             stop(restarted_sender)
+            # A cycle without targets: an empty cloud and an empty RadarScan (C53).
+            empty = bytearray(fixture[:32])
+            struct.pack_into('>I', empty, 16, len(empty))  # Generic header port size.
+            struct.pack_into('<H', empty, 28, 0)  # Number of targets.
+            empty_path = run / 'empty_port.bin'
+            empty_path.write_bytes(empty)
+            empty_sender = launch([os.environ['SMARTMICRO_TEST_SENDER'], str(empty_path)],
+                                  SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
+            wait(lambda: any(c.width == 0 for c in clouds[previous_count:]))
+            if RadarScan is not None:
+                scan_count = len(scans)
+                wait(lambda: any(not s.returns for s in scans[scan_count:]))
+                empty_scan = next(s for s in scans[scan_count:] if not s.returns)
+                assert empty_scan.header.frame_id == 'umrr96_test'
+            assert driver_processes[0].poll() is None
+            stop(driver_processes[0])
+            stop(empty_sender)
             assert len(list(run.glob('smartmicro-data-*'))) == 1
             stop(driver_processes[1])
             assert not list(run.glob('smartmicro-data-*'))
@@ -377,6 +405,15 @@ def _eth_sensor(**overrides):
     ({'sensor_0': _eth_sensor(link_type='can', model='umrr96_can_v1_2_2')}, {},
      "does not match the 'eth' adapter"),
     ({'sensor_0': _eth_sensor()}, {'instruction_timeout_ms': 50}, 'instruction_timeout_ms'),
+    ({'sensor_0': _eth_sensor(frame_id='radar'),
+      'sensor_1': _eth_sensor(id=201, frame_id='radar')}, {},
+     "sensor_1.frame_id 'radar' duplicates sensors.sensor_0"),
+    ({'sensor_0': _eth_sensor(uifname='umrra4_automotive', uifmajorv=1, uifminorv=6,
+                              uifpatchv=0)}, {},
+     "sensor_0.uifname 'umrra4_automotive' does not match model 'umrr96_v1_2_2'"),
+    ({'sensor_0': _eth_sensor(uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2,
+                              uifpatchv=1)}, {},
+     "sensor_0.uifpatchv 1 does not match model 'umrr96_v1_2_2' (expects 2)"),
 ])
 def test_invalid_startup_configuration_is_rejected(sensors, extra, message):
     """Configurations that would silently deliver nothing fail at startup instead."""
@@ -386,3 +423,150 @@ def test_invalid_startup_configuration_is_rejected(sensors, extra, message):
                                     'port': unused_port()}},
             sensors=sensors, **extra), directory)
         assert message in output, output
+
+
+def _shipped_sensors():
+    """Yield the file name and sensors of every shipped driver parameter file."""
+    for path in sorted((Path(__file__).resolve().parents[1] / 'param').rglob('*.yaml')):
+        for section in yaml.safe_load(path.read_text()).values():
+            if not isinstance(section, dict):
+                continue  # model_uif_catalogue.yaml
+            sensors = (section.get('ros__parameters') or {}).get('sensors')
+            if isinstance(sensors, dict):
+                yield path.name, sensors
+
+
+def test_shipped_parameter_files_match_the_model_catalogue():
+    """Every shipped sensor names its model's interface (C64) and has its own frame (C69)."""
+    catalogue = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / 'param/model_uif_catalogue.yaml').read_text())
+    interfaces = {entry['model']: entry['uifname']
+                  for entry in catalogue['entries_can'] + catalogue['entries_port']}
+    checked = 0
+    for name, sensors in _shipped_sensors():
+        frames = [sensor['frame_id'] for sensor in sensors.values()]
+        assert len(set(frames)) == len(frames), (name, frames)
+        for key, sensor in sensors.items():
+            version = [int(part) for part in sensor['model'].rsplit('_v', 1)[1].split('_')]
+            assert sensor['uifname'] == interfaces[sensor['model']], (name, key)
+            assert [sensor['uifmajorv'], sensor['uifminorv'], sensor['uifpatchv']] == version, (
+                name, key)
+            checked += 1
+    assert checked >= 10, checked
+
+
+def test_status_per_configured_stream():
+    """Object streams get their own status, only where configured (C62)."""
+    executable = Path(get_package_prefix('umrr_ros2_driver')) / (
+        'lib/umrr_ros2_driver/smartmicro_radar_node_exe')
+    rclpy.init()
+    node = rclpy.create_node('driver_streams_test')
+    statuses = {}
+    node.create_subscription(DiagnosticArray, '/diagnostics', lambda msg: statuses.update(
+        {s.name: s for s in msg.status}), 10)
+    serialization = {'inst_type': 'port_based', 'data_type': 'port_based'}
+    process = None
+    try:
+        with tempfile.TemporaryDirectory(prefix='umrr-streams-test-') as directory:
+            params = Path(directory) / 'params.yaml'
+            params.write_text(yaml.safe_dump({'/**': {'ros__parameters': {
+                'master_data_serial_type': 'port_based', 'master_inst_serial_type': 'port_based',
+                'adapters': {'adapter_0': {
+                    'hw_type': 'eth', 'hw_dev_id': 4, 'hw_iface_name': 'lo',
+                    'hw_ip_address': '127.0.0.1', 'port': unused_port()}},
+                'sensors': {
+                    'sensor_0': _eth_sensor(pub_type='mse', model='umrra4_mse_v3_0_0',
+                                            frame_id='umrr_0', port=unused_port(),
+                                            **serialization),
+                    # The SDK fails to initialize with two clients on one address.
+                    'sensor_1': _eth_sensor(id=201, frame_id='umrr_1', ip='127.0.0.2',
+                                            port=unused_port(), **serialization)}}}}))
+            process = subprocess.Popen(
+                [str(executable), '--ros-args', '-r', '__ns:=/driver_streams',
+                 '-r', '__node:=streams', '--params-file', str(params)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                env=dict(os.environ, TMPDIR=directory))
+            prefix = '/driver_streams/streams: '
+            expected = [prefix + name for name in (
+                'Object stream 0', 'SDK callbacks', 'Target stream 0', 'Target stream 1',
+                'UDP adapter 0')]
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline and process.poll() is None and not all(
+                    name in statuses and statuses[name].message != 'Node starting up'
+                    for name in expected):
+                rclpy.spin_once(node, timeout_sec=.1)
+            assert process.poll() is None, 'driver exited'
+            assert sorted(name for name in statuses if name.startswith(prefix)) == expected
+            objects = statuses[prefix + 'Object stream 0']
+            assert objects.level == DiagnosticStatus.STALE, objects
+            assert objects.message == 'Waiting for objects', objects
+            assert objects.hardware_id == 'umrra4_mse_v3_0_0@127.0.0.1', objects
+            assert statuses[prefix + 'Target stream 1'].message == 'Waiting for targets'
+    finally:
+        output = ''
+        if process is not None:
+            process.send_signal(signal.SIGINT)
+            try:
+                output, _ = process.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate()
+            print(output)
+        node.destroy_node()
+        rclpy.shutdown()
+    assert process.returncode == 0, output
+
+
+@pytest.mark.parametrize('executable, arguments, ready', [
+    ('smartmicro_radar_node_exe', None, 'Radar services are ready'),
+    ('smartmicro_radar_readback_node',
+     ['-p', 'sensor_id:=230739', '-p', 'interface_name:=lo', '-p', 'host_ip:=127.0.0.1',
+      '-p', 'sensor_ip:=127.0.0.1', '-p', 'startup_can_target_output:=-1'],
+     'Readback ready for sensor'),
+])
+def test_sdk_configuration_path_is_set_before_other_threads(executable, arguments, ready):
+    """The SDK path is set once, before rclcpp::init starts middleware threads (C65)."""
+    path = Path(get_package_prefix('umrr_ros2_driver')) / 'lib/umrr_ros2_driver' / executable
+    with tempfile.TemporaryDirectory(prefix='umrr-setenv-test-') as directory:
+        if arguments is None:  # Data node: one loopback sensor; nothing is sent.
+            params = Path(directory) / 'params.yaml'
+            params.write_text(yaml.safe_dump({'/**': {'ros__parameters': {
+                'master_data_serial_type': 'port_based', 'master_inst_serial_type': 'port_based',
+                'adapters': {'adapter_0': {'hw_type': 'eth', 'hw_dev_id': 4,
+                                           'hw_iface_name': 'lo', 'hw_ip_address': '127.0.0.1',
+                                           'port': unused_port()}},
+                'sensors': {'sensor_0': _eth_sensor(port=unused_port(), inst_type='port_based',
+                                                    data_type='port_based')}}}}))
+            arguments = ['--params-file', str(params)]
+        else:
+            arguments = arguments + ['-p', f'host_port:={unused_port()}',
+                                     '-p', f'sensor_port:={unused_port()}']
+        log = Path(directory) / 'setenv.log'
+        output = Path(directory) / 'output.log'
+        with output.open('w') as stream:
+            process = subprocess.Popen(
+                [str(path), '--ros-args', '-r', '__ns:=/setenv_probe'] + arguments,
+                stdout=stream, stderr=subprocess.STDOUT,
+                env=dict(os.environ, TMPDIR=directory,
+                         LD_PRELOAD=os.environ['SMARTMICRO_SETENV_PROBE'],
+                         SMARTMICRO_SETENV_PROBE_LOG=str(log)))
+            try:
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline and process.poll() is None and (
+                        ready not in output.read_text()):
+                    time.sleep(.1)
+                assert ready in output.read_text(), output.read_text()
+            finally:
+                process.send_signal(signal.SIGINT)
+                try:
+                    process.wait(timeout=8)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+        assert process.returncode == 0, output.read_text()
+        # One setenv (the constructor's activate() is a no-op), while the only threads
+        # besides main are LTTng-UST listeners started by library constructors ("-ust").
+        lines = log.read_text().splitlines()
+        assert len(lines) == 1, lines
+        threads = [name for name in lines[0].split('|') if name]
+        assert len([name for name in threads if not name.endswith('-ust')]) == 1, threads

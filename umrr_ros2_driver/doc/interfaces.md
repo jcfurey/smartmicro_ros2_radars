@@ -33,7 +33,9 @@ available (`apt install ros-lyrical-radar-msgs`; CMake option
 `radar_msgs/RadarScan` on `smart_radar/radar_scan_N`: same header and detection
 order, `range` [m], `azimuth`/`elevation` [rad], `doppler_velocity` = the SDK
 radial speed [m/s] without sign conversion (see `radial_speed` below) and
-`amplitude` = power [dB]. The scan is only built while it has subscribers.
+`amplitude` = power [dB]. A cycle without targets gives an empty scan (before
+2026-10-09 such a cycle was undefined behaviour and aborted builds with
+`_GLIBCXX_ASSERTIONS`). The scan is only built while it has subscribers.
 Setting the parameter on a build without radar_msgs fails at startup. radar_msgs
 is not a declared package dependency, so rosdep does not install it.
 
@@ -139,10 +141,65 @@ data topic can be overridden with the standard startup parameters
 
 Besides link type, model and publish type, the node refuses to start when an
 Ethernet sensor's `ip` or an adapter's `hw_ip_address` is not an IPv4 address,
-two sensors share an `id` or two adapters a `hw_dev_id`, a sensor's `link_type`
+two sensors share an `id`, a `frame_id` (two devices in one TF frame; since
+2026-10-09, and the shipped files now use `umrr_0`, `umrr_1`, ...) or two adapters a
+`hw_dev_id`, a sensor's `link_type`
 differs from its adapter's `hw_type`, or a `frame_id` starts with `/` (tf2
 rejects such frames). Each of these previously started a node that published
 nothing for that sensor.
+
+`uifname`, `uifmajorv`, `uifminorv` and `uifpatchv` must name the user interface
+of the sensor's `model` (see `param/model_uif_catalogue.yaml`; the version is the
+model suffix, e.g. `umrr96_v1_2_2` → `umrr96_t153_automotive` 1.2.2). A different
+name or version is rejected with the parameter named; before 2026-10-09 the node
+started but delivered no data for that sensor. Leaving all four unset (empty name, zero versions) takes them from the
+model.
+
+### Diagnostics
+
+Both nodes publish `/diagnostics` at about 1 Hz through `diagnostic_updater`.
+Status names are `<node name>: <status>`; a node with a namespace uses its fully
+qualified name (`/front/smart_radar: Target stream 0`), so two radars never report
+under the same name. This is the default of the parameter
+`diagnostic_updater.use_fqn` whenever the node namespace is not `/`, however the
+node is started (`ros2 run ... -r __ns:=/front`, a launch file or a component
+container); setting the parameter explicitly overrides it. Before 2026-10-09 only
+the launch files set it.
+
+Each configured data stream has its own liveness status: `Target stream N` for
+every sensor and `Object stream N` for sensors with `pub_type: mse` (object lists
+are subscribed to only then). A stream is `STALE` before its first list ("Waiting
+for ...") and after `diagnostics.stale_timeout` without one, `WARN` after a device
+timestamp anomaly (repeated, backwards or zero) and `OK` otherwise. Before
+2026-10-09 only target lists were tracked: an MSE sensor whose object stream stopped
+still reported `OK`.
+
+The device timestamp behind these checks and `RadarTiming.device_timestamp_us` is
+the generic port header timestamp for Ethernet lists. For CAN lists the SDK fills
+the port header with its own host receive time (`system_clock` µs, written when it
+assembles the port; no CAN signal maps to it), so CAN target lists use the
+acquisition time of their list header instead: `TimeStamp` [s] +
+`AcqTimeStampFraction` [s] (also published raw in `CanTargetHeader.time_stamp` and
+`acq_ts_fraction`). CAN object list headers carry no time: their
+`device_timestamp_us` is 0, the object stream reports
+`device_timestamp_available: false` and only its liveness is checked. Before
+2026-10-09 CAN lists reported the SDK receive time as device time. Header stamps
+remain ROS receive time throughout.
+
+The readback node's `Control requests` status counts requests, timeouts and
+rejections and reports the startup CAN target-output write as
+`startup_can_target_output` (`pending`, `writing (attempt N)`, `verifying (attempt
+N)`, `retrying: <error>`, `on (confirmed)`/`off (confirmed)` or `superseded by a
+set_radar_mode request`) with `startup_can_target_attempts`. The startup write and
+its readback run without blocking the executor, so control requests and the
+diagnostics are served while the sensor is unreachable.
+
+`UDP adapter N` reports the kernel's drop counter of the Ethernet adapter's socket
+(`/proc/net/udp`). Only the process's own sockets are considered, matched by local
+port and, when `hw_ip_address` is set, by local address; the status is `WARN`
+("unavailable or ambiguous") only if more than one socket still matches. The SDK
+(3.13.0) accepts one Ethernet adapter per process: a second one fails SDK
+initialization ("Only one ETH iface is allowed").
 
 ## Launch files
 
@@ -171,6 +228,16 @@ takes over the root mode/status service names; see
 The Smart Access SDK is a process-wide singleton. Load at most one of these
 components per process (container), and never the data node together with the
 readback node.
+
+The SDK reads the path of its configuration only from the environment variable
+`SMART_ACCESS_CFG_FILE_PATH` (its `Init()` takes no path), and glibc `setenv` is not
+safe against a concurrent `getenv` in another thread. The standalone executables
+create the private configuration directory and set the variable before
+`rclcpp::init`, when only the main thread (and LTTng-UST listener threads started
+by library constructors) exist. A component constructed in a container sets it in
+its constructor while the container's middleware and executor threads already
+run, as before 2026-10-09 in every case; prefer the executables where that risk
+matters.
 
 ## Install layout
 

@@ -34,5 +34,18 @@ auto startup_parameter(
     return node.declare_parameter<std::string>(name, std::string(default_value), descriptor);
   }
 }
+
+// diagnostic_updater names statuses "<node name>: <task>", so radars in different
+// namespaces would publish identical names. Declares diagnostic_updater.use_fqn with
+// default true for a namespaced node; a value set by the user still wins. Call before
+// constructing the Updater, which reads an already declared parameter.
+inline bool declare_diagnostic_names(rclcpp::Node & node)
+{
+  rcl_interfaces::msg::ParameterDescriptor descriptor;
+  descriptor.description =
+    "Prefix diagnostic status names with the node namespace (default: true when namespaced).";
+  return node.declare_parameter(
+    "diagnostic_updater.use_fqn", std::string(node.get_namespace()) != "/", descriptor);
+}
 }  // namespace smartmicro::drivers::radar
 #endif  // UMRR_ROS2_DRIVER__STARTUP_PARAMETER_HPP_

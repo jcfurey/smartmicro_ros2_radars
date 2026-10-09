@@ -20,7 +20,6 @@
 #ifdef UMRR_HAVE_RADAR_MSGS
 #include <radar_msgs/msg/radar_scan.hpp>
 #endif
-#include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <umrr_ros2_driver/sensor_models.hpp>
 #include <umrr_ros2_driver/service_parsing.hpp>
 #include <umrr_ros2_driver/udp_socket_health.hpp>
@@ -36,6 +35,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <string>
 #include <thread>
@@ -81,6 +81,7 @@ using smartmicro::drivers::radar::kEthLinkType;
 using smartmicro::drivers::radar::kEthernetModels;
 using smartmicro::drivers::radar::kMsePubType;
 using smartmicro::drivers::radar::kTargetPubType;
+using smartmicro::drivers::radar::resolve_user_interface;
 using smartmicro::drivers::radar::validate_sensor_config;
 
 constexpr auto kDefaultClientId = 0;
@@ -159,8 +160,18 @@ namespace drivers
 namespace radar
 {
 SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_options)
-: rclcpp::Node{"smartmicro_radar_node", node_options}
+: SmartmicroRadarNode{node_options, std::make_unique<RuntimeConfig>("smartmicro-data")}
 {
+}
+
+SmartmicroRadarNode::SmartmicroRadarNode(
+  const rclcpp::NodeOptions & node_options, std::unique_ptr<RuntimeConfig> runtime_config)
+: rclcpp::Node{"smartmicro_radar_node", node_options},
+  runtime_config_{std::move(runtime_config)}
+{
+  if (!runtime_config_) {
+    throw std::invalid_argument("SmartmicroRadarNode requires an SDK configuration directory");
+  }
   callback_gate_.set_error_handler([logger = get_logger()](const std::string & message) {
       RCLCPP_ERROR(logger, "%s", message.c_str());
     });
@@ -168,7 +179,7 @@ SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_option
     update_config_files_from_params();
     update_service = std::make_shared<UpdateService>();
 
-    runtime_config_.activate();
+    runtime_config_->activate();
     setup_diagnostics();
 
     initialize_services();
@@ -204,18 +215,23 @@ SmartmicroRadarNode::~SmartmicroRadarNode()
 }
 
 builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
-  uint64_t timestamp_us, uint32_t sensor_idx, uint8_t stream)
+  std::optional<uint64_t> timestamp_us, uint32_t sensor_idx, uint8_t stream)
 {
   auto timing_ptr = std::make_unique<umrr_ros2_msgs::msg::RadarTiming>();
   auto & timing = *timing_ptr;
   timing.header.stamp = now();
   timing.header.frame_id = m_sensors[sensor_idx].frame_id;
   timing.sensor_id = m_sensors[sensor_idx].id;
-  timing.device_timestamp_us = timestamp_us;
+  timing.device_timestamp_us = timestamp_us.value_or(0);  // 0: the list carries none.
   timing.stream = stream;
   timing.timestamp_source = umrr_ros2_msgs::msg::RadarTiming::ROS_RECEIVE_TIME;
-  if (stream == umrr_ros2_msgs::msg::RadarTiming::TARGETS) {
-    target_health_[sensor_idx].receive(timestamp_us);
+  auto * const health = stream == umrr_ros2_msgs::msg::RadarTiming::TARGETS ?
+    &target_health_[sensor_idx] :
+    stream == umrr_ros2_msgs::msg::RadarTiming::OBJECTS ? &object_health_[sensor_idx] : nullptr;
+  if (health && timestamp_us) {
+    health->receive(*timestamp_us);
+  } else if (health) {
+    health->receive_untimed();
   }
   const auto stamp = timing.header.stamp;
   timing_publishers_[sensor_idx]->publish(std::move(timing_ptr));
@@ -253,6 +269,7 @@ void SmartmicroRadarNode::setup_diagnostics()
   {
     throw std::invalid_argument("diagnostics.stale_timeout must be within 0.1..3600 s");
   }
+  declare_diagnostic_names(*this);
   diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
   // hardware_id identifies the physical device: <model>@<ip> for Ethernet,
   // <model>@can<dev_id> for CAN (the client id is reported as a value).
@@ -270,35 +287,16 @@ void SmartmicroRadarNode::setup_diagnostics()
       raw_quality_publishers_[i] = create_data_publisher<umrr_ros2_msgs::msg::Umrr96RawQuality>(
         "smart_radar/umrr96_raw_quality_" + std::to_string(i), m_sensors[i].history_size);
     }
-    diagnostics_->add("Target stream " + std::to_string(i),
-      [this, i, hardware_id = sensor_hardware_id(i)](
-        diagnostic_updater::DiagnosticStatusWrapper & status) {
-        using Status = diagnostic_msgs::msg::DiagnosticStatus;
-        const auto health = target_health_[i].snapshot();
-        status.hardware_id = hardware_id;
-        status.add("sensor_id", m_sensors[i].id);
-        if (!health.frames || health.age_seconds > stale_timeout_seconds_) {
-          status.summary(Status::STALE,
-                health.frames ? "No recent targets" : "Waiting for targets");
-        } else if (health.timestamp_warning) {
-          status.summary(Status::WARN, "Device timestamp anomaly; headers use ROS receive time");
-        } else {
-          status.summary(Status::OK, "Receiving targets");
-        }
-        status.add("frames_received", health.frames);
-        status.add("last_receive_age_seconds", health.age_seconds);
-        status.add("frequency_hz", health.frequency_hz);
-        status.add("device_timestamp_us", health.device_timestamp_us);
-        status.add("timestamp_repeats", health.repeated);
-        status.add("timestamp_backwards", health.backwards);
-        status.add("timestamp_zero", health.zero);
-        status.add("receive_interval_seconds", health.receive_interval_seconds);
-        status.add("device_interval_seconds", health.device_interval_seconds);
-        status.add("relative_delay_change_seconds", health.relative_delay_change_seconds);
-        status.add("max_positive_delay_change_seconds", health.max_positive_delay_change_seconds);
-        status.add("timestamp_source", "ros_receive_time");
-        status.add("sensor_clock_synchronized", false);
-      });
+    add_stream_status(
+      "Target stream " + std::to_string(i), target_health_[i], i, "targets",
+      sensor_hardware_id(i), true);
+    // Object lists are registered for pub_type mse only; no status for a stream the
+    // node does not subscribe to. CAN object lists carry no device timestamp.
+    if (m_sensors[i].pub_type == kMsePubType) {
+      add_stream_status(
+        "Object stream " + std::to_string(i), object_health_[i], i, "objects",
+        sensor_hardware_id(i), m_sensors[i].link_type == kEthLinkType);
+    }
   }
   for (size_t i = 0; i < m_number_of_adapters; ++i) {
     if (m_adapters[i].hw_type != "eth") {continue;}
@@ -306,7 +304,8 @@ void SmartmicroRadarNode::setup_diagnostics()
       [this, i, previous_inode = std::string{}, previous_drops = uint64_t{}]
       (diagnostic_updater::DiagnosticStatusWrapper & status) mutable {
         using Status = diagnostic_msgs::msg::DiagnosticStatus;
-        const auto socket = udp_socket_health(static_cast<uint16_t>(m_adapters[i].port));
+        const auto socket = udp_socket_health(
+          static_cast<uint16_t>(m_adapters[i].port), m_adapters[i].hw_ip_address);
         status.hardware_id = "udp@" +
         (m_adapters[i].hw_ip_address.empty() ? m_adapters[i].hw_iface_name :
         m_adapters[i].hw_ip_address) + ":" + std::to_string(m_adapters[i].port);
@@ -345,6 +344,41 @@ void SmartmicroRadarNode::setup_diagnostics()
       std::lock_guard<std::mutex> lock(instructions_mutex_);
       status.add("instruction_requests_pending", pending_instructions_.size());
       status.add("instruction_timeouts", instruction_timeouts_);
+    });
+}
+
+void SmartmicroRadarNode::add_stream_status(
+  const std::string & name, StreamHealth & health, size_t sensor_idx, const std::string & items,
+  const std::string & hardware_id, bool device_timestamps)
+{
+  diagnostics_->add(name,
+    [this, &health, sensor_idx, items, hardware_id, device_timestamps](
+      diagnostic_updater::DiagnosticStatusWrapper & status) {
+      using Status = diagnostic_msgs::msg::DiagnosticStatus;
+      const auto snapshot = health.snapshot();
+      status.hardware_id = hardware_id;
+      status.add("sensor_id", m_sensors[sensor_idx].id);
+      if (!snapshot.frames || snapshot.age_seconds > stale_timeout_seconds_) {
+        status.summary(Status::STALE, (snapshot.frames ? "No recent " : "Waiting for ") + items);
+      } else if (snapshot.timestamp_warning) {
+        status.summary(Status::WARN, "Device timestamp anomaly; headers use ROS receive time");
+      } else {
+        status.summary(Status::OK, "Receiving " + items);
+      }
+      status.add("frames_received", snapshot.frames);
+      status.add("last_receive_age_seconds", snapshot.age_seconds);
+      status.add("frequency_hz", snapshot.frequency_hz);
+      status.add("device_timestamp_available", device_timestamps);
+      status.add("device_timestamp_us", snapshot.device_timestamp_us);
+      status.add("timestamp_repeats", snapshot.repeated);
+      status.add("timestamp_backwards", snapshot.backwards);
+      status.add("timestamp_zero", snapshot.zero);
+      status.add("receive_interval_seconds", snapshot.receive_interval_seconds);
+      status.add("device_interval_seconds", snapshot.device_interval_seconds);
+      status.add("relative_delay_change_seconds", snapshot.relative_delay_change_seconds);
+      status.add("max_positive_delay_change_seconds", snapshot.max_positive_delay_change_seconds);
+      status.add("timestamp_source", "ros_receive_time");
+      status.add("sensor_clock_synchronized", false);
     });
 }
 
@@ -452,23 +486,10 @@ void SmartmicroRadarNode::publish_radar_scan(
     return;
   }
   // Same detections, header and order as the target cloud. doppler_velocity is
-  // the SDK radial speed without sign conversion; amplitude is power [dB].
+  // the SDK radial speed without sign conversion; amplitude is power [dB]. A cycle
+  // without targets is published as an empty scan.
   auto scan = std::make_unique<radar_msgs::msg::RadarScan>();
-  scan->header = cloud.header;
-  scan->returns.resize(cloud.width);
-  sensor_msgs::PointCloud2ConstIterator<float> range(cloud, "range");
-  sensor_msgs::PointCloud2ConstIterator<float> azimuth(cloud, "azimuth_angle");
-  sensor_msgs::PointCloud2ConstIterator<float> elevation(cloud, "elevation_angle");
-  sensor_msgs::PointCloud2ConstIterator<float> speed(cloud, "radial_speed");
-  sensor_msgs::PointCloud2ConstIterator<float> power(cloud, "power");
-  for (auto & detection : scan->returns) {
-    detection.range = *range;
-    detection.azimuth = *azimuth;
-    detection.elevation = *elevation;
-    detection.doppler_velocity = *speed;
-    detection.amplitude = *power;
-    ++range, ++azimuth, ++elevation, ++speed, ++power;
-  }
+  fill_radar_scan(cloud, *scan);
   publisher->publish(std::move(scan));
 #else
   (void)sensor_idx;
@@ -1222,7 +1243,7 @@ void SmartmicroRadarNode::on_port_targets(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::PortTargetHeader>();
   auto & header = *header_ptr;
   RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, codec::port_header(*list)->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, header, codec::port_timestamp_us(*list), sensor_idx);
   if constexpr (Model::kTargetOptions.raw_quality) {
     auto raw_quality_ptr = std::make_unique<umrr_ros2_msgs::msg::Umrr96RawQuality>();
     auto & raw_quality = *raw_quality_ptr;
@@ -1254,7 +1275,7 @@ void SmartmicroRadarNode::on_port_objects(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::PortObjectHeader>();
   auto & header = *header_ptr;
   ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, header, codec::port_timestamp_us(*list), sensor_idx);
   codec::convert_port_objects(*list, header, modifier);
   m_publishers_obj[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_obj_header[sensor_idx]->publish(std::move(header_ptr));
@@ -1267,7 +1288,7 @@ void SmartmicroRadarNode::on_fault_reports(
 {
   auto msg_ptr = std::make_unique<umrr_ros2_msgs::msg::PortFaultReportsMsg>();
   auto & msg = *msg_ptr;
-  fill_ros_header_stamp(msg, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, codec::port_timestamp_us(*list), sensor_idx);
   codec::convert_fault_reports(*list, msg);
   m_publishers_fault_report_msg[sensor_idx]->publish(std::move(msg_ptr));
 }
@@ -1282,7 +1303,7 @@ void SmartmicroRadarNode::on_can_targets(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::CanTargetHeader>();
   auto & header = *header_ptr;
   RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, header, codec::can_target_timestamp_us(*list), sensor_idx);
   codec::convert_can_targets(*list, header, modifier);
   publish_radar_scan(sensor_idx, msg);
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
@@ -1299,7 +1320,8 @@ void SmartmicroRadarNode::on_can_objects(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::CanObjectHeader>();
   auto & header = *header_ptr;
   ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  // CAN object lists carry no device timestamp (see can_target_timestamp_us).
+  fill_ros_header_stamp(msg, header, std::nullopt, sensor_idx);
   codec::convert_can_objects(*list, header, modifier);
   m_publishers_obj[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_obj_header[sensor_idx]->publish(std::move(header_ptr));
@@ -1396,6 +1418,13 @@ void SmartmicroRadarNode::update_config_files_from_params()
       sensor.link_type = startup_parameter(*this, prefix_3 + ".link_type", kDefaultHwLinkType);
       sensor.pub_type = startup_parameter(*this, prefix_3 + ".pub_type", "");
       validate_sensor_config(prefix_3, sensor.link_type, sensor.model, sensor.pub_type);
+      const auto interface = resolve_user_interface(
+        prefix_3, sensor.model, sensor.uifname, sensor.uifmajorv, sensor.uifminorv,
+        sensor.uifpatchv);
+      sensor.uifname = interface.name;
+      sensor.uifmajorv = interface.major;
+      sensor.uifminorv = interface.minor;
+      sensor.uifpatchv = interface.patch;
       if (sensor.port > 65535 || (sensor.link_type == "eth" && sensor.port == 0) ||
         sensor.history_size == 0 || sensor.frame_id.empty())
       {
@@ -1415,6 +1444,14 @@ void SmartmicroRadarNode::update_config_files_from_params()
           throw std::invalid_argument(
                   prefix_3 + ".id duplicates sensors.sensor_" + std::to_string(i) +
                   " (client ids route the SDK streams)");
+        }
+      }
+      // Two devices in one TF frame (REP 105): each sensor needs its own mounting pose.
+      for (size_t i = 0; i < index; ++i) {
+        if (m_sensors[i].frame_id == sensor.frame_id) {
+          throw std::invalid_argument(
+                  prefix_3 + ".frame_id '" + sensor.frame_id + "' duplicates sensors.sensor_" +
+                  std::to_string(i) + " (each sensor needs its own TF frame)");
         }
       }
       const auto adapter = std::find_if(
@@ -1455,10 +1492,10 @@ void SmartmicroRadarNode::update_config_files_from_params()
   auto config = nlohmann::json::parse(std::ifstream{kConfigFilePath});
   config[kDataSerialTypeJsonTag] = master_data_serial_type;
   config[kInstSerialTypeJsonTag] = master_inst_serial_type;
-  config["config_path"] = runtime_config_.path.string();
+  config["config_path"] = runtime_config_->path.string();
   config["shared_lib_path"] =
-    runtime_config_.sdk_library_path(config["shared_lib_path"].get<std::string>());
-  runtime_config_.write("smart_access_config.json", config);
+    runtime_config_->sdk_library_path(config["shared_lib_path"].get<std::string>());
+  runtime_config_->write("smart_access_config.json", config);
 
   auto hw_inventory = nlohmann::json::parse(std::ifstream{kHwInventoryFilePath});
   auto & hw_items = hw_inventory[kHwItemsJsonTag];
@@ -1481,7 +1518,7 @@ void SmartmicroRadarNode::update_config_files_from_params()
     hw_item[kBaudRateTag] = adapter.baudrate;
     hw_items.push_back(hw_item);
   }
-  runtime_config_.write("hw_inventory.json", hw_inventory);
+  runtime_config_->write("hw_inventory.json", hw_inventory);
 
   auto routing_table = nlohmann::json::parse(std::ifstream{kRoutingTableFilePath});
   auto & clients = routing_table[kClientsJsonTag];
@@ -1506,7 +1543,7 @@ void SmartmicroRadarNode::update_config_files_from_params()
     clients.push_back(client);
   }
 
-  runtime_config_.write("routing_table.json", routing_table);
+  runtime_config_->write("routing_table.json", routing_table);
 }
 
 }  // namespace radar

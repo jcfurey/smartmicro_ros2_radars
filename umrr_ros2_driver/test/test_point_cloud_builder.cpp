@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <gtest/gtest.h>
 #include <umrr_ros2_driver/point_cloud_builder.hpp>
+#include <std_msgs/msg/header.hpp>
 
 #include <array>
 #include <cstring>
@@ -10,6 +11,7 @@ using smartmicro::drivers::radar::RadarCloudBuilder;
 using smartmicro::drivers::radar::RadarPoint;
 using smartmicro::drivers::radar::ObjectCloudBuilder;
 using smartmicro::drivers::radar::ObjectPoint;
+using smartmicro::drivers::radar::fill_radar_scan;
 using Cloud = sensor_msgs::msg::PointCloud2;
 using Field = sensor_msgs::msg::PointField;
 
@@ -43,6 +45,17 @@ void expect_fields(
     EXPECT_EQ(cloud.fields[i].count, 1U);
   }
 }
+
+// The radar_msgs/RadarScan fields fill_radar_scan uses; radar_msgs is optional.
+struct ScanReturn
+{
+  float range{}, azimuth{}, elevation{}, doppler_velocity{}, amplitude{};
+};
+struct Scan
+{
+  std_msgs::msg::Header header;
+  std::vector<ScanReturn> returns;
+};
 
 template<typename Builder, typename Point>
 void check_records(const Point & point, const std::vector<uint8_t> & golden)
@@ -176,4 +189,35 @@ TEST(PointCloudBuilder, RejectsRowOverflowAndAlreadyInitializedMessages)
   EXPECT_EQ(cloud.row_step, 0U);
   EXPECT_THROW((RadarCloudBuilder{cloud, "other"}), std::invalid_argument);
   EXPECT_EQ(cloud.header.frame_id, "radar_test");
+}
+
+TEST(PointCloudBuilder, RadarScanCopiesTargetsAndAcceptsEmptyCycles)
+{
+  // Built with _GLIBCXX_ASSERTIONS: an iterator on the empty cloud aborts (C53).
+  for (const auto count : {0U, 1U, 3U}) {
+    Cloud cloud;
+    cloud.header.stamp.sec = 7;
+    RadarCloudBuilder builder(cloud, "radar_test");
+    for (uint32_t i = 0; i < count; ++i) {
+      RadarPoint point;
+      point.range = 10.0F + i;
+      point.azimuth_angle = .1F * i;
+      point.elevation_angle = -.2F;
+      point.radial_speed = -1.5F + i;
+      point.power = 40.0F;
+      builder.push_back(point);
+    }
+    Scan scan;
+    scan.returns.resize(5);  // Stale content from a reused message is replaced.
+    fill_radar_scan(cloud, scan);
+    EXPECT_EQ(scan.header, cloud.header);
+    ASSERT_EQ(scan.returns.size(), count);
+    for (uint32_t i = 0; i < count; ++i) {
+      EXPECT_FLOAT_EQ(scan.returns[i].range, 10.0F + i);
+      EXPECT_FLOAT_EQ(scan.returns[i].azimuth, .1F * i);
+      EXPECT_FLOAT_EQ(scan.returns[i].elevation, -.2F);
+      EXPECT_FLOAT_EQ(scan.returns[i].doppler_velocity, -1.5F + i);
+      EXPECT_FLOAT_EQ(scan.returns[i].amplitude, 40.0F);
+    }
+  }
 }

@@ -103,6 +103,22 @@ TEST(StreamHealth, DelayVariationDoesNotPretendToMeasureAbsoluteLatency)
   EXPECT_LT(health.snapshot().device_interval_seconds, 0);
 }
 
+TEST(StreamHealth, ListsWithoutDeviceTimestampCountOnlyLiveness)
+{
+  StreamHealth health;
+  const auto start = StreamHealth::Clock::now();
+  health.receive_untimed(start);
+  health.receive_untimed(start + std::chrono::milliseconds(100));
+  const auto snapshot = health.snapshot(start + std::chrono::milliseconds(150));
+  EXPECT_EQ(snapshot.frames, 2U);
+  EXPECT_NEAR(snapshot.receive_interval_seconds, .1, 1e-9);
+  EXPECT_NEAR(snapshot.age_seconds, .05, 1e-9);
+  EXPECT_FALSE(snapshot.timestamp_warning);  // Not a zero or repeated device timestamp.
+  EXPECT_EQ(snapshot.zero + snapshot.repeated + snapshot.backwards, 0U);
+  EXPECT_EQ(snapshot.device_timestamp_us, 0U);
+  EXPECT_LT(snapshot.device_interval_seconds, 0);
+}
+
 TEST(SdkCallbackGate, DrainsAnActiveCallAndDropsLateCalls)
 {
   SdkCallbackGate gate;
