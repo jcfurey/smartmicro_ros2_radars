@@ -19,9 +19,9 @@ namespace; `N` is the sensor index). Start them with `smartmicro_processing`'s
 | `smart_radar/port_targets_N` | driver, `PointCloud2` ([fields](#targets-smart_radarport_targets_n-smart_radarcan_targets_n-72-byte-stride)) | `sensors.sensor_N.frame_id` | ROS receive time in the SDK callback, minus `stamp_offset_s` when configured; device time in `timing_N` | reliable, `KEEP_LAST` `history_size`, [overridable](#qos) | every scan: 18.18 Hz with the sensor's CAN target output off, 8.33 Hz with it on | Own processing, radar-inertial estimation (per-point Doppler; sign unverified, O14), mapping |
 | `smart_radar/radar_scan_N` (optional) | driver, `radar_msgs/RadarScan` | as the cloud | as the cloud | as the cloud | as the cloud, only with subscribers | `radar_msgs` consumers; needs a radar_msgs build and `publish_radar_scan: true` ([details](#optional-radar_msgsradarscan)) |
 | `umrr96_processing/obstacles` | processing, `PointCloud2` x, y, z | `obstacle_frame` (a frame rigid to the radar, e.g. `base_link`; default the sensor frame) | input cloud's stamp | reliable, `KEEP_LAST` 5, `qos_overrides` | every accepted scan | Nav2 obstacle/STVL layer marking, collision monitor |
-| `umrr96_processing/tracks` | processing, `radar_msgs/RadarTracks` | sensor frame, or `tracking_frame` (velocities then over ground) | input cloud's stamp | as `obstacles` | every accepted scan | Track consumers (people, vehicles) |
+| `umrr96_processing/tracks` | processing, `radar_msgs/RadarTracks` (created only when radar_msgs is installed) | sensor frame, or `tracking_frame` (velocities then over ground) | input cloud's stamp | as `obstacles` | every accepted scan | Track consumers (people, vehicles) |
 | `umrr96_processing/tracked_objects` | processing, `PointCloud2` x, y, z, vx, vy, speed, track_id, age | as `tracks` | as `tracks` | as `obstacles` | as `tracks` | The same tracks without radar_msgs |
-| `umrr96_processing/experimental_velocity` | processing, `TwistWithCovarianceStamped` | sensor frame, at the radar origin | input cloud's stamp | as `obstacles` | accepted Doppler fits only | Experimental ego velocity, e.g. `robot_localization` ([processing README](../../smartmicro_processing/README.md)) |
+| `umrr96_processing/experimental_velocity` | processing, `TwistWithCovarianceStamped` | sensor frame, at the radar origin | input cloud's stamp | reliable, `KEEP_LAST` 10, `qos_overrides` | accepted Doppler fits only | Experimental ego velocity, e.g. `robot_localization` ([processing README](../../smartmicro_processing/README.md)) |
 
 All of them are in sensor or robot frames at receive time, so consumers look up
 TF at the stamp; the sensor's internal latency is not measured yet. Health is on
@@ -241,7 +241,8 @@ acquisition time of their list header instead: `TimeStamp` [s] +
 `device_timestamp_us` is 0, the object stream reports
 `device_timestamp_available: false` and only its liveness is checked. Before
 2026-10-09 CAN lists reported the SDK receive time as device time. Header stamps
-remain ROS receive time throughout.
+remain ROS receive time (minus `stamp_offset_s`, see [latency offset](#latency-offset));
+device time is never used for them.
 
 The readback node's `Control requests` status counts requests, timeouts and
 rejections and reports the startup CAN target-output write as
@@ -255,8 +256,8 @@ diagnostics are served while the sensor is unreachable.
 (`/proc/net/udp`). Only the process's own sockets are considered, matched by local
 port and, when `hw_ip_address` is set, by local address; the status is `WARN`
 ("unavailable or ambiguous") only if more than one socket still matches. The SDK
-(3.13.0) accepts one Ethernet adapter per process: a second one fails SDK
-initialization ("Only one ETH iface is allowed").
+(3.13.0) accepts one Ethernet adapter per process; a second one is rejected at
+startup (see [startup validation](#startup-validation)).
 
 ## Launch files
 
