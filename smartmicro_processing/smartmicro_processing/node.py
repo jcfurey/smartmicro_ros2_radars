@@ -67,8 +67,8 @@ TRACKER_PARAMETERS = {
     'confirm_hits': ('Hits within confirm_window scans needed to confirm a track.', 1, 64, 1),
     'confirm_window': ('Scan window for track confirmation.', 1, 64, 1),
     'max_coast': ('Delete a track after this long without support (s).', .05, 30),
-    'static_hold': ('A confirmed track may live on novel zero-Doppler support this long (s).',
-                    .01, 600),
+    'static_hold': ('A confirmed track may live on novel zero-Doppler support this long (s); '
+                    'no such support while the sensor is moving.', .01, 600),
     'background_time_constant': ('Memory of the static background used to tell novel '
                                  'zero-Doppler support from walls (s). Valid only while '
                                  'the input frame is fixed in the scene.', 1, 3600),
@@ -147,7 +147,8 @@ class RadarProcessing(Node):
         self.sensor_moving_speed = declare(
             self, 'sensor_moving_speed', .05,
             'Fitted sensor speed above which (for 3 consecutive scans) the sensor is moving: '
-            'the sensor-frame background is reset and not used (m/s).', .005, 10)
+            'the sensor-frame background is reset and not used, and tracks get no '
+            'zero-Doppler support (m/s).', .005, 10)
         self.fast_scans = 0
         self.track_pub = self.create_publisher(PointCloud2, '~/tracked_objects',
                                                qos_profile_sensor_data)
@@ -277,9 +278,13 @@ class RadarProcessing(Node):
             speed = float(np.linalg.norm(result.velocity))
             self.fast_scans = self.fast_scans + 1 if speed > self.sensor_moving_speed else 0
             static = selected[result.inliers, :3]
-            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3],
-                                       result.residuals[local], static,
-                                       sensor_moving=self.sensor_moving)
+            # The EKF runs in the sensor frame, where positions move at the velocity
+            # relative to the radar: feed it the sign-adapted measured Doppler. The
+            # ego-compensated residual is kept for the ghost rule, as in ghosts.py.
+            relative = self.fit_config.doppler_sign * selected[local, 3]
+            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3], relative, static,
+                                       sensor_moving=self.sensor_moving,
+                                       ghost_speed=result.residuals[local])
             self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
             # None until the background is learned: never drop returns as track multipath
             # against an unlearned (or, on a moving sensor, meaningless) background.

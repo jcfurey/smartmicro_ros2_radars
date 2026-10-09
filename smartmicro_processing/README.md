@@ -123,8 +123,8 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 | `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`, `reject_static_only`) |
 | `moving_ghosts` | Doppler outliers rejected by the active ghost policy. By default, any same-absolute-speed, double-absolute-speed or behind-static trigger rejects. Speed-copy rules ignore bearing and Doppler sign, so two independent movers more than `range_gap` apart in range can suppress the farther one. See the [criteria comparison](../docs/umrr96-rejection-criteria-20260928.md) for recorded tradeoffs. |
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
-| `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id, age (sensor frame) |
-| `track_markers` | RViz markers for the tracks (built only with subscribers) |
+| `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id, age (sensor frame). vx, vy and speed are velocity **relative to the radar** in sensor axes; they equal ground velocity only while the radar is stationary |
+| `track_markers` | RViz markers for the tracks (built only with subscribers); labels and arrows show the same radar-relative velocity |
 | `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height`. Novel static returns beyond a track (`shadow_gap`) are dropped only once the background is learned (`background_warmup`) and never while the sensor moves |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
@@ -134,6 +134,23 @@ condition, residual RMSE, computation time, last velocity age and
 `calibrated=False`, `sensor_moving` and `background_ready`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
+
+### Tracking on a moving radar
+
+The tracker runs in the radar frame. Its constant-velocity EKF is updated with
+each mover cluster's measured Doppler (sign-adapted: radial speed relative to
+the radar), because sensor-frame positions move at the object's velocity minus
+the radar's. The ego-compensated residual (`uᵀ v_object`) only separates movers
+from the static scene and feeds the same-speed ghost rules (`moving_ghosts` and
+the track-level rule). On a stationary radar the two agree to within the fit's
+velocity noise; in synthetic stationary scenes the change left track identities
+unchanged and moved track states by at most 5 mm.
+
+While the radar is moving (`sensor_moving`), the background is reset and every
+static return would be novel, so confirmed tracks get no zero-Doppler
+(`static_hold`) support: a track whose mover stops or leaves ends after
+`max_coast`. A person standing still in front of a moving radar is not tracked;
+they reach `obstacles` only through static persistence or `safety_range`.
 
 ### Inspecting a filter decision
 

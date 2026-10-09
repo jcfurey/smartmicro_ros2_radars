@@ -27,8 +27,9 @@
     reject_static_only: true
     # Moving-object tracker (walk-through: person tracked in 96% of walking scans,
     # ghost tracks in 0.7% of labelled scans). The background model assumes the
-    # radar is fixed in the scene: it restarts (and the obstacle shadow rule is off)
-    # while the fitted sensor speed exceeds sensor_moving_speed for 3 scans.
+    # radar is fixed in the scene: it restarts (and the obstacle shadow rule and
+    # static_hold support are off) while the fitted sensor speed exceeds
+    # sensor_moving_speed for 3 scans. Track vx/vy are relative to the radar.
     cluster_radius: 0.6
     gate: 1.2
     # Independent opt-ins; launch arguments with the same names can override these.

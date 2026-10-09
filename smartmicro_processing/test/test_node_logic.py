@@ -9,7 +9,7 @@ import pytest
 import rclpy
 from rclpy.time import Time
 from sensor_msgs.msg import PointField
-from sensor_msgs_py.point_cloud2 import create_cloud
+from sensor_msgs_py.point_cloud2 import create_cloud, read_points
 from smartmicro_processing.accumulation import pose_discontinuity, pose_step_limits
 from smartmicro_processing.accumulation_node import RadarAccumulation
 from smartmicro_processing.cloud import empty_cloud
@@ -324,5 +324,87 @@ def test_processing_moving_sensor_disables_background(ros):
             assert node.state == 'valid'
         assert node.sensor_moving and node.stats['sensor_moving']
         assert not node.tracker.background.ready and node.tracker.static_novel is None
+    finally:
+        node.destroy_node()
+
+
+LANDMARKS = np.array([[14 * math.cos(a), 14 * math.sin(a), z]
+                      for a in np.radians([-50, -35, -20, -8, 5, 15, 28, 40, 55, 65])
+                      for z in (-.8, 0., .8)])
+WALL = np.array([[x, 2., z] for x in np.arange(-5, 25, .25) for z in (-.6, 0., .6)])
+
+
+def drive(node, sensor_velocity, person, person_velocity, scans, scene=LANDMARKS, leave=None):
+    """
+    Feed a world-fixed scene and a walking person (two returns) seen from a moving radar.
+
+    Doppler is positive receding, relative to the radar. Returns per-scan rows of
+    (true person xy in the sensor frame or None, published tracks, obstacle xy).
+    """
+    for name in ('track_pub', 'obstacle_pub', 'audit_pub', 'diagnostics_pub', 'velocity_pub'):
+        setattr(node, name, Recorder())
+    node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
+    sensor_velocity = np.asarray(sensor_velocity, float)
+    start = node.get_clock().now().nanoseconds
+    rows = []
+    for k in range(scans):
+        t = k * .055
+        ns = start + round(t * 1e9)
+        node.now_ns = lambda ns=ns: ns + 5_000_000
+        relative = scene - sensor_velocity * t
+        relative = relative[relative[:, 0] > .3]
+        bearing = relative / np.linalg.norm(relative, axis=1)[:, None]
+        points = np.column_stack((relative, bearing @ -sensor_velocity,
+                                  np.full(len(relative), 30)))
+        truth = None
+        if leave is None or k < leave:
+            truth = np.asarray(person, float) + (np.asarray(person_velocity) - sensor_velocity) * t
+            for offset in ((0, 0, 0), (.2, .1, 0)):
+                xyz = truth + offset
+                speed = xyz @ (np.asarray(person_velocity) - sensor_velocity) / np.linalg.norm(xyz)
+                points = np.vstack((points, [*xyz, speed, 30]))
+        node.receive(cloud(ns, points))
+        assert node.state == 'valid'
+        tracks = read_points(node.track_pub.messages[-1])
+        obstacles = read_points(node.obstacle_pub.messages[-1])
+        rows.append((None if truth is None else truth[:2], tracks,
+                     np.column_stack((obstacles['x'], obstacles['y']))))
+    return rows
+
+
+@pytest.mark.parametrize('person,person_velocity,relative_vx', [
+    ([10., 0., 0.], [-1., 0., 0.], -2.),  # approach: closing at 2 m/s
+    ([4., .3, 0.], [1., 0., 0.], 0.)])  # follower: fixed in the sensor frame
+def test_moving_sensor_tracks_people_in_the_sensor_frame(ros, person, person_velocity,
+                                                         relative_vx):
+    # Fed ego-compensated speeds, the EKF lagged 1.3-1.6 m behind the sensor-frame
+    # position, split the track and dropped the person from obstacles.
+    ros()
+    node = RadarProcessing()
+    try:
+        rows = drive(node, [1., 0., 0.], person, person_velocity, 70)
+        assert node.sensor_moving
+        for truth, tracks, obstacles in rows[10:]:
+            if np.linalg.norm(truth) < node.obstacle_config.safety_range:
+                continue
+            assert len(tracks) == 1
+            assert math.hypot(tracks['x'][0] - truth[0], tracks['y'][0] - truth[1]) < .3
+            assert tracks['vx'][0] == pytest.approx(relative_vx, abs=.2)
+            assert np.min(np.linalg.norm(obstacles - truth, axis=1)) < .3
+        assert node.tracker.next_id == 2  # one identity throughout
+    finally:
+        node.destroy_node()
+
+
+def test_moving_sensor_wall_does_not_hold_a_departed_track(ros):
+    ros()
+    node = RadarProcessing()
+    try:
+        rows = drive(node, [1., 0., 0.], [7., 1.9, 0.], [-.5, 0., 0.], 140,
+                     np.vstack((LANDMARKS, WALL)), leave=20)
+        assert len(rows[19][1]) == 1  # confirmed before leaving
+        alive = [k for k, (_, tracks, _) in enumerate(rows) if k >= 20 and len(tracks)]
+        # At most max_coast, not static_hold (5 s) on novel wall returns.
+        assert (max(alive) - 19) * .055 <= node.tracker_config.max_coast + 1e-9
     finally:
         node.destroy_node()

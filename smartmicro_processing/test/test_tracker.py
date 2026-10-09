@@ -94,6 +94,64 @@ def test_moving_sensor_resets_background():
     assert not tracker.background.ready and tracker.static_novel is None
 
 
+def test_ghost_speed_defaults_to_the_motion_speed():
+    plain, explicit = MovingObjectTracker(), MovingObjectTracker()
+    velocity = np.array([0.0, 0.8])
+    for k in range(30):
+        position = np.array([2.0, -1.0]) + velocity * k * DT
+        movers, speeds = [[*position, 0], [6.0, 2.0, 0]], [radial(position, velocity), .3]
+        visible = plain.step(k * DT, movers, speeds)
+        assert [t.track_id for t in explicit.step(k * DT, movers, speeds, ghost_speed=speeds)
+                ] == [t.track_id for t in visible]
+    assert len(plain.tracks) == len(explicit.tracks) == 2
+    for a, b in zip(plain.tracks, explicit.tracks):
+        np.testing.assert_array_equal(a.x, b.x)
+        assert a.radial_speed == b.radial_speed
+
+
+@pytest.mark.parametrize('ghost_speeds,far_hidden', [((.36, .36), True), ((.36, 1.5), False)])
+def test_track_ghost_rule_compares_ghost_speed_not_motion_speed(ghost_speeds, far_hidden):
+    tracker = MovingObjectTracker()
+    for k in range(40):
+        near = np.array([1.5 + 0.02 * k, 0.0])
+        far = np.array([6.0 + 0.02 * k, 1.0])
+        # Equal motion (relative) Doppler; only the ghost-rule speed differs.
+        tracks = tracker.step(k * DT, [[*near, 0], [*far, 0]], [.36, .36],
+                              ghost_speed=list(ghost_speeds))
+    assert len(tracks) == (1 if far_hidden else 2)
+    assert sorted(t.radial_speed for t in tracker.tracks) == sorted(ghost_speeds)
+
+
+def sensor_frame_wall(t, speed=1.0):
+    """Wall at y = 2 seen from a radar driving along it (+x at ``speed``)."""
+    xs = np.arange(-10, 30, .25) - speed * t
+    xs = xs[(xs > .5) & (xs < 20)]
+    return np.c_[xs, np.full(len(xs), 2.0), np.zeros(len(xs))]
+
+
+@pytest.mark.parametrize('sensor_moving', [True, False])
+def test_moving_sensor_disables_zero_doppler_support(sensor_moving):
+    # Every static return is novel while the background is reset, so a wall next to
+    # a departed mover used to hold its confirmed track for the whole static_hold.
+    tracker = MovingObjectTracker()
+    speed = 1.0 if sensor_moving else 0.0
+    velocity = np.array([-1.5, 0.0])  # relative to the radar
+    for k in range(15):
+        position = np.array([5.0, 1.9]) + velocity * k * DT
+        visible = tracker.step(k * DT, [[*position, 0]], [radial(position, velocity)],
+                               sensor_frame_wall(k * DT, speed), sensor_moving=sensor_moving)
+    assert len(visible) == 1
+    alive = 0.0
+    for k in range(15, 140):
+        if tracker.step(k * DT, [], [], sensor_frame_wall(k * DT, speed),
+                        sensor_moving=sensor_moving):
+            alive = (k - 14) * DT
+    if sensor_moving:
+        assert alive <= tracker.config.max_coast
+    else:  # A scene-fixed wall stays novel until learned: the legacy static_hold applies.
+        assert alive > tracker.config.max_coast
+
+
 def confirmed_tracker(scans=20):
     tracker = MovingObjectTracker()
     velocity = np.array([0.0, 0.8])
