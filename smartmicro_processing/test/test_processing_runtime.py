@@ -20,6 +20,11 @@ from std_msgs.msg import Header
 from umrr_ros2_msgs.msg import DetectionAudit
 import yaml
 
+try:
+    from radar_msgs.msg import RadarTracks
+except ImportError:  # optional: the node then publishes no ~/tracks
+    RadarTracks = None
+
 
 def velocity_std_floor():
     path = os.path.join(get_package_share_directory('smartmicro_processing'),
@@ -42,14 +47,21 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
     velocities, statuses, audits = [], [], []
     publisher = node.create_publisher(PointCloud2, '/test_radar/targets', qos_profile_sensor_data)
     clock_pub = node.create_publisher(Clock, '/clock', 10)
-    for name, messages in outputs.items():
-        node.create_subscription(PointCloud2, '/umrr96_processing/' + name, messages.append,
-                                 qos_profile_sensor_data)
+    # A default (reliable) subscriber must receive too, not only sensor-data ones.
+    # Subset clouds are built only with subscribers: wait until each one is matched.
+    subset_subscriptions = [node.create_subscription(
+        PointCloud2, '/umrr96_processing/' + name, messages.append,
+        10 if name == 'classified_targets' else qos_profile_sensor_data)
+        for name, messages in outputs.items()]
     node.create_subscription(TwistWithCovarianceStamped,
                              '/umrr96_processing/experimental_velocity',
                              velocities.append, 10)
     node.create_subscription(DetectionAudit, '/umrr96_processing/detection_audit',
                              audits.append, qos_profile_sensor_data)
+    typed_tracks = []
+    if RadarTracks is not None:
+        node.create_subscription(RadarTracks, '/umrr96_processing/tracks', typed_tracks.append,
+                                 10)
 
     def diagnostic(message):
         for status in message.status:
@@ -127,11 +139,14 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
             ], stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             wait_for(lambda: publisher.get_subscription_count() == 1
                      and node.count_publishers('/umrr96_processing/experimental_velocity') == 1
+                     and all(s.get_publisher_count() for s in subset_subscriptions)
                      and (not sim_time or clock_pub.get_subscription_count() >= 1), 12)
             first = cloud()
             send_expect(first, 'valid')
             wait_for(lambda: velocities and audits
                      and all(messages for messages in outputs.values()))
+            if RadarTracks is not None:
+                wait_for(lambda: any(m.header == first.header for m in typed_tracks))
             velocity = velocities[-1]
             assert velocity.header == first.header
             actual = velocity.twist.twist.linear

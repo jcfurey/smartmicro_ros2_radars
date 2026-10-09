@@ -22,6 +22,7 @@
     max_velocity_std: 1.0
     max_speed: 15.0
     # Multipath-ghost rejection for moving_targets (85% ghosts removed, 97% real kept).
+    # range_gap and speed_tolerance also set the tracker's track-level ghost rule.
     range_gap: 1.5
     speed_tolerance: 0.25
     wall_azimuth_deg: 4.0
@@ -32,7 +33,14 @@
     # ghost tracks in 0.7% of labelled scans). The background model assumes the
     # radar is fixed in the scene: it restarts (and the obstacle shadow rule and
     # static_hold support are off) while the fitted sensor speed exceeds
-    # sensor_moving_speed for 3 scans. Track vx/vy are relative to the radar.
+    # sensor_moving_speed for 3 scans.
+    # Empty: track in the radar frame (vx/vy relative to the radar). A fixed frame such
+    # as odom: TF at each scan's stamp (waiting up to tf_wait_seconds; without it the
+    # tracker coasts), ground velocities, tracks published in that frame. The
+    # background, persistence and shadow rule stay in the radar frame. Not with
+    # standing_support.
+    tracking_frame: ''
+    tf_wait_seconds: 0.1
     cluster_radius: 0.6
     gate: 1.2
     # Independent opt-ins; launch arguments with the same names can override these.

@@ -385,3 +385,59 @@ def test_joint_assignment_preserves_confirmed_priority_and_observation_permutati
     tracks[1].confirmed = False
     tracks[1].x[:2] = [2.2, 0.]
     assert tracker.associate(tracks, [(np.array([2.2, 0.]), 0., 1)]) == {1: 0}
+
+
+def frame_scenario():
+    """Wall background, a walker with a farther same-speed copy, a stop, then nothing."""
+    wall = [[4., y, 0.] for y in (-1., 0., 1.)]
+    for k in range(100):
+        yield k * DT, [], [], wall
+    velocity = np.array([.8, .3])
+    for j in range(40):
+        position = np.array([.7, -.5]) + velocity * j * DT
+        speed = radial(position, velocity)
+        yield (100 + j) * DT, [[*position, 0], [*(3 * position), 0]], [speed, speed], wall
+    for j in range(60):
+        yield (140 + j) * DT, [], [], wall + [[*position, 0]]
+
+
+@pytest.mark.parametrize('yaw,shift', [(0., (0., 0.)), (.7, (5., -3.))])
+def test_fixed_frame_tracking_is_equivariant_to_the_sensor_frame(yaw, shift):
+    # Tracking in a fixed frame (sensor at origin, rotated by yaw) must reproduce the
+    # sensor-frame tracker exactly, mapped into that frame; static support uses the
+    # tracking-frame copies while the background stays in the sensor frame.
+    config = TrackerConfig(evidence_confirmation=True, joint_association=True,
+                           association_uncertainty=True)
+    sensor, fixed = MovingObjectTracker(config), MovingObjectTracker(config)
+    rotation = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0],
+                         [0, 0, 1]])
+    shift = np.array([*shift, 0.])
+
+    def move(xyz):
+        return np.asarray(xyz, float).reshape(-1, 3) @ rotation.T + shift
+
+    seen = 0
+    for stamp, movers, speeds, static in frame_scenario():
+        a = sensor.step(stamp, movers, speeds, static)
+        b = fixed.step(stamp, move(movers), speeds, static, origin=shift[:2],
+                       static_support_xyz=move(static))
+        assert [t.track_id for t in a] == [t.track_id for t in b]
+        seen += len(a)
+        for ta, tb in zip(sensor.tracks, fixed.tracks):
+            assert (ta.track_id, ta.confirmed, ta.ghost) == (tb.track_id, tb.confirmed, tb.ghost)
+            expected = np.r_[rotation[:2, :2] @ ta.x[:2] + shift[:2], rotation[:2, :2] @ ta.x[2:]]
+            if yaw == 0 and not shift.any():
+                np.testing.assert_array_equal(tb.x, ta.x)  # origin (0, 0): bit for bit
+            else:
+                np.testing.assert_allclose(tb.x, expected, atol=1e-9)
+    assert seen > 50 and len(sensor.tracks) == len(fixed.tracks) >= 1
+
+
+def test_fixed_frame_bearing_and_new_track_velocity_use_the_sensor_origin():
+    tracker = MovingObjectTracker()
+    origin = np.array([10., 5.])
+    tracker.step(0., [[13., 9., 0.]], [-1.], origin=origin)  # 5 m from the sensor
+    np.testing.assert_allclose(tracker.tracks[0].x[2:], [-.6, -.8])  # along the bearing
+    with pytest.raises(ValueError):
+        MovingObjectTracker(TrackerConfig(standing_support=True)).step(
+            0., [], [], [[1., 0., 0.]], origin=origin, static_support_xyz=[[11., 5., 0.]])

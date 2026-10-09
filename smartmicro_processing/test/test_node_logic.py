@@ -11,10 +11,12 @@ from geometry_msgs.msg import TransformStamped
 import numpy as np
 import pytest
 import rclpy
+from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import PointField
 from sensor_msgs_py.point_cloud2 import create_cloud, read_points
-from smartmicro_processing import accumulation_node, node as processing_node, ros_support
+from smartmicro_processing import (accumulation_node, node as processing_node, radar_tracks,
+                                   ros_support)
 from smartmicro_processing.accumulation import pose_discontinuity, pose_step_limits
 from smartmicro_processing.accumulation_node import RadarAccumulation
 from smartmicro_processing.cloud import empty_cloud
@@ -49,16 +51,17 @@ def cloud(ns, points, frame='umrr96'):
 
 
 class Recorder:
-    """Publisher stand-in with one subscriber."""
+    """Publisher stand-in with ``subscribers`` subscribers (one by default)."""
 
-    def __init__(self):
+    def __init__(self, subscribers=1):
         self.messages = []
+        self.subscribers = subscribers
 
     def publish(self, message):
         self.messages.append(message)
 
     def get_subscription_count(self):
-        return 1
+        return self.subscribers
 
 
 @pytest.mark.parametrize('node_type,name', [(RadarProcessing, 'umrr96_processing.yaml'),
@@ -74,6 +77,42 @@ def test_python_defaults_equal_the_shipped_yaml(ros, node_type, name):
             assert node.has_parameter(key), key
             default = node.get_parameter(key).value
             assert type(default) is type(value) and default == value, (key, default, value)
+    finally:
+        node.destroy_node()
+
+
+@pytest.mark.parametrize('node_type,topic', [
+    (RadarProcessing, '/umrr96_processing/obstacles'),
+    (RadarAccumulation, '/umrr96_accumulation/accumulated_targets')])
+def test_publishers_are_reliable_by_default_and_overridable(ros, node_type, topic):
+    # Best-effort outputs left a default (reliable) subscriber with nothing but an
+    # incompatible-QoS warning, and qos_overrides were ignored.
+    ros()
+    node = node_type()
+    try:
+        publishers = [p for p in node.publishers if p.topic_name != '/parameter_events']
+        assert topic in [p.topic_name for p in publishers] and len(publishers) >= 3
+        for publisher in publishers:
+            qos = publisher.qos_profile
+            assert qos.reliability == QoSReliabilityPolicy.RELIABLE, publisher.topic_name
+            assert qos.durability == QoSDurabilityPolicy.VOLATILE
+            assert qos.history == QoSHistoryPolicy.KEEP_LAST and qos.depth >= 5
+            prefix = f'qos_overrides.{publisher.topic_name}.publisher.'
+            for policy in ('reliability', 'history', 'depth'):
+                assert node.has_parameter(prefix + policy), prefix + policy
+    finally:
+        node.destroy_node()
+    rclpy.try_shutdown()
+    ros(f'qos_overrides.{topic}.publisher.reliability:=best_effort',
+        f'qos_overrides.{topic}.publisher.depth:=2')
+    node = node_type()
+    try:
+        by_topic = {p.topic_name: p.qos_profile for p in node.publishers}
+        assert by_topic[topic].reliability == QoSReliabilityPolicy.BEST_EFFORT
+        assert by_topic[topic].depth == 2
+        others = [qos for name, qos in by_topic.items()
+                  if name not in (topic, '/parameter_events')]
+        assert all(qos.reliability == QoSReliabilityPolicy.RELIABLE for qos in others)
     finally:
         node.destroy_node()
 
@@ -188,6 +227,27 @@ def test_standing_support_parameters_reach_the_tracker(ros):
         assert node.tracker.config.standing_support
         assert node.tracker.config.standing_hold == 30.
         assert node.describe_parameter('standing_support').read_only
+    finally:
+        node.destroy_node()
+
+
+def test_ghost_parameters_set_the_track_level_ghost_rule(ros):
+    # The tracker kept its own 1.5 m / 0.25 m/s copy whatever the YAML said.
+    ros()
+    node = RadarProcessing()
+    try:
+        assert node.tracker.config.ghost_range_gap == node.ghost_config.range_gap == 1.5
+        assert node.tracker.config.ghost_speed_tolerance == node.ghost_config.speed_tolerance
+    finally:
+        node.destroy_node()
+    rclpy.try_shutdown()
+    ros('range_gap:=2.5', 'speed_tolerance:=0.4')
+    node = RadarProcessing()
+    try:
+        assert node.ghost_config.range_gap == 2.5 and node.ghost_config.speed_tolerance == .4
+        assert node.tracker.config.ghost_range_gap == 2.5
+        assert node.tracker.config.ghost_speed_tolerance == .4
+        assert node.tracker.config is node.tracker_config
     finally:
         node.destroy_node()
 
@@ -530,6 +590,45 @@ def recorded_node():
     return node
 
 
+def test_subset_clouds_are_built_only_with_subscribers(ros):
+    # All eight subset/display clouds used to be built and published on every scan.
+    ros()
+    node = recorded_node()
+    try:
+        subscribed = {'doppler_inliers', 'classified_targets'}
+        node.cloud_publishers = {name: Recorder(int(name in subscribed))
+                                 for name in node.cloud_publishers}
+        node.velocity_pub = Recorder()
+        outputs = node.cloud_publishers
+        now = node.get_clock().now().nanoseconds
+        for k in range(3):
+            node.receive(moving_sensor_cloud(now - (40 - 10 * k) * 1_000_000, np.zeros(3)))
+        assert {name for name, r in outputs.items() if r.messages} == subscribed
+        assert [m.width for m in outputs['doppler_inliers'].messages] == [30] * 3
+        assert outputs['classified_targets'].messages[-1].width == 30
+        assert node.stats['displayed'] == 30  # counted without building the display
+        for name in ('obstacle_pub', 'track_pub', 'audit_pub', 'velocity_pub'):
+            assert len(getattr(node, name).messages) == 3, name
+        node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))  # rejected: clears
+        assert {name for name, r in outputs.items() if r.messages} == subscribed
+        for name in subscribed:
+            assert len(outputs[name].messages) == 4 and outputs[name].messages[-1].width == 0
+        assert node.obstacle_pub.messages[-1].width == 0
+        assert node.audit_pub.messages[-1].event == DetectionAudit.CLEAR
+        # A late subscriber gets the next scan; the next clear reaches it too.
+        outputs['moving_targets'].subscribers = 1
+        node.receive(moving_sensor_cloud(now - 5_000_000, np.zeros(3)))
+        assert [m.width for m in outputs['moving_targets'].messages] == [0]
+        outputs['doppler_inliers'].subscribers = 0
+        node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))
+        assert [m.width for m in outputs['moving_targets'].messages] == [0, 0]
+        # Unsubscribed since its last scan, but it carried data: cleared as well.
+        assert [m.width for m in outputs['doppler_inliers'].messages][-2:] == [30, 0]
+        assert not outputs['quality_targets'].messages
+    finally:
+        node.destroy_node()
+
+
 @pytest.mark.parametrize('frame', ['', 'base_link'])
 def test_obstacles_are_flattened_in_the_obstacle_frame(ros, frame):
     # A radar 0.5 m up pitched 5 deg down: flattening in the sensor frame put returns
@@ -641,6 +740,8 @@ def drive(node, sensor_velocity, person, person_velocity, scans, scene=LANDMARKS
     """
     for name in ('track_pub', 'obstacle_pub', 'audit_pub', 'diagnostics_pub', 'velocity_pub'):
         setattr(node, name, Recorder())
+    if node.radar_tracks_pub is not None:
+        node.radar_tracks_pub = Recorder()
     node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
     sensor_velocity = np.asarray(sensor_velocity, float)
     start = node.get_clock().now().nanoseconds
@@ -706,3 +807,262 @@ def test_moving_sensor_wall_does_not_hold_a_departed_track(ros):
         assert (max(alive) - 19) * .055 <= node.tracker_config.max_coast + 1e-9
     finally:
         node.destroy_node()
+
+
+def test_radar_track_fields_uuid_and_covariance():
+    pytest.importorskip('radar_msgs.msg')
+    from radar_msgs.msg import RadarTrack
+    P = np.array([[.04, .01, .002, 0.], [.01, .09, 0., .003],
+                  [.002, 0., .5, .07], [0., .003, .07, .6]])
+    track = SimpleNamespace(track_id=7, x=np.array([3., -1., .4, .2]), P=P)
+    header = Header(frame_id='umrr96', stamp=stamp(5))
+    message = radar_tracks.radar_tracks(header, [track], '/front/umrr96_processing', z=.5)
+    (item,) = message.tracks
+    assert message.header == header and item.classification == RadarTrack.DYNAMIC
+    assert (item.position.x, item.position.y, item.position.z) == (3., -1., .5)
+    assert (item.velocity.x, item.velocity.y, item.velocity.z) == (.4, .2, 0.)
+    assert (item.acceleration.x, item.acceleration.y, item.acceleration.z) == (0., 0., 0.)
+    assert (item.size.x, item.size.y, item.size.z) == (0., 0., 0.)  # placeholder
+    big = radar_tracks.UNOBSERVED_VARIANCE
+    np.testing.assert_allclose(item.position_covariance, [.04, .01, 0, .09, 0, big], rtol=1e-6)
+    np.testing.assert_allclose(item.velocity_covariance, [.5, .07, 0, .6, 0, big], rtol=1e-6)
+    for unknown in (item.acceleration_covariance, item.size_covariance):
+        np.testing.assert_allclose(unknown, [big, 0, 0, big, 0, big])
+    same = radar_tracks.track_uuid('/front/umrr96_processing', 7)
+    assert bytes(item.uuid.uuid) == same.bytes and same.version == 5
+    assert radar_tracks.track_uuid('/rear/umrr96_processing', 7) != same
+    assert radar_tracks.track_uuid('/front/umrr96_processing', 8) != same
+
+
+def test_radar_tracks_mirror_tracked_objects(ros):
+    pytest.importorskip('radar_msgs.msg')
+    ros()
+    node = RadarProcessing()
+    try:
+        assert node.radar_tracks_pub is not None
+        drive(node, [0., 0., 0.], [6., 1., 0.], [-.8, .3, 0.], 40)
+        typed, clouds = node.radar_tracks_pub.messages, node.track_pub.messages
+        assert len(typed) == len(clouds) == 40
+        uuids = set()
+        for message, cloud_message in zip(typed, clouds):
+            rows = read_points(cloud_message)
+            assert message.header == cloud_message.header
+            assert len(message.tracks) == len(rows)
+            for item, row in zip(message.tracks, rows):
+                assert (item.position.x, item.position.y) == pytest.approx(
+                    (row['x'], row['y']), abs=1e-5)
+                assert item.position.z == row['z'] == 0.
+                assert (item.velocity.x, item.velocity.y) == pytest.approx(
+                    (row['vx'], row['vy']), abs=1e-5)
+                assert bytes(item.uuid.uuid) == radar_tracks.track_uuid(
+                    '/umrr96_processing', row['track_id']).bytes
+                uuids.add(bytes(item.uuid.uuid))
+        assert len(uuids) == 1 and len(typed[-1].tracks) == 1  # one stable identity
+        (track,) = [t for t in node.tracker.tracks if t.confirmed]
+        np.testing.assert_allclose(typed[-1].tracks[0].position_covariance[[0, 1, 3]],
+                                   track.P[[0, 0, 1], [0, 1, 1]], rtol=1e-6)
+        np.testing.assert_allclose(typed[-1].tracks[0].velocity_covariance[[0, 1, 3]],
+                                   track.P[[2, 2, 3], [2, 3, 3]], rtol=1e-6)
+        node.receive(cloud(node.last_stamp + 1, [[2, 1, 0, 0, 30]], frame='other'))  # clear
+        assert typed[-1].tracks == [] and typed[-1].header.frame_id == 'umrr96'
+    finally:
+        node.destroy_node()
+
+
+def test_typed_tracks_are_skipped_without_radar_msgs(ros, monkeypatch):
+    monkeypatch.setattr(radar_tracks, 'RadarTracks', None)
+    ros()
+    node = recorded_node()
+    try:
+        assert node.radar_tracks_pub is None
+        assert not any(p.topic_name.endswith('/tracks') for p in node.publishers)
+        now = node.get_clock().now().nanoseconds
+        node.receive(moving_sensor_cloud(now - 20_000_000, np.zeros(3)))
+        assert node.state == 'valid' and node.track_pub.messages
+        values = {v.key: v.value for v in node.diagnostics_pub.messages[-1].status[0].values}
+        assert values['typed_tracks'] == 'False'
+    finally:
+        node.destroy_node()
+
+
+def test_track_ids_continue_across_a_clock_reset(ros):
+    ros()
+    node = RadarProcessing()
+    try:
+        node.tracker.next_id = 42
+        node.last_now = node.get_clock().now().nanoseconds + 10 ** 12
+        node.now_ns()  # the ROS clock went backwards
+        assert node.state == 'clock_reset' and node.tracker.next_id == 42
+        assert not node.tracker.tracks
+    finally:
+        node.destroy_node()
+
+
+def planar_rotation(yaw):
+    return np.array([[math.cos(yaw), -math.sin(yaw), 0], [math.sin(yaw), math.cos(yaw), 0],
+                     [0, 0, 1]])
+
+
+def odom_transform(ns, position, yaw):
+    """Return odom <- umrr96 at ``ns``: the radar at ``position`` heading ``yaw``."""
+    message = TransformStamped()
+    message.header.frame_id, message.child_frame_id = 'odom', 'umrr96'
+    message.header.stamp = stamp(ns)
+    translation = message.transform.translation
+    translation.x, translation.y, translation.z = (float(v) for v in position)
+    message.transform.rotation.z = math.sin(yaw / 2)
+    message.transform.rotation.w = math.cos(yaw / 2)
+    return message
+
+
+# Landmarks all around the start pose; only those in front of the radar are returned.
+RING = np.array([[14 * math.cos(a), 14 * math.sin(a), z]
+                 for a in np.radians(np.arange(0, 360, 12)) for z in (-.8, 0., .8)])
+
+
+def drive_odom(node, person, person_velocity, scans, speed=1., yaw=.5, yaw_rate=0.,
+               start_xy=(2., -1.), missing=()):
+    """
+    Feed a world-fixed scene and a walking person seen from a radar driving in odom.
+
+    The radar starts at ``start_xy`` (0.5 m up) heading ``yaw`` and drives at
+    ``speed`` along its heading, turning at ``yaw_rate``; odom <- umrr96 is in
+    TF at every scan stamp except ``missing`` scans. ``person`` and
+    ``person_velocity`` are given in the radar's start frame. Doppler is
+    positive receding, relative to the radar. Returns per-scan rows of (true
+    person xy in odom, true velocity in odom, published tracks, obstacle xy in
+    the radar frame, true person xy in the radar frame).
+    """
+    for name in ('track_pub', 'obstacle_pub', 'audit_pub', 'diagnostics_pub', 'velocity_pub'):
+        setattr(node, name, Recorder())
+    node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
+    start = np.array([*start_xy, .5])
+    initial = planar_rotation(yaw)
+    scene = RING @ initial.T + start
+    walker = initial @ np.asarray(person, float) + start
+    walker_velocity = initial @ np.asarray(person_velocity, float)
+    begin = node.get_clock().now().nanoseconds
+    rows = []
+    for k in range(scans):
+        t = k * .055
+        ns = begin + round(t * 1e9)
+        node.now_ns = lambda ns=ns: ns + 5_000_000
+        heading = yaw + yaw_rate * t
+        if yaw_rate:
+            position = start + speed / yaw_rate * np.array([
+                math.sin(heading) - math.sin(yaw), math.cos(yaw) - math.cos(heading), 0.])
+        else:
+            position = start + speed * t * initial[:, 0]
+        velocity = speed * planar_rotation(heading)[:, 0]
+        rotation = planar_rotation(heading)  # odom <- umrr96
+        if k not in missing:
+            node.tf_buffer.set_transform(odom_transform(ns, position, heading), 'test')
+        local = (scene - position) @ rotation
+        local = local[local[:, 0] > .3]
+        bearing = local / np.linalg.norm(local, axis=1)[:, None]
+        points = np.column_stack((local, bearing @ (rotation.T @ -velocity),
+                                  np.full(len(local), 30)))
+        truth = walker + walker_velocity * t
+        for offset in ((0, 0, 0), (.2, .1, 0)):
+            xyz = (truth + offset - position) @ rotation
+            relative = rotation.T @ (walker_velocity - velocity)
+            points = np.vstack((points, [*xyz, xyz @ relative / np.linalg.norm(xyz), 30]))
+        node.receive(cloud(ns, points))
+        assert node.state == 'valid'
+        tracks = read_points(node.track_pub.messages[-1])
+        obstacles = read_points(node.obstacle_pub.messages[-1])
+        rows.append((truth[:2], walker_velocity[:2], tracks,
+                     np.column_stack((obstacles['x'], obstacles['y'])),
+                     ((truth - position) @ rotation)[:2]))
+    return rows
+
+
+@pytest.mark.parametrize('person,person_velocity,yaw_rate', [
+    ([10., 0., 0.], [-1., 0., 0.], 0.),  # approach: closing at 2 m/s
+    ([4., .3, 0.], [1., 0., 0.], 0.),  # follower: fixed in the sensor frame
+    ([8., 1., 0.], [-.6, -.4, 0.], .15)])  # turning radar, crossing walker
+def test_tracking_frame_gives_ground_tracks_on_a_moving_radar(ros, person, person_velocity,
+                                                              yaw_rate):
+    ros('tracking_frame:=odom')
+    node = RadarProcessing()
+    try:
+        rows = drive_odom(node, person, person_velocity, 70, yaw_rate=yaw_rate)
+        assert node.sensor_moving and node.tracking_tf_failures == 0
+        assert node.track_pub.messages[-1].header.frame_id == 'odom'
+        assert node.obstacle_pub.messages[-1].header.frame_id == 'umrr96'
+        for truth, velocity, tracks, obstacles, local in rows[10:]:
+            assert len(tracks) == 1
+            assert math.hypot(tracks['x'][0] - truth[0], tracks['y'][0] - truth[1]) < .3
+            assert tracks['z'][0] == pytest.approx(.5)  # the radar's height in odom
+            assert (tracks['vx'][0], tracks['vy'][0]) == pytest.approx(tuple(velocity), abs=.2)
+            if np.linalg.norm(local) >= node.obstacle_config.safety_range:
+                assert np.min(np.linalg.norm(obstacles - local, axis=1)) < .3
+        assert node.tracker.next_id == 2  # one identity throughout
+        node.receive(cloud(node.last_stamp + 1, [[2, 1, 0, 0, 30]], frame='other'))  # clear
+        assert node.track_pub.messages[-1].header.frame_id == 'odom'
+        assert node.track_pub.messages[-1].width == 0
+    finally:
+        node.destroy_node()
+
+
+def test_tracking_frame_coasts_and_counts_scans_without_transform(ros):
+    ros('tracking_frame:=odom', 'tf_wait_seconds:=0')
+    node = RadarProcessing()
+    try:
+        missing = range(30, 34)
+        rows = drive_odom(node, [10., 0., 0.], [-1., 0., 0.], 50, missing=missing)
+        assert node.tracking_tf_failures == len(missing)
+        for k, (truth, velocity, tracks, obstacles, local) in enumerate(rows[10:], 10):
+            assert len(tracks) == 1  # coasted through the gap, same identity
+            error = math.hypot(tracks['x'][0] - truth[0], tracks['y'][0] - truth[1])
+            assert error < (.4 if k in missing else .3)
+            if k in missing:  # track position unknown in the radar frame: movers pass
+                assert np.min(np.linalg.norm(obstacles - local, axis=1)) < .3
+        assert node.tracker.next_id == 2
+        statuses = [m.status[0] for m in node.diagnostics_pub.messages]
+        coasting = [s for s in statuses if 'tracker coasting' in s.message]
+        assert coasting and all(s.level == DiagnosticStatus.WARN for s in coasting)
+        values = {v.key: v.value for v in statuses[-1].values}
+        assert values['tracking_tf_failures'] == '4' and values['tracking_frame'] == 'odom'
+        assert values['track_velocity'] == 'ground' and values['tracking_tf_error'] == 'None'
+        assert statuses[-1].level == DiagnosticStatus.OK
+    finally:
+        node.destroy_node()
+
+
+def test_tracking_frame_scans_wait_for_their_transform_without_blocking(ros, steady):
+    ros('tracking_frame:=odom')  # tf_wait_seconds 0.1
+    node = recorded_node()
+    try:
+        now = node.get_clock().now().nanoseconds
+        node.now_ns = lambda: now
+        first, second = now - 20_000_000, now - 10_000_000
+        node.receive(moving_sensor_cloud(first, np.zeros(3)))
+        node.receive(moving_sensor_cloud(second, np.zeros(3)))
+        assert len(node.pending) == 2 and not node.track_pub.messages  # waiting, not blocked
+        node.tf_buffer.set_transform(odom_transform(first, (1., 2., .5), .3), 'test')
+        node.process_pending()  # the timer: the first scan's TF has arrived
+        assert len(node.pending) == 1 and len(node.track_pub.messages) == 1
+        assert node.track_pub.messages[0].header.frame_id == 'odom'
+        assert node.tracking_tf_failures == 0 and node.stats['tracking_tf_available']
+        steady.now += .05
+        node.process_pending()
+        assert len(node.pending) == 1  # still within tf_wait_seconds
+        steady.now += .1
+        node.process_pending()  # expired: processed without TF, the tracker coasts
+        assert not node.pending and len(node.track_pub.messages) == 2
+        assert node.tracking_tf_failures == 1 and not node.stats['tracking_tf_available']
+        assert 'ExtrapolationException' in node.tracking_tf_error
+        stamps = [Time.from_msg(m.header.stamp).nanoseconds for m in node.obstacle_pub.messages]
+        assert stamps == [first, second]  # in order, at their own stamps
+    finally:
+        node.destroy_node()
+
+
+@pytest.mark.parametrize('overrides', [
+    ('tracking_frame:=odom', 'standing_support:=true'),
+    ('tracking_frame:=umrr96',), ('tracking_frame:=/odom',)])
+def test_tracking_frame_rejects_invalid_combinations(ros, overrides):
+    ros(*overrides)
+    with pytest.raises(ValueError):
+        RadarProcessing()

@@ -53,7 +53,11 @@ Output names are deliberately separate:
 | Pose compensated | `/umrr96_accumulation/accumulated_targets` | `/umrr96_accumulation/confirmed_targets` | Configured fixed frame, default `odom` |
 | Stationary preview | `/umrr96_accumulation/stationary_preview/accumulated_targets` | `/umrr96_accumulation/stationary_preview/confirmed_targets` | Input sensor frame, default `umrr96` |
 
-Both outputs use sensor-data QoS (Best Effort). `node_name` can distinguish
+Both outputs are reliable, volatile, KEEP_LAST(5), and match reliable and
+best-effort subscribers alike; the input subscription uses sensor-data QoS.
+Startup parameters such as
+`qos_overrides./umrr96_accumulation/confirmed_targets.publisher.reliability: best_effort`
+(also `history`, `depth`; fully qualified topic) override them. `node_name` can distinguish
 concurrent comparisons; `namespace`, `input_topic`, `expected_frame_id`,
 `fixed_frame`, `params_file` and `use_sim_time` are launch arguments. The launch
 file remaps the node's relative input name to `input_topic`; with
@@ -161,7 +165,10 @@ pair radar marking with a clearing lidar source, or use STVL decay. The
 accumulator source below remains available.
 
 [`config/nav2_obstacle_layer.example.yaml`](config/nav2_obstacle_layer.example.yaml)
-is a starting point for an `ObstacleLayer` observation source:
+holds a complete radar-only `spatio_temporal_voxel_layer` with decay (the
+primary radar-only configuration), the ObstacleLayer with lidar clearing and a
+`collision_monitor` source (see [Nav2 consumers](README.md#nav2-consumers)).
+For the accumulator, an `ObstacleLayer` observation source looks like this:
 
 ```yaml
 radar_layer:

@@ -31,7 +31,7 @@ from .accumulation import (AccumulationConfig, pose_step, pose_step_limits, Temp
                            transform_measurements)
 from .cloud import measurements
 from .evidence_cloud import evidence_cloud
-from .ros_support import declare, DiagnosticsRateLimiter
+from .ros_support import declare, DiagnosticsRateLimiter, output_publisher
 
 # Relative by default so a namespace moves the input with the node; remap it in launch.
 DEFAULT_INPUT = 'umrr96_processing/doppler_inliers'
@@ -111,11 +111,10 @@ class RadarAccumulation(Node):
             raise ValueError('max_pending_scans must be within 1..128')
         self.output_frame = self.fixed_frame if self.mode == 'pose_compensated' else self.frame
         prefix = '~/' if self.mode == 'pose_compensated' else '~/stationary_preview/'
-        self.evidence_pub = self.create_publisher(PointCloud2, prefix + 'accumulated_targets',
-                                                  qos_profile_sensor_data)
-        self.confirmed_pub = self.create_publisher(PointCloud2, prefix + 'confirmed_targets',
-                                                   qos_profile_sensor_data)
-        self.diagnostics_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        # Reliable KEEP_LAST outputs with qos_overrides; the input stays sensor-data QoS.
+        self.evidence_pub = output_publisher(self, PointCloud2, prefix + 'accumulated_targets')
+        self.confirmed_pub = output_publisher(self, PointCloud2, prefix + 'confirmed_targets')
+        self.diagnostics_pub = output_publisher(self, DiagnosticArray, '/diagnostics', 10)
         self.diagnostics_limiter = DiagnosticsRateLimiter(diagnostics_period)
         self.empty_heartbeat = {publisher: DiagnosticsRateLimiter(diagnostics_period)
                                 for publisher in (self.evidence_pub, self.confirmed_pub)}
