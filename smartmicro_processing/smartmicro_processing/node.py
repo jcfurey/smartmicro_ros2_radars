@@ -21,6 +21,7 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from umrr_ros2_msgs.msg import DetectionAudit
 from visualization_msgs.msg import Marker, MarkerArray
 
+from . import radar_tracks
 from .classification import classified_cloud, classify, cleared_audit, drawable
 from .cloud import (empty_cloud, empty_like, GateConfig, measurements, select_measurements,
                     subset_cloud)
@@ -182,6 +183,14 @@ class RadarProcessing(Node):
         # Outputs are reliable KEEP_LAST with qos_overrides (output_publisher); the
         # input subscription stays sensor-data QoS.
         self.track_pub = output_publisher(self, PointCloud2, '~/tracked_objects')
+        # Typed tracks need radar_msgs (optional at runtime; declared exec_depend).
+        self.radar_tracks_pub = None
+        if radar_tracks.RadarTracks is None:
+            self.get_logger().warning(
+                'radar_msgs is not installed: ~/tracks (radar_msgs/RadarTracks) is not '
+                'published; tracked_objects is unaffected')
+        else:
+            self.radar_tracks_pub = output_publisher(self, radar_tracks.RadarTracks, '~/tracks')
         self.marker_pub = output_publisher(self, MarkerArray, '~/track_markers', 10)
         self.obstacle_config = _declare_config(self, ObstacleConfig, OBSTACLE_PARAMETERS)
         self.persistence = PersistenceFilter(self.obstacle_config)
@@ -243,7 +252,10 @@ class RadarProcessing(Node):
             self.state = 'clock_reset'
             self.stats = {}
             # Time went backwards (bag loop): tracks, background and persistence restart.
+            # Track IDs (and the typed tracks' UUIDs) continue: never reused in a run.
+            next_id = self.tracker.next_id
             self.tracker = MovingObjectTracker(self.tracker_config)
+            self.tracker.next_id = next_id
             self.persistence.reset()
             self.fast_scans = 0
         self.last_now = now
@@ -281,6 +293,8 @@ class RadarProcessing(Node):
         self.subsets_published.clear()
         self.audit_pub.publish(audit)
         self.track_pub.publish(create_cloud(header, TRACK_FIELDS, []))
+        if self.radar_tracks_pub is not None:
+            self.radar_tracks_pub.publish(radar_tracks.RadarTracks(header=header))
         self.obstacle_pub.publish(create_cloud(
             Header(stamp=stamp, frame_id=self.obstacle_output_frame), OBSTACLE_FIELDS, []))
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
@@ -487,6 +501,9 @@ class RadarProcessing(Node):
         rows = [(t.x[0], t.x[1], 0.0, t.x[2], t.x[3], t.speed, t.track_id, now - t.first_stamp)
                 for t in tracks]
         self.track_pub.publish(create_cloud(header, TRACK_FIELDS, rows))
+        if self.radar_tracks_pub is not None:
+            self.radar_tracks_pub.publish(radar_tracks.radar_tracks(
+                header, tracks, self.get_fully_qualified_name()))
         if not self.marker_pub.get_subscription_count():
             return
         markers = [Marker(action=Marker.DELETEALL)]
@@ -552,6 +569,7 @@ class RadarProcessing(Node):
                       joint_association=self.tracker.config.joint_association,
                       association_uncertainty=self.tracker.config.association_uncertainty,
                       association_doppler=self.tracker.config.association_doppler,
+                      typed_tracks=self.radar_tracks_pub is not None,
                       received=self.received, valid_fits=self.valid_fits,
                       rejected_inputs=self.rejected_inputs, last_velocity_age_seconds=age,
                       background_gap_resets=self.background_gap_resets,

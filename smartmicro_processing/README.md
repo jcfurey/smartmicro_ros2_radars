@@ -124,13 +124,14 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 | `moving_ghosts` | Doppler outliers rejected by the active ghost policy. By default, any same-absolute-speed, double-absolute-speed or behind-static trigger rejects. Speed-copy rules ignore bearing and Doppler sign, so two independent movers more than `range_gap` apart in range can suppress the farther one. See the [criteria comparison](../docs/umrr96-rejection-criteria-20260928.md) for recorded tradeoffs. |
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
 | `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id (uint32; the other fields are float32), age (sensor frame). vx, vy and speed are velocity **relative to the radar** in sensor axes; they equal ground velocity only while the radar is stationary |
+| `tracks` | `radar_msgs/RadarTracks`: the same confirmed tracks with UUIDs and EKF covariances (see [typed tracks](#typed-tracks)); only when radar_msgs is installed |
 | `track_markers` | RViz markers for the tracks (built only with subscribers); labels and arrows show the same radar-relative velocity |
 | `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; in `obstacle_frame` (default: the input frame) with z flattened to `obstacle_height` there (see [obstacle frame](#obstacle-frame)), at the input stamp. Novel static returns more than `shadow_gap` beyond a confirmed track and within `shadow_half_angle_deg` (15°) of its bearing are dropped as its multipath, only once the background is learned (`background_warmup`) and never while the sensor moves (see [track shadow](#track-shadow-rule)) |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 
-The consumer outputs `obstacles`, `tracked_objects`, `detection_audit` and
-`experimental_velocity` are published on every accepted scan (the twist only
+The consumer outputs `obstacles`, `tracked_objects`, `tracks`, `detection_audit`
+and `experimental_velocity` are published on every accepted scan (the twist only
 for valid fits). The subset and display clouds (`quality_targets`,
 `doppler_inliers`, `doppler_outliers`, `unclassified_targets`,
 `moving_targets`, `moving_ghosts`, `tracked_targets`, `classified_targets`)
@@ -166,6 +167,27 @@ subscription stays sensor-data QoS. The policies `reliability`, `history` and
           reliability: best_effort
           depth: 1
 ```
+
+### Typed tracks
+
+`~/tracks` (`radar_msgs/RadarTracks`) carries one `RadarTrack` per confirmed,
+non-ghost track, with the header (stamp and frame) of `tracked_objects`:
+
+| Field | Value |
+| --- | --- |
+| `uuid` | UUIDv5 (URL namespace) of `ros:<node fully qualified name>/track/<track_id>`: stable for a track, distinct between nodes; it repeats only when the node restarts (track IDs continue across a clock reset) |
+| `position` | x, y of the EKF state; z as in `tracked_objects` |
+| `velocity` | vx, vy of the EKF state (same semantics as `tracked_objects`), vz 0 |
+| `acceleration`, `size` | zero; size is a placeholder, not measured |
+| `classification` | `DYNAMIC` (Doppler movers) |
+| `position_covariance`, `velocity_covariance` | upper triangles (xx, xy, xz, yy, yz, zz) from the EKF covariance over (px, py, vx, vy); xz = yz = 0 and zz = 1e6 (z unobserved) |
+| `acceleration_covariance`, `size_covariance` | diagonal 1e6 (not estimated) |
+
+The covariance is the tracker's model (`position_std` 0.15 m, `radial_speed_std`
+0.1 m/s, `accel_std` 2 m/s²), not a calibrated error. radar_msgs and
+unique_identifier_msgs are declared run dependencies; when radar_msgs cannot
+be imported the node logs one warning at startup, does not create `~/tracks`,
+and reports `typed_tracks=False` in diagnostics.
 
 ### Obstacle frame
 

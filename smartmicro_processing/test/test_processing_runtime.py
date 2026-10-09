@@ -20,6 +20,11 @@ from std_msgs.msg import Header
 from umrr_ros2_msgs.msg import DetectionAudit
 import yaml
 
+try:
+    from radar_msgs.msg import RadarTracks
+except ImportError:  # optional: the node then publishes no ~/tracks
+    RadarTracks = None
+
 
 def velocity_std_floor():
     path = os.path.join(get_package_share_directory('smartmicro_processing'),
@@ -53,6 +58,10 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
                              velocities.append, 10)
     node.create_subscription(DetectionAudit, '/umrr96_processing/detection_audit',
                              audits.append, qos_profile_sensor_data)
+    typed_tracks = []
+    if RadarTracks is not None:
+        node.create_subscription(RadarTracks, '/umrr96_processing/tracks', typed_tracks.append,
+                                 10)
 
     def diagnostic(message):
         for status in message.status:
@@ -136,6 +145,8 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
             send_expect(first, 'valid')
             wait_for(lambda: velocities and audits
                      and all(messages for messages in outputs.values()))
+            if RadarTracks is not None:
+                wait_for(lambda: any(m.header == first.header for m in typed_tracks))
             velocity = velocities[-1]
             assert velocity.header == first.header
             actual = velocity.twist.twist.linear

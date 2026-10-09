@@ -15,7 +15,8 @@ from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolic
 from rclpy.time import Time
 from sensor_msgs.msg import PointField
 from sensor_msgs_py.point_cloud2 import create_cloud, read_points
-from smartmicro_processing import accumulation_node, node as processing_node, ros_support
+from smartmicro_processing import (accumulation_node, node as processing_node, radar_tracks,
+                                   ros_support)
 from smartmicro_processing.accumulation import pose_discontinuity, pose_step_limits
 from smartmicro_processing.accumulation_node import RadarAccumulation
 from smartmicro_processing.cloud import empty_cloud
@@ -739,6 +740,8 @@ def drive(node, sensor_velocity, person, person_velocity, scans, scene=LANDMARKS
     """
     for name in ('track_pub', 'obstacle_pub', 'audit_pub', 'diagnostics_pub', 'velocity_pub'):
         setattr(node, name, Recorder())
+    if node.radar_tracks_pub is not None:
+        node.radar_tracks_pub = Recorder()
     node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
     sensor_velocity = np.asarray(sensor_velocity, float)
     start = node.get_clock().now().nanoseconds
@@ -802,5 +805,94 @@ def test_moving_sensor_wall_does_not_hold_a_departed_track(ros):
         alive = [k for k, (_, tracks, _) in enumerate(rows) if k >= 20 and len(tracks)]
         # At most max_coast, not static_hold (5 s) on novel wall returns.
         assert (max(alive) - 19) * .055 <= node.tracker_config.max_coast + 1e-9
+    finally:
+        node.destroy_node()
+
+
+def test_radar_track_fields_uuid_and_covariance():
+    pytest.importorskip('radar_msgs.msg')
+    from radar_msgs.msg import RadarTrack
+    P = np.array([[.04, .01, .002, 0.], [.01, .09, 0., .003],
+                  [.002, 0., .5, .07], [0., .003, .07, .6]])
+    track = SimpleNamespace(track_id=7, x=np.array([3., -1., .4, .2]), P=P)
+    header = Header(frame_id='umrr96', stamp=stamp(5))
+    message = radar_tracks.radar_tracks(header, [track], '/front/umrr96_processing', z=.5)
+    (item,) = message.tracks
+    assert message.header == header and item.classification == RadarTrack.DYNAMIC
+    assert (item.position.x, item.position.y, item.position.z) == (3., -1., .5)
+    assert (item.velocity.x, item.velocity.y, item.velocity.z) == (.4, .2, 0.)
+    assert (item.acceleration.x, item.acceleration.y, item.acceleration.z) == (0., 0., 0.)
+    assert (item.size.x, item.size.y, item.size.z) == (0., 0., 0.)  # placeholder
+    big = radar_tracks.UNOBSERVED_VARIANCE
+    np.testing.assert_allclose(item.position_covariance, [.04, .01, 0, .09, 0, big], rtol=1e-6)
+    np.testing.assert_allclose(item.velocity_covariance, [.5, .07, 0, .6, 0, big], rtol=1e-6)
+    for unknown in (item.acceleration_covariance, item.size_covariance):
+        np.testing.assert_allclose(unknown, [big, 0, 0, big, 0, big])
+    same = radar_tracks.track_uuid('/front/umrr96_processing', 7)
+    assert bytes(item.uuid.uuid) == same.bytes and same.version == 5
+    assert radar_tracks.track_uuid('/rear/umrr96_processing', 7) != same
+    assert radar_tracks.track_uuid('/front/umrr96_processing', 8) != same
+
+
+def test_radar_tracks_mirror_tracked_objects(ros):
+    pytest.importorskip('radar_msgs.msg')
+    ros()
+    node = RadarProcessing()
+    try:
+        assert node.radar_tracks_pub is not None
+        drive(node, [0., 0., 0.], [6., 1., 0.], [-.8, .3, 0.], 40)
+        typed, clouds = node.radar_tracks_pub.messages, node.track_pub.messages
+        assert len(typed) == len(clouds) == 40
+        uuids = set()
+        for message, cloud_message in zip(typed, clouds):
+            rows = read_points(cloud_message)
+            assert message.header == cloud_message.header
+            assert len(message.tracks) == len(rows)
+            for item, row in zip(message.tracks, rows):
+                assert (item.position.x, item.position.y) == pytest.approx(
+                    (row['x'], row['y']), abs=1e-5)
+                assert item.position.z == row['z'] == 0.
+                assert (item.velocity.x, item.velocity.y) == pytest.approx(
+                    (row['vx'], row['vy']), abs=1e-5)
+                assert bytes(item.uuid.uuid) == radar_tracks.track_uuid(
+                    '/umrr96_processing', row['track_id']).bytes
+                uuids.add(bytes(item.uuid.uuid))
+        assert len(uuids) == 1 and len(typed[-1].tracks) == 1  # one stable identity
+        (track,) = [t for t in node.tracker.tracks if t.confirmed]
+        np.testing.assert_allclose(typed[-1].tracks[0].position_covariance[[0, 1, 3]],
+                                   track.P[[0, 0, 1], [0, 1, 1]], rtol=1e-6)
+        np.testing.assert_allclose(typed[-1].tracks[0].velocity_covariance[[0, 1, 3]],
+                                   track.P[[2, 2, 3], [2, 3, 3]], rtol=1e-6)
+        node.receive(cloud(node.last_stamp + 1, [[2, 1, 0, 0, 30]], frame='other'))  # clear
+        assert typed[-1].tracks == [] and typed[-1].header.frame_id == 'umrr96'
+    finally:
+        node.destroy_node()
+
+
+def test_typed_tracks_are_skipped_without_radar_msgs(ros, monkeypatch):
+    monkeypatch.setattr(radar_tracks, 'RadarTracks', None)
+    ros()
+    node = recorded_node()
+    try:
+        assert node.radar_tracks_pub is None
+        assert not any(p.topic_name.endswith('/tracks') for p in node.publishers)
+        now = node.get_clock().now().nanoseconds
+        node.receive(moving_sensor_cloud(now - 20_000_000, np.zeros(3)))
+        assert node.state == 'valid' and node.track_pub.messages
+        values = {v.key: v.value for v in node.diagnostics_pub.messages[-1].status[0].values}
+        assert values['typed_tracks'] == 'False'
+    finally:
+        node.destroy_node()
+
+
+def test_track_ids_continue_across_a_clock_reset(ros):
+    ros()
+    node = RadarProcessing()
+    try:
+        node.tracker.next_id = 42
+        node.last_now = node.get_clock().now().nanoseconds + 10 ** 12
+        node.now_ns()  # the ROS clock went backwards
+        assert node.state == 'clock_reset' and node.tracker.next_id == 42
+        assert not node.tracker.tracks
     finally:
         node.destroy_node()
