@@ -128,11 +128,13 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pep257 REQUIRED)
   find_package(ament_cmake_xmllint REQUIRED)
   find_package(ament_cmake_lint_cmake REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
   # The C++ panels predate ament's C++ style checks; lint Python, XML and CMake only.
-  ament_flake8(custom_can_sender.py)
-  ament_pep257(custom_can_sender.py)
+  ament_flake8(custom_can_sender.py test/test_custom_can_sender.py)
+  ament_pep257(custom_can_sender.py test/test_custom_can_sender.py)
   ament_xmllint()
   ament_lint_cmake()
+  ament_add_pytest_test(test_custom_can_sender test/test_custom_can_sender.py TIMEOUT 30)
 
   add_executable(panel_loading_smoke test/panel_loading_smoke.cpp)
   target_link_libraries(panel_loading_smoke
