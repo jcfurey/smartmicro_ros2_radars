@@ -98,7 +98,11 @@ separate RGB **Radar fan image** display included in the saved RViz configuratio
   `qos_overrides.<topic>.publisher.reliability: best_effort` override.
 
 ### Smart Command Configurator
-- Sends commands and mode/config related service calls.
+- Sends commands and mode/config related service calls to `/smart_radar/...`.
+  Under `umrr96_live.launch.py` the parameter and status calls reach the UMRR-96
+  readback node, which accepts only its own sensor ID and the UMRR-96 tuning
+  parameters; commands still reach the data node (see
+  [service routing](../umrr_ros2_driver/doc/interfaces.md#service-routing)).
 - Sensor IDs and integer values accept decimal or `0x` hexadecimal; values are
   checked against the selected type before sending, and parse errors are shown
   in the response area. Command values are sent as float32 unchanged.
