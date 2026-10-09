@@ -16,6 +16,7 @@ from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py.point_cloud2 import create_cloud
 from std_msgs.msg import Header
+from tf2_ros import Buffer, TransformException, TransformListener
 from umrr_ros2_msgs.msg import DetectionAudit
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -24,7 +25,7 @@ from .cloud import (empty_cloud, empty_like, GateConfig, measurements, select_me
                     subset_cloud)
 from .doppler import fit_velocity, FitConfig
 from .ghosts import ghost_reasons, ghost_rejection_mask, GhostConfig, GhostReason
-from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter
+from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter, to_frame
 from .ros_support import declare, DiagnosticsRateLimiter
 from .tracker import MovingObjectTracker, TrackerConfig
 
@@ -88,8 +89,9 @@ OBSTACLE_PARAMETERS = {
     'persistence_window': ('Scan window for static persistence.', 1, 64, 1),
     'safety_range': ('Non-ghost returns nearer than this pass immediately (m).', 0.01, 50),
     'track_radius': ('Moving returns this close to a confirmed track pass (m).', .05, 10),
-    'obstacle_height': ('Output z in the sensor frame (m); negative keeps the measured z, '
-                        'which is unreliable on this sensor.', -1, 10),
+    'obstacle_height': ('Output z in obstacle_frame (the input frame when empty) (m); '
+                        'negative keeps the measured z, which is unreliable on this sensor.',
+                        -1, 10),
     'shadow_gap': ('Novel static returns this far beyond a confirmed track, near its '
                    'bearing (shadow_half_angle_deg), are treated as its multipath (m); '
                    '<= 0 disables.', -1, 50),
@@ -169,6 +171,23 @@ class RadarProcessing(Node):
         self.persistence = PersistenceFilter(self.obstacle_config)
         self.obstacle_pub = self.create_publisher(PointCloud2, '~/obstacles',
                                                   qos_profile_sensor_data)
+        self.obstacle_frame = declare(
+            self, 'obstacle_frame', '',
+            'Frame of ~/obstacles; empty keeps the input frame. Otherwise a frame rigidly '
+            'attached to the radar (e.g. base_link): points use the latest TF (a static '
+            'mount is the contract) and z = obstacle_height in that frame. Scans without '
+            'that transform publish no obstacles.')
+        if self.obstacle_frame and (self.obstacle_frame.startswith('/') or any(
+                c.isspace() for c in self.obstacle_frame)):
+            raise ValueError('obstacle_frame must be empty or a TF frame without leading slash')
+        self.transform_obstacles = self.obstacle_frame not in ('', self.frame)
+        self.obstacle_output_frame = self.obstacle_frame or self.frame
+        self.tf_buffer = Buffer() if self.transform_obstacles else None
+        self.tf_listener = (TransformListener(self.tf_buffer, self)
+                            if self.transform_obstacles else None)
+        self.obstacle_tf_failures = self.obstacle_tf_changes = 0
+        self.obstacle_tf_error = None  # why the last scan's obstacles were withheld
+        self.obstacle_mount = None
         self.cloud_publishers = {
             name: self.create_publisher(PointCloud2, '~/' + name, qos_profile_sensor_data)
             for name in CLOUD_OUTPUTS}
@@ -242,7 +261,8 @@ class RadarProcessing(Node):
                               if name == 'classified_targets' else subset)
         self.audit_pub.publish(audit)
         self.track_pub.publish(create_cloud(header, TRACK_FIELDS, []))
-        self.obstacle_pub.publish(create_cloud(header, OBSTACLE_FIELDS, []))
+        self.obstacle_pub.publish(create_cloud(
+            Header(stamp=stamp, frame_id=self.obstacle_output_frame), OBSTACLE_FIELDS, []))
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
 
     def reject(self, reason, detail=''):
@@ -317,8 +337,9 @@ class RadarProcessing(Node):
             # against an unlearned (or, on a moving sensor, meaningless) background.
             obstacles = obstacle_points(
                 static, self.persistence.step(static), selected[movers, :3], ghosts,
-                [t.x[:2] for t in tracks], self.obstacle_config, self.tracker.static_novel)
-            self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
+                [t.x[:2] for t in tracks], self.obstacle_config, self.tracker.static_novel,
+                flatten=not self.transform_obstacles)
+            self.publish_obstacles(cloud.header, obstacles)
             track_xy = [t.x[:2] for t in tracks]
             on_track = near_tracks(selected[local, :3], track_xy,
                                    self.obstacle_config.track_radius)
@@ -360,8 +381,9 @@ class RadarProcessing(Node):
             points = selected[:, :3]
             obstacles = obstacle_points(points, self.persistence.step(points), np.empty((0, 3)),
                                         np.empty(0, bool), [t.x[:2] for t in tracks],
-                                        self.obstacle_config)
-            self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
+                                        self.obstacle_config,
+                                        flatten=not self.transform_obstacles)
+            self.publish_obstacles(cloud.header, obstacles)
             partitions = {'doppler_inliers': [], 'doppler_outliers': [],
                           'moving_targets': [], 'moving_ghosts': [], 'tracked_targets': [],
                           'unclassified_targets': indices}
@@ -381,6 +403,7 @@ class RadarProcessing(Node):
         stats.update(audited=len(audit.source_index), displayed=display.width)
         self.outputs_hold_data = True
         self.state = result.reason
+        stats.update(obstacles_published=self.obstacle_tf_error is None)
         stats.update(stamp_ns=stamp, receive_age_seconds=age, sensor_moving=self.sensor_moving,
                      reject_static_only=self.reject_static_only,
                      background_ready=self.tracker.background.ready,
@@ -391,6 +414,44 @@ class RadarProcessing(Node):
     @property
     def sensor_moving(self):
         return self.fast_scans >= MOVING_SCANS
+
+    def publish_obstacles(self, header, points):
+        """
+        Publish obstacle evidence at the input stamp in ``obstacle_frame``.
+
+        The mount is static, so the latest transform is the contract, not a
+        fallback. Without it, nothing is published for this scan: Nav2 must
+        not receive sensor-frame points labelled with another frame.
+        """
+        if not self.transform_obstacles:
+            self.obstacle_pub.publish(create_cloud(header, OBSTACLE_FIELDS, points))
+            return
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.obstacle_frame, self.frame, Time()).transform
+            mount = (np.array([transform.translation.x, transform.translation.y,
+                               transform.translation.z]),
+                     np.array([transform.rotation.x, transform.rotation.y,
+                               transform.rotation.z, transform.rotation.w]))
+            points = to_frame(points, *mount, self.obstacle_config.obstacle_height)
+        except (TransformException, ValueError) as error:
+            self.obstacle_tf_failures += 1
+            self.obstacle_tf_error = f'{type(error).__name__}: {error}'
+            self.get_logger().warning(
+                f'Obstacles withheld: no valid transform {self.frame} -> '
+                f'{self.obstacle_frame} ({error})', throttle_duration_sec=5.0)
+            return
+        if self.obstacle_mount is not None and (
+                np.linalg.norm(mount[0] - self.obstacle_mount[0]) > 1e-3
+                or abs(abs(mount[1] @ self.obstacle_mount[1]) - 1) > 1e-6):
+            self.obstacle_tf_changes += 1
+            self.get_logger().warning(
+                f'Transform {self.frame} -> {self.obstacle_frame} changed; obstacle_frame '
+                'must be rigidly attached to the radar', throttle_duration_sec=5.0)
+        self.obstacle_mount = mount
+        self.obstacle_tf_error = None
+        self.obstacle_pub.publish(create_cloud(
+            Header(stamp=header.stamp, frame_id=self.obstacle_frame), OBSTACLE_FIELDS, points))
 
     def publish_tracks(self, header, tracks, now):
         rows = [(t.x[0], t.x[1], 0.0, t.x[2], t.x[3], t.speed, t.track_id, now - t.first_stamp)
@@ -441,7 +502,11 @@ class RadarProcessing(Node):
         level = DiagnosticStatus.OK if self.state == 'valid' else DiagnosticStatus.WARN
         if self.state in ('input_stale', 'waiting_for_input', 'clock_reset'):
             level = DiagnosticStatus.STALE
-        if not self.diagnostics_limiter.due((self.state, level)):
+        # The last accepted scan's obstacles were withheld for want of a transform.
+        withheld = self.obstacle_tf_error is not None and self.outputs_hold_data
+        if withheld:
+            level = DiagnosticStatus.WARN
+        if not self.diagnostics_limiter.due((self.state, level, withheld)):
             return
         age = None if self.last_fit_wall is None else time.monotonic() - self.last_fit_wall
         values = dict(state=self.state, fit_valid=self.state == 'valid', calibrated=False,
@@ -457,11 +522,20 @@ class RadarProcessing(Node):
                       received=self.received, valid_fits=self.valid_fits,
                       rejected_inputs=self.rejected_inputs, last_velocity_age_seconds=age,
                       background_gap_resets=self.background_gap_resets,
+                      obstacle_frame=self.obstacle_output_frame,
+                      obstacle_tf_failures=self.obstacle_tf_failures,
+                      obstacle_tf_changes=self.obstacle_tf_changes,
+                      obstacle_tf_error=self.obstacle_tf_error,
                       **self.stats)
+        if withheld:
+            message = f'{self.state}; obstacles withheld: no transform to {self.obstacle_frame}'
+        elif self.state == 'valid':
+            message = 'Experimental fit valid; calibration pending'
+        else:
+            message = self.state
         status = DiagnosticStatus(
             level=level, name=self.get_fully_qualified_name() + '/doppler', hardware_id=self.frame,
-            message=('Experimental fit valid; calibration pending' if self.state == 'valid'
-                     else self.state),
+            message=message,
             values=[KeyValue(key=k, value=str(v)) for k, v in values.items()])
         self.diagnostics_pub.publish(DiagnosticArray(
             header=Header(stamp=self.get_clock().now().to_msg()), status=[status]))

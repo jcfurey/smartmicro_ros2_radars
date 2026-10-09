@@ -2,7 +2,8 @@
 import numpy as np
 import pytest
 
-from smartmicro_processing.obstacles import obstacle_points, ObstacleConfig, PersistenceFilter
+from smartmicro_processing.obstacles import (obstacle_points, ObstacleConfig, PersistenceFilter,
+                                             to_frame)
 
 
 def test_persistence_needs_k_of_n():
@@ -74,6 +75,18 @@ def test_measured_height_kept_when_negative():
     c = ObstacleConfig(obstacle_height=-1.0, include_tracks=False)
     points = obstacle_points([[3.0, 0, 0.7]], [True], np.empty((0, 3)), [], [], c)
     assert points[:, 2].tolist() == [0.7]
+
+
+def test_to_frame_flattens_after_the_mount_transform():
+    half = np.radians(5.0) / 2  # pitched 5 deg down, 0.5 m up
+    mount = ([0.0, 0.0, 0.5], [0.0, np.sin(half), 0.0, np.cos(half)])
+    points = to_frame([[10.0, 0.0, 0.0]], *mount, -1.0)
+    np.testing.assert_allclose(points, [[10 * np.cos(2 * half), 0, .5 - 10 * np.sin(2 * half)]])
+    assert points[0, 2] < 0  # below any min_obstacle_height without flattening
+    assert to_frame([[10.0, 0.0, 0.0]], *mount, 0.3)[0, 2] == 0.3
+    assert to_frame(np.empty((0, 3)), *mount, 0.3).shape == (0, 3)
+    with pytest.raises(ValueError):
+        to_frame([[1.0, 0.0, 0.0]], [0, 0, 0], [0, 0, 0, 0], 0.3)
 
 
 def test_invalid_config():

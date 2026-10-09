@@ -6,6 +6,8 @@ import math
 
 import numpy as np
 
+from .accumulation import transform_measurements
+
 
 @dataclass
 class ObstacleConfig:
@@ -76,7 +78,7 @@ def near_tracks(xyz, track_xy, radius):
 
 
 def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, config,
-                    novel=None):
+                    novel=None, flatten=True):
     """
     Select obstacle evidence and return an (N, 3) array.
 
@@ -88,6 +90,8 @@ def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, co
     than ``shadow_gap`` beyond that track's range is treated as the object's
     multipath and dropped while the track exists. A half-angle of 180 degrees
     reproduces the earlier rule: beyond the nearest track at any bearing.
+    Track positions get z = 0 (the sensor's height). ``flatten=False`` keeps
+    the measured z for a later transform (see ``to_frame``).
     """
     static_xyz = np.asarray(static_xyz, float).reshape(-1, 3)
     mover_xyz = np.asarray(mover_xyz, float).reshape(-1, 3)
@@ -110,6 +114,21 @@ def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, co
     if config.include_tracks and len(track_xy):
         parts.append(np.c_[track_xy, np.zeros(len(track_xy))])
     points = np.vstack(parts)
-    if config.obstacle_height >= 0 and len(points):
+    if flatten and config.obstacle_height >= 0 and len(points):
         points[:, 2] = config.obstacle_height
     return points
+
+
+def to_frame(points, translation, quaternion, height):
+    """
+    Transform sensor-frame points by a target-from-sensor pose (XYZW rotation).
+
+    Afterwards z is set to ``height`` in the target frame; a negative height
+    keeps the transformed z. Raises ValueError for an invalid transform.
+    """
+    points = np.asarray(points, float).reshape(-1, 3)
+    result = transform_measurements(np.c_[points, np.zeros((len(points), 2))],
+                                    translation, quaternion)[:, :3]
+    if height >= 0:
+        result[:, 2] = height
+    return result

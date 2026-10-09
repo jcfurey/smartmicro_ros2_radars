@@ -125,7 +125,7 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
 | `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id (uint32; the other fields are float32), age (sensor frame). vx, vy and speed are velocity **relative to the radar** in sensor axes; they equal ground velocity only while the radar is stationary |
 | `track_markers` | RViz markers for the tracks (built only with subscribers); labels and arrows show the same radar-relative velocity |
-| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height`. Novel static returns more than `shadow_gap` beyond a confirmed track and within `shadow_half_angle_deg` (15°) of its bearing are dropped as its multipath, only once the background is learned (`background_warmup`) and never while the sensor moves (see [track shadow](#track-shadow-rule)) |
+| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; in `obstacle_frame` (default: the input frame) with z flattened to `obstacle_height` there (see [obstacle frame](#obstacle-frame)), at the input stamp. Novel static returns more than `shadow_gap` beyond a confirmed track and within `shadow_half_angle_deg` (15°) of its bearing are dropped as its multipath, only once the background is learned (`background_warmup`) and never while the sensor moves (see [track shadow](#track-shadow-rule)) |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 
@@ -134,6 +134,23 @@ condition, residual RMSE, computation time, last velocity age and
 `calibrated=False`, `sensor_moving`, `background_ready` and `background_gap_resets`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
+
+### Obstacle frame
+
+Nav2 applies `min_obstacle_height`/`max_obstacle_height` in its global frame.
+With the default `obstacle_frame: ''`, `obstacles` is in the radar frame and z
+is flattened there, which assumes a level mount: a radar 0.5 m up and pitched
+5° down puts flattened returns beyond about 8 m below a 0.10 m minimum, and
+Nav2 drops them silently. Set `obstacle_frame` to a frame rigidly attached to
+the radar (for example `base_link`): points, including track positions, are
+transformed with the latest `obstacle_frame` ← radar transform, z is set to
+`obstacle_height` in that frame, and the cloud keeps the input stamp. Because
+the mount is static, the latest transform is the contract, not a fallback; a
+transform that changes is counted (`obstacle_tf_changes`) and logged. If the
+transform is unavailable, that scan publishes no obstacles (no identity
+fallback): `obstacle_tf_failures` counts it, `obstacles_published` is false and
+the diagnostic turns WARN. Clears use the same frame. Do not use a fixed frame
+such as `odom` here.
 
 ### Track shadow rule
 

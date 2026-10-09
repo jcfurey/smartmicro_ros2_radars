@@ -4,6 +4,8 @@ from itertools import product
 import math
 import time
 
+from diagnostic_msgs.msg import DiagnosticStatus
+from geometry_msgs.msg import TransformStamped
 import numpy as np
 import pytest
 import rclpy
@@ -387,6 +389,81 @@ def test_processing_moving_sensor_disables_background(ros):
             assert node.state == 'valid'
         assert node.sensor_moving and node.stats['sensor_moving']
         assert not node.tracker.background.ready and node.tracker.static_novel is None
+    finally:
+        node.destroy_node()
+
+
+def radar_mount(pitch_deg=5.0, height=.5):
+    """Return base_link <- umrr96: 0.2 m forward, ``height`` up, pitched down."""
+    mount = TransformStamped()
+    mount.header.frame_id, mount.child_frame_id = 'base_link', 'umrr96'
+    mount.transform.translation.x, mount.transform.translation.z = .2, height
+    half = math.radians(pitch_deg) / 2
+    mount.transform.rotation.y, mount.transform.rotation.w = math.sin(half), math.cos(half)
+    return mount
+
+
+def recorded_node():
+    node = RadarProcessing()
+    node.cloud_publishers = {name: Recorder() for name in node.cloud_publishers}
+    for name in ('track_pub', 'obstacle_pub', 'audit_pub', 'diagnostics_pub'):
+        setattr(node, name, Recorder())
+    return node
+
+
+@pytest.mark.parametrize('frame', ['', 'base_link'])
+def test_obstacles_are_flattened_in_the_obstacle_frame(ros, frame):
+    # A radar 0.5 m up pitched 5 deg down: flattening in the sensor frame put returns
+    # beyond ~8 m below Nav2's min_obstacle_height in the robot's frame.
+    ros(*(['obstacle_frame:=' + frame] if frame else []))  # default: the input frame
+    node = recorded_node()
+    try:
+        if frame:
+            node.tf_buffer.set_transform_static(radar_mount(), 'test')
+        now = node.get_clock().now().nanoseconds
+        for k in range(3):  # static persistence needs 3 of 5 scans
+            message = moving_sensor_cloud(now - (30 - 10 * k) * 1_000_000, np.zeros(3))
+            node.receive(message)
+        obstacles = node.obstacle_pub.messages[-1]
+        assert obstacles.header.stamp == message.header.stamp
+        assert obstacles.header.frame_id == (frame or 'umrr96')
+        out = read_points(obstacles)
+        assert len(out) == 30 and np.all(out['z'] == np.float32(.3))
+        source = read_points(message)
+        pitch = math.radians(5.0) if frame else 0.
+        expected_x = (np.cos(pitch) * source['x'] + np.sin(pitch) * source['z']
+                      + (.2 if frame else 0.))
+        np.testing.assert_allclose(np.sort(out['x']), np.sort(expected_x), atol=1e-5)
+        np.testing.assert_allclose(np.sort(out['y']), np.sort(source['y']), atol=1e-5)
+        assert node.stats['obstacles_published'] and node.obstacle_tf_failures == 0
+    finally:
+        node.destroy_node()
+
+
+def test_obstacles_are_withheld_without_a_transform(ros):
+    ros('obstacle_frame:=base_link')
+    node = recorded_node()
+    try:
+        now = node.get_clock().now().nanoseconds
+        node.receive(moving_sensor_cloud(now - 30_000_000, np.zeros(3)))
+        # No silent identity fallback: nothing is published, the miss is counted.
+        assert node.state == 'valid' and not node.obstacle_pub.messages
+        assert node.track_pub.messages and node.cloud_publishers['quality_targets'].messages
+        assert node.obstacle_tf_failures == 1 and not node.stats['obstacles_published']
+        status = node.diagnostics_pub.messages[-1].status[0]
+        values = {v.key: v.value for v in status.values}
+        assert status.level == DiagnosticStatus.WARN and 'obstacles withheld' in status.message
+        assert values['obstacle_tf_failures'] == '1' and values['obstacle_frame'] == 'base_link'
+        node.tf_buffer.set_transform_static(radar_mount(), 'test')
+        node.receive(moving_sensor_cloud(now - 20_000_000, np.zeros(3)))
+        assert node.obstacle_pub.messages[-1].header.frame_id == 'base_link'
+        assert node.diagnostics_pub.messages[-1].status[0].level == DiagnosticStatus.OK
+        node.tf_buffer.set_transform_static(radar_mount(pitch_deg=10.), 'test')
+        node.receive(moving_sensor_cloud(now - 10_000_000, np.zeros(3)))
+        assert node.obstacle_tf_changes == 1  # not rigidly attached: warned and counted
+        node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))  # clear
+        clear = node.obstacle_pub.messages[-1]
+        assert clear.width == 0 and clear.header.frame_id == 'base_link'
     finally:
         node.destroy_node()
 
