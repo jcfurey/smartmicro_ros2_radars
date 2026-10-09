@@ -114,7 +114,7 @@ def test_driver_runtime():
                     id=200, frame_id='umrr96_test', history_size=10, ip='127.0.0.1',
                     port=peer_port, inst_type='port_based', data_type='port_based',
                     uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2, uifpatchv=2,
-                    stamp_offset_s=.5)},
+                    stamp_offset_s=.5, intensity_field='snr')},
                 instruction_timeout_ms=300, **{'diagnostics.stale_timeout': .5})
             offset_ns = 500_000_000  # Stamps are receive time minus stamp_offset_s (O6).
             driver_processes = []
@@ -131,6 +131,7 @@ def test_driver_runtime():
                     for key in ('uifname', 'uifmajorv', 'uifminorv', 'uifpatchv'):
                         del parameters['sensors']['sensor_0'][key]
                     parameters['sensors']['sensor_0']['stamp_offset_s'] = 0  # An integer.
+                    del parameters['sensors']['sensor_0']['intensity_field']
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
@@ -286,6 +287,9 @@ def test_driver_runtime():
                 assert raw.device_timestamp_us * 1000 != ros_ns
                 assert any(h.header == cloud.header for h in headers)
                 assert cloud.point_step == 72 and cloud.width == 17
+                # intensity_field: snr's bytes also published as `intensity` (O9).
+                alias = next(f for f in cloud.fields if f.name == 'intensity')
+                assert (alias.offset, alias.datatype) == (28, alias.FLOAT32), alias
                 metadata = next(h for h in headers if h.header == cloud.header)
                 assert metadata.acquisition_setup_valid and metadata.acquisition_setup == 0x1234
                 raw_values = next((q for q in quality if q.header == cloud.header), None)
@@ -303,6 +307,8 @@ def test_driver_runtime():
                         expected = struct.unpack('<f', struct.pack('<f', base + index))[0]
                         assert float(record[field]) == expected, (field, index, record[field])
                     assert int(record['peak_idx']) == index + 100
+                    assert struct.pack('<f', record['intensity']) == struct.pack(
+                        '<f', record['snr'])
             if RadarScan is not None:
                 wait(lambda: scans)
                 scan = scans[-1]
@@ -436,6 +442,9 @@ def _eth_adapter(**overrides):
      'sensors.sensor_0.stamp_offset_s must be within 0..1 s'),
     ({'sensor_0': _eth_sensor(stamp_offset_s='50ms')}, {},
      'sensors.sensor_0.stamp_offset_s must be a number'),
+    ({'sensor_0': _eth_sensor(intensity_field='intensity')}, {},
+     "sensors.sensor_0.intensity_field must be empty, 'power', 'rcs', 'snr' or 'noise', got "
+     "'intensity'"),
     ({'sensor_0': _eth_sensor(frame_id='radar'),
       'sensor_1': _eth_sensor(id=201, frame_id='radar')}, {},
      "sensor_1.frame_id 'radar' duplicates sensors.sensor_0"),

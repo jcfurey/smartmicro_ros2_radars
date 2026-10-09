@@ -316,6 +316,20 @@ non-number is rejected at startup with the parameter named.
 | `false_alarm_probability` | float32 | Probability as reported. NaN for UMRR-96 (raw values in `umrr96_raw_quality_N`). |
 | `flags` | uint32 | Vendor bit field; UINT32_MAX where unavailable. |
 | `peak_idx` | uint16 | Index into the vendor peak list; UINT16_MAX where unavailable. |
+| `intensity` | float32 | Only with `intensity_field` set: a second name for that field (below). |
+
+`sensors.sensor_N.intensity_field` (startup, default empty: no alias) set to
+`power`, `rcs`, `snr` or `noise` adds a field named `intensity` to the target
+clouds (port and CAN) with the same offset and datatype as the chosen field: the
+same bytes under a second name, listed after `peak_idx`, so `point_step` stays 72
+and every other field is unchanged. PCL point types with `intensity`, LiDAR
+odometry front ends and RViz's Intensity channel pick it up. Any other value is
+rejected at startup with the parameter named. Since 2026-10-09.
+
+`is_dense` stays `false` even when every `x`, `y`, `z` is finite: PCL defines a
+dense cloud as one without NaN in any float field, and the clouds do carry NaN
+(UMRR-96 `false_alarm_probability` on every target; unavailable attributes on
+other models).
 
 ### Objects: `smart_radar/port_objects_N`, `smart_radar/can_objects_N` (48-byte stride)
 

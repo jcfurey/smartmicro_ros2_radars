@@ -5,12 +5,15 @@
 
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace smartmicro::drivers::radar
@@ -58,6 +61,24 @@ struct ObjectPoint
   uint16_t status{};
 };
 
+// Target fields that sensors.sensor_N.intensity_field may alias as `intensity`, the
+// field name PCL point types, LiDAR odometry pipelines and RViz look for.
+inline constexpr std::array<std::string_view, 4> kIntensityFields = {
+  "power", "rcs", "snr", "noise"};
+
+// An intensity_field value is empty (no alias) or one of kIntensityFields.
+inline void validate_intensity_field(const std::string & name, std::string_view value)
+{
+  if (value.empty() ||
+    std::find(kIntensityFields.begin(), kIntensityFields.end(), value) != kIntensityFields.end())
+  {
+    return;
+  }
+  throw std::invalid_argument(
+          name + " must be empty, 'power', 'rcs', 'snr' or 'noise', got '" +
+          std::string(value) + "'");
+}
+
 namespace detail
 {
 // Shared allocation/bookkeeping for the two fixed schemas below.
@@ -98,6 +119,21 @@ protected:
       field.count = 1;
       cloud.fields.push_back(field);
     }
+  }
+
+  // Appends a field named `alias` with the offset and type of `target`: the same bytes
+  // under a second name, so point_step and every existing field stay unchanged.
+  void add_alias(const std::string & alias, std::string_view target)
+  {
+    const auto field = std::find_if(
+      cloud_.fields.begin(), cloud_.fields.end(),
+      [target](const Field & candidate) {return candidate.name == target;});
+    if (field == cloud_.fields.end()) {
+      throw std::invalid_argument("No field '" + std::string(target) + "' to alias");
+    }
+    auto copy = *field;
+    copy.name = alias;
+    cloud_.fields.push_back(copy);
   }
 
   uint8_t * append_point()
@@ -144,7 +180,10 @@ private:
 class RadarCloudBuilder : public detail::CloudBuilder
 {
 public:
-  RadarCloudBuilder(sensor_msgs::msg::PointCloud2 & cloud, const std::string & frame_id)
+  // intensity_field: empty, or a kIntensityFields name also published as `intensity`.
+  RadarCloudBuilder(
+    sensor_msgs::msg::PointCloud2 & cloud, const std::string & frame_id,
+    std::string_view intensity_field = {})
   : CloudBuilder(cloud, frame_id, 72, {
       {"x", 0, Field::FLOAT32}, {"y", 4, Field::FLOAT32}, {"z", 8, Field::FLOAT32},
       {"radial_speed", 12, Field::FLOAT32}, {"power", 16, Field::FLOAT32},
@@ -155,7 +194,12 @@ public:
       {"variance_elevation_angle", 56, Field::FLOAT32},
       {"false_alarm_probability", 60, Field::FLOAT32}, {"flags", 64, Field::UINT32},
       {"peak_idx", 68, Field::UINT16}})
-  {}
+  {
+    if (!intensity_field.empty()) {
+      validate_intensity_field("intensity_field", intensity_field);
+      add_alias("intensity", intensity_field);
+    }
+  }
 
   void push_back(const RadarPoint & p)
   {

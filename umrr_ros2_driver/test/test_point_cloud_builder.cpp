@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cstring>
+#include <map>
+#include <string>
 #include <vector>
 
 using smartmicro::drivers::radar::RadarCloudBuilder;
@@ -12,6 +14,8 @@ using smartmicro::drivers::radar::RadarPoint;
 using smartmicro::drivers::radar::ObjectCloudBuilder;
 using smartmicro::drivers::radar::ObjectPoint;
 using smartmicro::drivers::radar::fill_radar_scan;
+using smartmicro::drivers::radar::kIntensityFields;
+using smartmicro::drivers::radar::validate_intensity_field;
 using Cloud = sensor_msgs::msg::PointCloud2;
 using Field = sensor_msgs::msg::PointField;
 
@@ -99,6 +103,61 @@ TEST(PointCloudBuilder, TargetSchemaKeepsPublishedOffsetsAndTypes)
       "variance_elevation_angle", "false_alarm_probability", "flags", "peak_idx"},
     {0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68},
     {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, Field::UINT32, Field::UINT16});
+}
+
+TEST(PointCloudBuilder, IntensityAliasSharesTheChosenFieldsBytes)
+{
+  // O9: `intensity` is a second name for an existing field: same offset and type, no
+  // extra bytes, existing fields unchanged. Without intensity_field there is none
+  // (TargetSchemaKeepsPublishedOffsetsAndTypes checks the exact field list).
+  const std::map<std::string, uint32_t> offsets{{"power", 16}, {"rcs", 20}, {"noise", 24},
+    {"snr", 28}};
+  ASSERT_EQ(offsets.size(), kIntensityFields.size());
+  RadarPoint point;
+  point.power = 41.0F;
+  point.rcs = 0.25F;
+  point.noise = 12.5F;
+  point.snr = 28.5F;
+  Cloud plain;
+  RadarCloudBuilder{plain, "radar_test"}.push_back(point);
+  for (const auto & [name, offset] : offsets) {
+    Cloud cloud;
+    RadarCloudBuilder builder(cloud, "radar_test", name);
+    builder.push_back(point);
+    builder.push_back(point);
+    ASSERT_EQ(cloud.fields.size(), 19U) << name;
+    EXPECT_EQ(std::vector<Field>(cloud.fields.begin(), cloud.fields.end() - 1), plain.fields);
+    const auto & alias = cloud.fields.back();
+    EXPECT_EQ(alias.name, "intensity");
+    EXPECT_EQ(alias.offset, offset) << name;
+    EXPECT_EQ(alias.datatype, Field::FLOAT32);
+    EXPECT_EQ(alias.count, 1U);
+    EXPECT_EQ(cloud.point_step, 72U);
+    EXPECT_EQ(cloud.row_step, 144U);
+    EXPECT_EQ(std::vector<uint8_t>(cloud.data.begin(), cloud.data.begin() + 72), plain.data);
+    sensor_msgs::PointCloud2ConstIterator<float> intensity(cloud, "intensity");
+    sensor_msgs::PointCloud2ConstIterator<float> original(cloud, name);
+    EXPECT_EQ(*intensity, *original) << name;
+    EXPECT_FALSE(cloud.is_dense);
+  }
+}
+
+TEST(PointCloudBuilder, IntensityFieldIsValidated)
+{
+  EXPECT_NO_THROW(validate_intensity_field("s.intensity_field", ""));
+  for (const auto name : kIntensityFields) {
+    EXPECT_NO_THROW(validate_intensity_field("s.intensity_field", name));
+  }
+  try {
+    validate_intensity_field("s.intensity_field", "range");
+    ADD_FAILURE() << "range accepted";
+  } catch (const std::invalid_argument & error) {
+    EXPECT_STREQ(
+      error.what(),
+      "s.intensity_field must be empty, 'power', 'rcs', 'snr' or 'noise', got 'range'");
+  }
+  Cloud cloud;
+  EXPECT_THROW((RadarCloudBuilder{cloud, "radar_test", "x"}), std::invalid_argument);
 }
 
 TEST(PointCloudBuilder, ObjectSchemaKeepsIntegerSignednessAndPadding)

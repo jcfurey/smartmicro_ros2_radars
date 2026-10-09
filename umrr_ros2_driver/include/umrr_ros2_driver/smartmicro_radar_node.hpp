@@ -91,6 +91,8 @@ struct SensorConfig
   std::string pub_type{};
   // Subtracted from the receive time for every header stamp of this sensor [s].
   double stamp_offset_s{};
+  // Target field also published as `intensity` (empty: none).
+  std::string intensity_field{};
 };
 
 struct HWConfig

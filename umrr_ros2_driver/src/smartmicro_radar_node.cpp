@@ -83,6 +83,7 @@ using smartmicro::drivers::radar::kEthernetModels;
 using smartmicro::drivers::radar::kMsePubType;
 using smartmicro::drivers::radar::kTargetPubType;
 using smartmicro::drivers::radar::resolve_user_interface;
+using smartmicro::drivers::radar::validate_intensity_field;
 using smartmicro::drivers::radar::validate_sensor_config;
 using smartmicro::drivers::radar::validate_serialization_type;
 
@@ -1232,7 +1233,8 @@ void SmartmicroRadarNode::on_port_targets(
   auto & msg = *msg_ptr;
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::PortTargetHeader>();
   auto & header = *header_ptr;
-  RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
+  RadarCloudBuilder modifier{
+    msg, m_sensors[sensor_idx].frame_id, m_sensors[sensor_idx].intensity_field};
   fill_ros_header_stamp(msg, header, codec::port_timestamp_us(*list), sensor_idx);
   if constexpr (Model::kTargetOptions.raw_quality) {
     auto raw_quality_ptr = std::make_unique<umrr_ros2_msgs::msg::Umrr96RawQuality>();
@@ -1292,7 +1294,8 @@ void SmartmicroRadarNode::on_can_targets(
   auto & msg = *msg_ptr;
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::CanTargetHeader>();
   auto & header = *header_ptr;
-  RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
+  RadarCloudBuilder modifier{
+    msg, m_sensors[sensor_idx].frame_id, m_sensors[sensor_idx].intensity_field};
   fill_ros_header_stamp(msg, header, codec::can_target_timestamp_us(*list), sensor_idx);
   codec::convert_can_targets(*list, header, modifier);
   publish_radar_scan(sensor_idx, msg);
@@ -1432,6 +1435,8 @@ void SmartmicroRadarNode::update_config_files_from_params()
       validate_sensor_config(prefix_3, sensor.link_type, sensor.model, sensor.pub_type);
       validate_serialization_type(prefix_3 + ".inst_type", sensor.inst_type);
       validate_serialization_type(prefix_3 + ".data_type", sensor.data_type);
+      sensor.intensity_field = startup_parameter(*this, prefix_3 + ".intensity_field", "");
+      validate_intensity_field(prefix_3 + ".intensity_field", sensor.intensity_field);
       const auto interface = resolve_user_interface(
         prefix_3, sensor.model, sensor.uifname, sensor.uifmajorv, sensor.uifminorv,
         sensor.uifpatchv);
