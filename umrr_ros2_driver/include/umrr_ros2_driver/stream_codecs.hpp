@@ -98,6 +98,13 @@ auto port_header(const List & list)
   }
 }
 
+// Device timestamp [us] of an Ethernet port: its generic port header.
+template<typename List>
+uint64_t port_timestamp_us(const List & list)
+{
+  return port_header(list)->GetTimestamp();
+}
+
 template<typename Header, typename Msg>
 void fill_generic_port_header(const Header & port, Msg & msg)
 {
@@ -314,6 +321,26 @@ void convert_fault_reports(const Reports & reports, umrr_ros2_msgs::msg::PortFau
 }
 
 // ---- CAN target and object lists ----------------------------------------------
+
+// Device timestamp [us] of a CAN target list. The CAN port specs map no signal into
+// the port header; the SDK stamps it with its own system_clock receive time when it
+// assembles the port. The sensor's acquisition time is the list header's TimeStamp
+// [s] plus AcqTimeStampFraction [s, 2^-32 resolution]. CAN object list headers
+// carry no time at all.
+template<typename List>
+uint64_t can_target_timestamp_us(const List & list)
+{
+  const auto target_header = list.GetTargetListHeader();
+  using ListHeader = detail::Pointee<decltype(target_header)>;
+  auto microseconds = static_cast<uint64_t>(target_header->GetTimeStamp()) * 1000000U;
+  if constexpr (detail::has_GetAcqTimeStampFraction_v<ListHeader>) {
+    const double fraction = target_header->GetAcqTimeStampFraction();
+    if (fraction >= 0.0 && fraction < 1.0) {  // Rounding up to 1e6 carries into the seconds.
+      microseconds += static_cast<uint64_t>(std::llround(fraction * 1e6));
+    }
+  }
+  return microseconds;
+}
 
 template<typename List>
 void convert_can_targets(

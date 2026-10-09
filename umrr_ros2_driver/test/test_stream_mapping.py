@@ -49,6 +49,8 @@ def decoder(codes, namespace):
             return 'max'
         if value in table:
             return table[value]
+        if isinstance(value, int) and value % 1000000 == 0 and value // 1000000 in table:
+            return table[value // 1000000] + '*1e6'  # Seconds to microseconds.
         code = round(value / DEG)
         if code in table and f32(code * DEG) == value:
             return table[code] + '*deg2rad'
@@ -73,6 +75,8 @@ def decode_case(result, decode):
     raw = yaml.safe_load(result['raw'])
     for key in ('false_alarm_probability_raw', 'flags_raw'):
         fields['raw.' + key] = decode(raw[key][0]) if raw[key] else None
+    if 'device_timestamp_us' in result:
+        fields['device_timestamp_us'] = decode(result['device_timestamp_us'])
     cloud = result.get('cloud')
     if cloud is not None:
         assert len(cloud) == 2, 'expected one point per mocked item'

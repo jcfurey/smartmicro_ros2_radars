@@ -260,6 +260,10 @@ if(BUILD_TESTING)
         set_tests_properties(test_point_cloud_builder PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
     endif()
 
+    ament_add_gtest(test_stream_codecs test/test_stream_codecs.cpp)
+    target_include_directories(test_stream_codecs PRIVATE include)
+    target_link_libraries(test_stream_codecs ${umrr_ros2_msgs_TARGETS} ${sensor_msgs_TARGETS})
+
     ament_add_gtest(test_sdk_float test/test_sdk_float.cpp)
     target_include_directories(test_sdk_float PRIVATE "${SMARTMICRO_SDK_DIR}/include")
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

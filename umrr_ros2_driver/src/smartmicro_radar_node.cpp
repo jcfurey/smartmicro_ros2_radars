@@ -35,6 +35,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <string>
 #include <thread>
@@ -204,20 +205,23 @@ SmartmicroRadarNode::~SmartmicroRadarNode()
 }
 
 builtin_interfaces::msg::Time SmartmicroRadarNode::receive_stamp(
-  uint64_t timestamp_us, uint32_t sensor_idx, uint8_t stream)
+  std::optional<uint64_t> timestamp_us, uint32_t sensor_idx, uint8_t stream)
 {
   auto timing_ptr = std::make_unique<umrr_ros2_msgs::msg::RadarTiming>();
   auto & timing = *timing_ptr;
   timing.header.stamp = now();
   timing.header.frame_id = m_sensors[sensor_idx].frame_id;
   timing.sensor_id = m_sensors[sensor_idx].id;
-  timing.device_timestamp_us = timestamp_us;
+  timing.device_timestamp_us = timestamp_us.value_or(0);  // 0: the list carries none.
   timing.stream = stream;
   timing.timestamp_source = umrr_ros2_msgs::msg::RadarTiming::ROS_RECEIVE_TIME;
-  if (stream == umrr_ros2_msgs::msg::RadarTiming::TARGETS) {
-    target_health_[sensor_idx].receive(timestamp_us);
-  } else if (stream == umrr_ros2_msgs::msg::RadarTiming::OBJECTS) {
-    object_health_[sensor_idx].receive(timestamp_us);
+  auto * const health = stream == umrr_ros2_msgs::msg::RadarTiming::TARGETS ?
+    &target_health_[sensor_idx] :
+    stream == umrr_ros2_msgs::msg::RadarTiming::OBJECTS ? &object_health_[sensor_idx] : nullptr;
+  if (health && timestamp_us) {
+    health->receive(*timestamp_us);
+  } else if (health) {
+    health->receive_untimed();
   }
   const auto stamp = timing.header.stamp;
   timing_publishers_[sensor_idx]->publish(std::move(timing_ptr));
@@ -275,13 +279,13 @@ void SmartmicroRadarNode::setup_diagnostics()
     }
     add_stream_status(
       "Target stream " + std::to_string(i), target_health_[i], i, "targets",
-      sensor_hardware_id(i));
+      sensor_hardware_id(i), true);
     // Object lists are registered for pub_type mse only; no status for a stream the
-    // node does not subscribe to.
+    // node does not subscribe to. CAN object lists carry no device timestamp.
     if (m_sensors[i].pub_type == kMsePubType) {
       add_stream_status(
         "Object stream " + std::to_string(i), object_health_[i], i, "objects",
-        sensor_hardware_id(i));
+        sensor_hardware_id(i), m_sensors[i].link_type == kEthLinkType);
     }
   }
   for (size_t i = 0; i < m_number_of_adapters; ++i) {
@@ -335,10 +339,10 @@ void SmartmicroRadarNode::setup_diagnostics()
 
 void SmartmicroRadarNode::add_stream_status(
   const std::string & name, StreamHealth & health, size_t sensor_idx, const std::string & items,
-  const std::string & hardware_id)
+  const std::string & hardware_id, bool device_timestamps)
 {
   diagnostics_->add(name,
-    [this, &health, sensor_idx, items, hardware_id](
+    [this, &health, sensor_idx, items, hardware_id, device_timestamps](
       diagnostic_updater::DiagnosticStatusWrapper & status) {
       using Status = diagnostic_msgs::msg::DiagnosticStatus;
       const auto snapshot = health.snapshot();
@@ -354,6 +358,7 @@ void SmartmicroRadarNode::add_stream_status(
       status.add("frames_received", snapshot.frames);
       status.add("last_receive_age_seconds", snapshot.age_seconds);
       status.add("frequency_hz", snapshot.frequency_hz);
+      status.add("device_timestamp_available", device_timestamps);
       status.add("device_timestamp_us", snapshot.device_timestamp_us);
       status.add("timestamp_repeats", snapshot.repeated);
       status.add("timestamp_backwards", snapshot.backwards);
@@ -1228,7 +1233,7 @@ void SmartmicroRadarNode::on_port_targets(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::PortTargetHeader>();
   auto & header = *header_ptr;
   RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, codec::port_header(*list)->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, header, codec::port_timestamp_us(*list), sensor_idx);
   if constexpr (Model::kTargetOptions.raw_quality) {
     auto raw_quality_ptr = std::make_unique<umrr_ros2_msgs::msg::Umrr96RawQuality>();
     auto & raw_quality = *raw_quality_ptr;
@@ -1260,7 +1265,7 @@ void SmartmicroRadarNode::on_port_objects(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::PortObjectHeader>();
   auto & header = *header_ptr;
   ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, header, codec::port_timestamp_us(*list), sensor_idx);
   codec::convert_port_objects(*list, header, modifier);
   m_publishers_obj[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_port_obj_header[sensor_idx]->publish(std::move(header_ptr));
@@ -1273,7 +1278,7 @@ void SmartmicroRadarNode::on_fault_reports(
 {
   auto msg_ptr = std::make_unique<umrr_ros2_msgs::msg::PortFaultReportsMsg>();
   auto & msg = *msg_ptr;
-  fill_ros_header_stamp(msg, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, codec::port_timestamp_us(*list), sensor_idx);
   codec::convert_fault_reports(*list, msg);
   m_publishers_fault_report_msg[sensor_idx]->publish(std::move(msg_ptr));
 }
@@ -1288,7 +1293,7 @@ void SmartmicroRadarNode::on_can_targets(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::CanTargetHeader>();
   auto & header = *header_ptr;
   RadarCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  fill_ros_header_stamp(msg, header, codec::can_target_timestamp_us(*list), sensor_idx);
   codec::convert_can_targets(*list, header, modifier);
   publish_radar_scan(sensor_idx, msg);
   m_publishers[sensor_idx]->publish(std::move(msg_ptr));
@@ -1305,7 +1310,8 @@ void SmartmicroRadarNode::on_can_objects(
   auto header_ptr = std::make_unique<umrr_ros2_msgs::msg::CanObjectHeader>();
   auto & header = *header_ptr;
   ObjectCloudBuilder modifier{msg, m_sensors[sensor_idx].frame_id};
-  fill_ros_header_stamp(msg, header, list->GetPortHeader()->GetTimestamp(), sensor_idx);
+  // CAN object lists carry no device timestamp (see can_target_timestamp_us).
+  fill_ros_header_stamp(msg, header, std::nullopt, sensor_idx);
   codec::convert_can_objects(*list, header, modifier);
   m_publishers_obj[sensor_idx]->publish(std::move(msg_ptr));
   m_publishers_can_obj_header[sensor_idx]->publish(std::move(header_ptr));

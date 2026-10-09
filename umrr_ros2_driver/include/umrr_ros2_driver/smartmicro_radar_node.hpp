@@ -55,6 +55,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
@@ -226,8 +227,14 @@ private:
 
   static std::string firmware_download_result(UpdateResult update_result);
 
+  ///
+  /// @brief      Publishes the RadarTiming of a received list, updates the stream's
+  ///             health and returns the ROS receive time used as header stamp.
+  ///
+  /// @param[in]  timestamp_us  Device timestamp [us], or none if the list has none.
+  ///
   builtin_interfaces::msg::Time receive_stamp(
-    uint64_t timestamp_us, uint32_t sensor_idx, uint8_t stream);
+    std::optional<uint64_t> timestamp_us, uint32_t sensor_idx, uint8_t stream);
   void setup_diagnostics();
 
   ///
@@ -238,10 +245,11 @@ private:
   /// @param[in]  sensor_idx   The sensor index.
   /// @param[in]  items        What the stream delivers ("targets", "objects").
   /// @param[in]  hardware_id  The sensor's hardware id.
+  /// @param[in]  device_timestamps  Whether the stream's lists carry a device timestamp.
   ///
   void add_stream_status(
     const std::string & name, StreamHealth & health, size_t sensor_idx,
-    const std::string & items, const std::string & hardware_id);
+    const std::string & items, const std::string & hardware_id, bool device_timestamps);
 
   ///
   /// @brief Fills the ROS timestamp for the PointCloud2 message and the custom header message.
@@ -251,14 +259,14 @@ private:
   ///
   /// @param[in,out] msg         The PointCloud2 message.
   /// @param[in,out] header      The custom ROS header message.
-  /// @param[in]     timestamp_us Sensor timestamp in microseconds.
+  /// @param[in]     timestamp_us Sensor timestamp in microseconds, if the list has one.
   /// @param[in]     sensor_idx   Sensor index used to select the frame_id.
   ///
   template<typename HeaderMsgT>
   void fill_ros_header_stamp(
     sensor_msgs::msg::PointCloud2 & msg,
     HeaderMsgT & header,
-    const std::uint64_t timestamp_us,
+    const std::optional<std::uint64_t> timestamp_us,
     const std::uint32_t sensor_idx)
   {
     constexpr bool objects =

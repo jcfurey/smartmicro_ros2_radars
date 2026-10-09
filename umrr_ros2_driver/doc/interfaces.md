@@ -129,6 +129,18 @@ timestamp anomaly (repeated, backwards or zero) and `OK` otherwise. Before
 2026-10-09 only target lists were tracked: an MSE sensor whose object stream stopped
 still reported `OK`.
 
+The device timestamp behind these checks and `RadarTiming.device_timestamp_us` is
+the generic port header timestamp for Ethernet lists. For CAN lists the SDK fills
+the port header with its own host receive time (`system_clock` µs, written when it
+assembles the port; no CAN signal maps to it), so CAN target lists use the
+acquisition time of their list header instead: `TimeStamp` [s] +
+`AcqTimeStampFraction` [s] (also published raw in `CanTargetHeader.time_stamp` and
+`acq_ts_fraction`). CAN object list headers carry no time: their
+`device_timestamp_us` is 0, the object stream reports
+`device_timestamp_available: false` and only its liveness is checked. Before
+2026-10-09 CAN lists reported the SDK receive time as device time. Header stamps
+remain ROS receive time throughout.
+
 `UDP adapter N` reports the kernel's drop counter of the Ethernet adapter's socket
 (`/proc/net/udp`). Only the process's own sockets are considered, matched by local
 port and, when `hw_ip_address` is set, by local address; the status is `WARN`
