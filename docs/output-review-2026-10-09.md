@@ -67,6 +67,28 @@ accumulator is in the sensor frame and stamped at receive time.
   rate; RViz configs use absolute names (C39); `umrr96_grid.rviz` enables a
   RobotModel the default launch does not publish.
 
+## Live observations (2026-10-09)
+
+From the stationary live session and its 2,206-scan static recording
+([evidence](umrr96-review-live-20261009.json)):
+
+- **Twist covariance is the floor, not the data (O5).** Reported σ is about
+  0.050 m/s on each axis (`velocity_std_floor`), while the scan-to-scan spread of
+  the fit is 1.0, 1.0 and 4.8 mm/s (x, y, z): about 50× conservative in x/y, and
+  z is about five times noisier than x/y. A per-axis, data-driven covariance
+  needs a moving recording to calibrate.
+- **Obstacle marks flicker (O8).** The 3-of-5 persistence rule keeps 5–23
+  (mean 14) of about 25 detections per scan of an unchanging room, so a costmap
+  sees cells appear and vanish between scans.
+- **Latency (O6).** Receive-stamp age is 0.8 ms and processing adds about 10 ms
+  (p95 11.5 ms); the sensor-internal latency before the SDK callback remains
+  unknown.
+- **Diagnostics (O7).** One device appears as `umrr96_v1_2_2@192.168.11.11`
+  (data node) and `umrr96@192.168.11.11` (readback), and the adapter as
+  `udp@192.168.11.17:55555`.
+- **RadarScan (O9)** works live at 18.18 Hz when built against radar_msgs; it is
+  still not a declared dependency.
+
 ## Planned changes
 
 Status: `planned`, `in progress`, `done`, `deferred`. Quick wins first.

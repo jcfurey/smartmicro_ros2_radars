@@ -1,0 +1,929 @@
+{
+ "date": "2026-10-09",
+ "sensor": {
+  "serial": 230739,
+  "client_id": "0x00038553",
+  "firmware": "5.2.2",
+  "ip": "192.168.11.11"
+ },
+ "build": "cam_wip 23b6afa (merged review fixes), Lyrical Release, radar_msgs from an extracted package",
+ "scene": "stationary radar, static room, no movers",
+ "sensor_writes": [
+  "output_control_target_list_can 1 -> 0 at readback startup (volatile, confirmed after 1 attempt)"
+ ],
+ "readonly_start_can_on": {
+  "seconds": 12.0,
+  "topics": {
+   "/smart_radar/port_targets_0": {
+    "messages": 100,
+    "rate_hz": 8.34,
+    "stamp_age_ms_p50_p95": [
+     0.77,
+     1.1
+    ],
+    "size_mean": 21.23,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ],
+     [
+      "radial_speed",
+      "FLOAT32"
+     ],
+     [
+      "power",
+      "FLOAT32"
+     ],
+     [
+      "rcs",
+      "FLOAT32"
+     ],
+     [
+      "noise",
+      "FLOAT32"
+     ],
+     [
+      "snr",
+      "FLOAT32"
+     ],
+     [
+      "azimuth_angle",
+      "FLOAT32"
+     ],
+     [
+      "elevation_angle",
+      "FLOAT32"
+     ],
+     [
+      "range",
+      "FLOAT32"
+     ],
+     [
+      "variance_range",
+      "FLOAT32"
+     ],
+     [
+      "variance_speed",
+      "FLOAT32"
+     ],
+     [
+      "variance_azimuth_angle",
+      "FLOAT32"
+     ],
+     [
+      "variance_elevation_angle",
+      "FLOAT32"
+     ],
+     [
+      "false_alarm_probability",
+      "FLOAT32"
+     ],
+     [
+      "flags",
+      "UINT32"
+     ],
+     [
+      "peak_idx",
+      "UINT16"
+     ]
+    ]
+   },
+   "/smart_radar/timing_0": {
+    "messages": 100,
+    "rate_hz": 8.33,
+    "stamp_age_ms_p50_p95": [
+     0.32,
+     0.42
+    ],
+    "frames": [
+     "umrr96"
+    ],
+    "device_dt_us_min_max": [
+     119979,
+     120031
+    ],
+    "device_backwards": 0
+   },
+   "/umrr96_processing/obstacles": {
+    "messages": 100,
+    "rate_hz": 8.33,
+    "stamp_age_ms_p50_p95": [
+     9.32,
+     10.26
+    ],
+    "size_mean": 14.93,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ]
+    ]
+   },
+   "/umrr96_processing/tracked_objects": {
+    "messages": 100,
+    "rate_hz": 8.33,
+    "stamp_age_ms_p50_p95": [
+     8.93,
+     9.95
+    ],
+    "size_mean": 0.0,
+    "empty": 100,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ],
+     [
+      "vx",
+      "FLOAT32"
+     ],
+     [
+      "vy",
+      "FLOAT32"
+     ],
+     [
+      "speed",
+      "FLOAT32"
+     ],
+     [
+      "track_id",
+      "UINT32"
+     ],
+     [
+      "age",
+      "FLOAT32"
+     ]
+    ],
+    "track_ids": []
+   },
+   "/umrr96_processing/classified_targets": {
+    "messages": 100,
+    "rate_hz": 8.33,
+    "stamp_age_ms_p50_p95": [
+     10.79,
+     11.9
+    ],
+    "size_mean": 21.23,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ],
+     [
+      "rgb",
+      "UINT32"
+     ],
+     [
+      "source_index",
+      "UINT32"
+     ],
+     [
+      "classification",
+      "UINT8"
+     ],
+     [
+      "track_associated",
+      "UINT8"
+     ],
+     [
+      "reason_flags",
+      "UINT16"
+     ]
+    ]
+   },
+   "/umrr96_processing/experimental_velocity": {
+    "messages": 100,
+    "rate_hz": 8.33,
+    "stamp_age_ms_p50_p95": [
+     9.47,
+     10.42
+    ],
+    "frames": [
+     "umrr96"
+    ],
+    "speed_p50_p95": [
+     0.0033,
+     0.0093
+    ]
+   },
+   "/smart_radar/radar_scan_0": {
+    "messages": 100,
+    "rate_hz": 8.33,
+    "stamp_age_ms_p50_p95": [
+     0.51,
+     0.97
+    ],
+    "size_mean": 21.23,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ]
+   }
+  }
+ },
+ "can_off_outputs": {
+  "seconds": 15.0,
+  "topics": {
+   "/smart_radar/port_targets_0": {
+    "messages": 272,
+    "rate_hz": 18.18,
+    "stamp_age_ms_p50_p95": [
+     0.81,
+     1.18
+    ],
+    "size_mean": 24.7,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ],
+     [
+      "radial_speed",
+      "FLOAT32"
+     ],
+     [
+      "power",
+      "FLOAT32"
+     ],
+     [
+      "rcs",
+      "FLOAT32"
+     ],
+     [
+      "noise",
+      "FLOAT32"
+     ],
+     [
+      "snr",
+      "FLOAT32"
+     ],
+     [
+      "azimuth_angle",
+      "FLOAT32"
+     ],
+     [
+      "elevation_angle",
+      "FLOAT32"
+     ],
+     [
+      "range",
+      "FLOAT32"
+     ],
+     [
+      "variance_range",
+      "FLOAT32"
+     ],
+     [
+      "variance_speed",
+      "FLOAT32"
+     ],
+     [
+      "variance_azimuth_angle",
+      "FLOAT32"
+     ],
+     [
+      "variance_elevation_angle",
+      "FLOAT32"
+     ],
+     [
+      "false_alarm_probability",
+      "FLOAT32"
+     ],
+     [
+      "flags",
+      "UINT32"
+     ],
+     [
+      "peak_idx",
+      "UINT16"
+     ]
+    ]
+   },
+   "/smart_radar/timing_0": {
+    "messages": 273,
+    "rate_hz": 18.18,
+    "stamp_age_ms_p50_p95": [
+     0.33,
+     0.46
+    ],
+    "frames": [
+     "umrr96"
+    ],
+    "device_dt_us_min_max": [
+     54969,
+     55026
+    ],
+    "device_backwards": 0
+   },
+   "/umrr96_processing/obstacles": {
+    "messages": 273,
+    "rate_hz": 18.18,
+    "stamp_age_ms_p50_p95": [
+     9.68,
+     11.54
+    ],
+    "size_mean": 12.91,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ]
+    ]
+   },
+   "/umrr96_processing/tracked_objects": {
+    "messages": 273,
+    "rate_hz": 18.18,
+    "stamp_age_ms_p50_p95": [
+     9.32,
+     11.24
+    ],
+    "size_mean": 0.0,
+    "empty": 273,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ],
+     [
+      "vx",
+      "FLOAT32"
+     ],
+     [
+      "vy",
+      "FLOAT32"
+     ],
+     [
+      "speed",
+      "FLOAT32"
+     ],
+     [
+      "track_id",
+      "UINT32"
+     ],
+     [
+      "age",
+      "FLOAT32"
+     ]
+    ],
+    "track_ids": []
+   },
+   "/umrr96_processing/classified_targets": {
+    "messages": 273,
+    "rate_hz": 18.19,
+    "stamp_age_ms_p50_p95": [
+     11.11,
+     13.57
+    ],
+    "size_mean": 24.71,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ],
+    "fields": [
+     [
+      "x",
+      "FLOAT32"
+     ],
+     [
+      "y",
+      "FLOAT32"
+     ],
+     [
+      "z",
+      "FLOAT32"
+     ],
+     [
+      "rgb",
+      "UINT32"
+     ],
+     [
+      "source_index",
+      "UINT32"
+     ],
+     [
+      "classification",
+      "UINT8"
+     ],
+     [
+      "track_associated",
+      "UINT8"
+     ],
+     [
+      "reason_flags",
+      "UINT16"
+     ]
+    ]
+   },
+   "/umrr96_processing/experimental_velocity": {
+    "messages": 273,
+    "rate_hz": 18.18,
+    "stamp_age_ms_p50_p95": [
+     9.83,
+     11.72
+    ],
+    "frames": [
+     "umrr96"
+    ],
+    "speed_p50_p95": [
+     0.0026,
+     0.0079
+    ]
+   },
+   "/smart_radar/radar_scan_0": {
+    "messages": 272,
+    "rate_hz": 18.18,
+    "stamp_age_ms_p50_p95": [
+     0.55,
+     1.03
+    ],
+    "size_mean": 24.7,
+    "empty": 0,
+    "frames": [
+     "umrr96"
+    ]
+   }
+  }
+ },
+ "measure_baseline": {
+  "scene": "stationary",
+  "sensor_id": 230739,
+  "success": true,
+  "restoration": "not_needed",
+  "statuses": {
+   "auto_interface_version_major": 1,
+   "auto_interface_version_minor": 0,
+   "product_serial": 230739,
+   "product_gen": 150,
+   "product_mod_high": 0,
+   "product_mod_low": 3,
+   "product_rev": 1,
+   "systime_low_dword": 470088458,
+   "systime_high_dword": 0,
+   "sw_generation": 5,
+   "sw_version_major": 5,
+   "sw_version_minor": 2,
+   "sw_version_patch": 2,
+   "customer_id": 0
+  },
+  "windows": [
+   {
+    "label": "initial",
+    "duration_seconds": 10.004976440000064,
+    "frames": 181,
+    "observed_hz": 18.09008753605193,
+    "detections_per_frame": {
+     "count": 181,
+     "finite": 181,
+     "min": 19.0,
+     "max": 33.0,
+     "mean": 25.895027624309392,
+     "median": 26.0
+    },
+    "detections_under_5m_per_frame": {
+     "count": 181,
+     "finite": 181,
+     "min": 4.0,
+     "max": 8.0,
+     "mean": 5.679558011049724,
+     "median": 6.0
+    },
+    "range_m": {
+     "count": 4687,
+     "finite": 4687,
+     "min": 0.9938820600509644,
+     "max": 19.30925178527832,
+     "mean": 9.70490426800514,
+     "median": 9.36701488494873
+    },
+    "snr_db": {
+     "count": 4687,
+     "finite": 4687,
+     "min": 16.914474487304688,
+     "max": 59.08189392089844,
+     "mean": 32.91109065468285,
+     "median": 29.58837890625
+    },
+    "radial_speed_mps": {
+     "count": 4687,
+     "finite": 4687,
+     "min": -0.11520086973905563,
+     "max": 0.3262980580329895,
+     "mean": 0.00026530886910585376,
+     "median": 0.0002219186135334894
+    },
+    "device_interval_seconds": {
+     "count": 180,
+     "finite": 180,
+     "min": 0.054919,
+     "max": 0.056081,
+     "mean": 0.055273066666666676,
+     "median": 0.055006
+    },
+    "device_timestamp_nonincreasing": 0,
+    "sensor_cycle_seconds": {
+     "count": 181,
+     "finite": 181,
+     "min": 0.05489899963140488,
+     "max": 0.05604499951004982,
+     "mean": 0.05525509943125656,
+     "median": 0.05498399958014488
+    },
+    "acquisition_setup_counts": {
+     "49": 181
+    },
+    "quality": {
+     "variance_range": {
+      "count": 4687,
+      "finite": 4687,
+      "min": 0.000379481993149966,
+      "max": 0.0007655485533177853,
+      "mean": 0.00044819442864912993,
+      "median": 0.00040031783282756805
+     },
+     "variance_speed": {
+      "count": 4687,
+      "finite": 4687,
+      "min": 0.00044508156133815646,
+      "max": 0.0010093223536387086,
+      "mean": 0.0005582456919858905,
+      "median": 0.0005098773399367929
+     },
+     "variance_azimuth_angle": {
+      "count": 4687,
+      "finite": 4687,
+      "min": 6.948337249923497e-05,
+      "max": 0.0017284955829381943,
+      "mean": 0.00015496830269643412,
+      "median": 9.626560495235026e-05
+     },
+     "variance_elevation_angle": {
+      "count": 4687,
+      "finite": 4687,
+      "min": 5.687616067007184e-05,
+      "max": 6.694325566058978e-05,
+      "mean": 5.850176881446357e-05,
+      "median": 5.807365960208699e-05
+     },
+     "false_alarm_probability": {
+      "count": 4687,
+      "finite": 0,
+      "min": null,
+      "max": null,
+      "mean": null,
+      "median": null
+     }
+    },
+    "flags_counts": {
+     "4294967295": 4687
+    },
+    "fields": [
+     "x",
+     "y",
+     "z",
+     "radial_speed",
+     "power",
+     "rcs",
+     "noise",
+     "snr",
+     "azimuth_angle",
+     "elevation_angle",
+     "range",
+     "variance_range",
+     "variance_speed",
+     "variance_azimuth_angle",
+     "variance_elevation_angle",
+     "false_alarm_probability",
+     "flags",
+     "peak_idx"
+    ],
+    "raw_quality_frames": 181,
+    "raw_pfa": {
+     "count": 4687,
+     "finite": 4687,
+     "min": 0.0,
+     "max": 0.0,
+     "mean": 0.0,
+     "median": 0.0
+    },
+    "raw_flags_counts": {
+     "0": 4687
+    },
+    "raw_quality_semantics": "unverified"
+   }
+  ]
+ },
+ "cpu_percent_one_core": {
+  "no_extra_subscribers": {
+   "seconds": 30.0,
+   "cpu_percent_one_core": {
+    "robot_state_publisher": 0.0,
+    "smartmicro_radar_node_exe": 0.6,
+    "smartmicro_radar_readback_node": 0.07,
+    "umrr96_views": 2.33,
+    "umrr96_processing": 19.2
+   }
+  },
+  "while_recording": {
+   "seconds": 110.0,
+   "cpu_percent_one_core": {
+    "robot_state_publisher": 0.02,
+    "smartmicro_radar_node_exe": 0.6,
+    "smartmicro_radar_readback_node": 0.05,
+    "umrr96_views": 2.27,
+    "umrr96_processing": 18.76
+   }
+  }
+ },
+ "static_recording_120s": {
+  "scans": 2206,
+  "detections_per_scan_mean": 25.53,
+  "valid_fits": 2207,
+  "fit_speed_m_s": {
+   "p50": 0.003273018503180704,
+   "p95": 0.009795793977583853,
+   "p99": 0.0147302954052903,
+   "max": 0.020811856767638196
+  },
+  "fit_component_std_m_s": [
+   0.0009760289680439985,
+   0.0010402633246800043,
+   0.004803830561112375
+  ],
+  "reported_sigma_m_s_median": [
+   0.05028434655019456,
+   0.05050204742317081,
+   0.058496697838847304
+  ],
+  "fits_above_sensor_moving_speed_0.05": 0,
+  "longest_run_above_0.05_scans": 0,
+  "abs_radial_speed_m_s": {
+   "p50": 0.0009529674716759473,
+   "p95": 0.006975733675062654,
+   "p99": 0.011714550526812677,
+   "fraction_above_0.05": 0.0011363232839742908,
+   "fraction_above_0.20": 0.0006214267959234402
+  },
+  "snr_db": {
+   "p5": 18.725701522827148,
+   "p50": 30.560672760009766
+  },
+  "track_points": 0,
+  "scans_with_tracks": 0,
+  "obstacles_per_scan": {
+   "mean": 13.98,
+   "min": 5,
+   "max": 23
+  },
+  "audit_classification_counts": {
+   "2": 56285,
+   "3": 63,
+   "4": 1
+  },
+  "audit_reason_flag_counts": {
+   "0": 56348,
+   "64": 1
+  }
+ },
+ "offline_audit_replay": {
+  "generated_at": "2026-10-09T14:50:10.677814+00:00",
+  "topic": "/smart_radar/port_targets_0",
+  "sources": [
+   {
+    "file": "0_static-canoff-120s_2026_10_09-09_47_04.mcap",
+    "bytes": 13315880,
+    "sha256": "dc212555b9dde89ee9f1e168906ad138b8fe3b551a38d4a0157704e2bc3447c3"
+   },
+   {
+    "file": "metadata.yaml",
+    "bytes": 11567,
+    "sha256": "617479dc1fb6712d6d7a9415bfb201aebd3b608715cade95336345b2e198cb63"
+   }
+  ],
+  "frames": {
+   "umrr96": 2206
+  },
+  "scans": 2206,
+  "reasons": {
+   "valid": 2206
+  },
+  "counts": {
+   "input": 56322,
+   "accepted": 56322,
+   "rejected_nonfinite": 0,
+   "rejected_range": 0,
+   "rejected_snr": 0,
+   "inliers": 56258,
+   "outliers": 64
+  },
+  "fit_config": {
+   "doppler_sign": 1,
+   "residual_threshold": 0.05,
+   "min_inliers": 8,
+   "min_inlier_fraction": 0.6,
+   "max_condition": 30.0,
+   "ransac_trials": 128,
+   "noise_floor": 0.02,
+   "velocity_std_floor": 0.05,
+   "max_velocity_std": 1.0,
+   "max_speed": 15.0
+  },
+  "gate_config": {
+   "min_range": 0.15,
+   "max_range": 120.0,
+   "min_snr_db": 6.0
+  },
+  "fitted_speed_mps": {
+   "min": 0.00019463485005424247,
+   "median": 0.003271676011990702,
+   "p95": 0.00979659314604807,
+   "max": 0.020811856767638196
+  },
+  "direction_condition": {
+   "min": 4.508524434383194,
+   "median": 6.3024693386784865,
+   "p95": 7.86243941100096,
+   "max": 10.906122184771256
+  },
+  "residual_rmse_mps": {
+   "min": 0.000618395621365391,
+   "median": 0.002603112446157992,
+   "p95": 0.0043617621806013055,
+   "max": 0.010366151827569765
+  },
+  "model_max_velocity_std_mps": {
+   "min": 0.054241529356945796,
+   "median": 0.05852058682016434,
+   "p95": 0.06304403657716351,
+   "max": 0.0779375994844549
+  },
+  "processing_ms": {
+   "min": 5.140815000231669,
+   "median": 7.071711499975208,
+   "p95": 7.981443000062427,
+   "max": 13.007122000090021
+  },
+  "independent_reference_available": false,
+  "interpretation": "Numerical replay only; fit residuals are not velocity accuracy. Doppler sign, timing, extrinsics and covariance are uncalibrated. Historical replay does not exercise live freshness checks."
+ },
+ "obstacle_frame_pitched_mount_c51": {
+  "main": {
+   "messages": 224,
+   "frames": [
+    "umrr96"
+   ],
+   "x_max_m": 17.62,
+   "z_min_max": [
+    0.3,
+    0.3
+   ],
+   "pitched_mount_base_z_min_max": [
+    -0.737,
+    0.762
+   ],
+   "pitched_mount_below_0.10": 0.39600665557404324
+  },
+  "tf": {
+   "messages": 223,
+   "frames": [
+    "base_link"
+   ],
+   "x_max_m": 17.86,
+   "z_min_max": [
+    0.3,
+    0.3
+   ]
+  },
+  "notf": {
+   "messages": 0,
+   "frames": [],
+   "x_max_m": 0.0
+  },
+  "diagnostics": {
+   "/review_tf/umrr96_processing/doppler": {
+    "level": 0,
+    "message": "Experimental fit valid; calibration pending",
+    "values": {
+     "obstacle_frame": "base_link",
+     "obstacle_tf_failures": "0",
+     "obstacle_tf_changes": "0",
+     "obstacle_tf_error": "None",
+     "obstacles": "11",
+     "obstacles_published": "True"
+    }
+   },
+   "/review_notf/umrr96_processing/doppler": {
+    "level": 1,
+    "message": "valid; obstacles withheld: no transform to missing_frame",
+    "values": {
+     "obstacle_frame": "missing_frame",
+     "obstacle_tf_failures": "278",
+     "obstacle_tf_changes": "0",
+     "obstacle_tf_error": "LookupException: \"missing_frame\" passed to lookupTransform argument target_frame does not exist. ",
+     "obstacles": "15",
+     "obstacles_published": "False"
+    }
+   }
+  }
+ },
+ "namespaced_diagnostics_c57": {
+  "diagnostic_names": [
+   "/front/smart_radar: SDK callbacks [hw=umrr96_v1_2_2@192.168.11.11]",
+   "/front/smart_radar: Target stream 0 [hw=umrr96_v1_2_2@192.168.11.11]",
+   "/front/smart_radar: UDP adapter 0 [hw=udp@192.168.11.17:55555]",
+   "/front/smart_radar_readback: Control requests [hw=umrr96@192.168.11.11]"
+  ],
+  "front_targets_messages": 188,
+  "front_targets_hz": 18.63
+ },
+ "live_launch_rviz_c52": {
+  "urdf_bytes": 2378,
+  "rviz2_started": true,
+  "rviz2_exit_on_sigint": "finished cleanly",
+  "umrr96_panel_node": "umrr96_config_<pid>_0",
+  "panel_read": "sweep=2, range switching=0, antenna=0, CAN targets=0; firmware 5.2.2, ID 0x00038553"
+ },
+ "data_node_get_radar_mode": "success=false, \"Timed out after 3000 ms\" (readback node answered the same read in 0.88 s)"
+}

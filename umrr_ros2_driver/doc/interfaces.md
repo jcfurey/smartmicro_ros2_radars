@@ -111,12 +111,14 @@ Replies use the JSON above. With the bench parameter file:
 ```bash
 ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode \
   '{sensor_id: 230739, section_name: auto_interface_0dim, params: [frequency_sweep_idx], param_types: [3]}'
-# The data node's version of the same read:
-ros2 service call /smart_radar/data_receiver/get_radar_mode umrr_ros2_msgs/srv/GetMode \
-  '{sensor_id: 230739, section_name: auto_interface_0dim, params: [frequency_sweep_idx], param_types: [3]}'
 ```
 
-See [UMRR-96 bring-up](../../docs/umrr96-bringup.md#read-parameters-and-status)
+On the UMRR-96 the data node's port-based instructions get no sensor reply: the
+same read through `smart_radar/data_receiver/get_radar_mode` returns
+`success: false` with "Timed out after 3000 ms" (live, 2026-10-09). The data
+node's `send_command` and `set_ip_address` send instruction batches through the
+same client, so treat a timeout there as "unknown", not as "not applied". See
+[UMRR-96 bring-up](../../docs/umrr96-bringup.md#read-parameters-and-status)
 for why the readback node exists.
 
 ### QoS
