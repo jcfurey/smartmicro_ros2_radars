@@ -286,10 +286,13 @@ int main(int argc, char ** argv)
     wait([&] {return true;}, .2, "");
 
     // --- Status (C14): late publisher discovered, subscribed only when selected ---
+    // S25: the publisher is best effort, as with the driver's QoS override; the
+    // recorder below checks that a reliable (default) publisher still matches.
     auto status = loader.createSharedInstance("smart_rviz_plugin/Smart Status");
     auto status_topic = child<QComboBox>(status, "topic");
     const std::string header_topic = "/smart_radar/port_targetheader_7";
-    auto header_pub = node->create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(header_topic, 10);
+    auto header_pub = node->create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
+      header_topic, rclcpp::SensorDataQoS());
     wait([&] {return status_topic->findText(QString::fromStdString(header_topic)) > 0;}, 5,
       "status topic discovery");
     check(node->count_subscribers(header_topic) == 0, "Status subscribed before selection");
@@ -310,11 +313,19 @@ int main(int argc, char ** argv)
     auto faults = loader.createSharedInstance("smart_rviz_plugin/Smart Fault Reports");
     auto fault_topic = child<QComboBox>(faults, "topic");
     const std::string fault_name = "/smart_radar/port_faultreport_3";
-    auto fault_pub = node->create_publisher<umrr_ros2_msgs::msg::PortFaultReportsMsg>(fault_name, 10);
+    auto fault_pub = node->create_publisher<umrr_ros2_msgs::msg::PortFaultReportsMsg>(
+      fault_name, rclcpp::SensorDataQoS());
     wait([&] {return fault_topic->findText(QString::fromStdString(fault_name)) > 0;}, 5,
       "fault topic discovery");
     fault_topic->setCurrentIndex(fault_topic->findText(QString::fromStdString(fault_name)));
     wait([&] {return node->count_subscribers(fault_name) == 1;}, 5, "fault subscription");
+    auto fault_header = child<QTableWidget>(faults, "fault_header_table");
+    wait([&] {
+        umrr_ros2_msgs::msg::PortFaultReportsMsg message;
+        message.header.frame_id = "best_effort_faults";
+        fault_pub->publish(message);
+        return fault_header->item(2, 0)->text() == "best_effort_faults";
+      }, 5, "best-effort fault report received");
     fault_pub.reset();
     wait([&] {return fault_topic->currentIndex() == 0 && node->count_subscribers(fault_name) == 0;},
       5, "fault unsubscribe after topic vanished");
@@ -349,11 +360,25 @@ int main(int argc, char ** argv)
     child<QSpinBox>(recorder, "max_rows")->setValue(200);
     child<QPushButton>(recorder, "record")->click();
     // Queue eight frames without processing Qt events, simulating a GUI stall.
-    // Stay below the subscription's depth of ten and wait for reliable delivery
-    // before invoking ticks, so this checks queue draining, not DDS timing.
+    // Stay below the subscription's depth of ten and wait for delivery before
+    // invoking ticks, so this checks queue draining, not DDS timing. The panel
+    // subscribes best effort (S25), so acknowledgements cannot confirm delivery;
+    // a best-effort probe on the same topic stands in for the panel's reader.
+    size_t probed = 0;
+    auto probe = node->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_topic,
+      rclcpp::SensorDataQoS(rclcpp::KeepLast(10)),
+      [&](sensor_msgs::msg::PointCloud2::ConstSharedPtr) {++probed;});
+    const auto probe_deadline = Clock::now() + std::chrono::seconds(5);
+    while (node->count_subscribers(cloud_topic) < 2 && Clock::now() < probe_deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     for (int i = 0; i < 8; ++i) {cloud_pub->publish(target_cloud(26));}
-    check(cloud_pub->wait_for_all_acked(std::chrono::seconds(5)),
-      "Recorder burst was not delivered");
+    while (probed < 8 && Clock::now() < probe_deadline) {
+      executor.spin_some(std::chrono::milliseconds(2));
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    check(probed == 8, "Recorder burst was not delivered");
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     // Eight frames hold 208 rows. Seven ticks must process all eight: the eighth
     // no longer fits under the 200-row cap and stops the recording with seven
     // whole frames (C59). One-message-per-tick processing handles only seven
@@ -368,6 +393,7 @@ int main(int argc, char ** argv)
     check(child<QPushButton>(recorder, "save")->isEnabled() &&
       child<QPushButton>(recorder, "record")->text() == "Record",
       "Recording not stopped at the cap");
+    probe.reset();
     check(child<QLabel>(recorder, "status")->text().contains("182 rows held"),
       "Cap did not keep whole frames: " + child<QLabel>(recorder, "status")->text().toStdString());
     // CSV: m^2 header, significant digits, and whole frames only.

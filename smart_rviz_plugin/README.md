@@ -93,6 +93,9 @@ separate RGB **Radar fan image** display included in the saved RViz configuratio
   significant digits), object `heading` is radians and shown/exported in degrees.
 - The subscription holds up to ten pending clouds. Catch-up is limited by
   callback cost; a long GUI stall can still overflow that queue.
+- Recorder, Status and Fault Reports subscribe best effort (sensor-data QoS,
+  depth 10), so they receive both the driver's default reliable publishers and a
+  `qos_overrides.<topic>.publisher.reliability: best_effort` override.
 
 ### Smart Command Configurator
 - Sends commands and mode/config related service calls.

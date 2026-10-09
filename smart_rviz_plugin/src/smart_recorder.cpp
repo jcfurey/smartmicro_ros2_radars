@@ -185,7 +185,8 @@ void SmartRadarRecorder::subscribe_selected()
   if (selected_topic_.empty()) {return;}
   const std::string topic = selected_topic_;
   subscription_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
-    topic, 10, [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+    topic, panel_util::data_qos(),
+    [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
       try {
         if (topic.find("port_targets") != std::string::npos) {
           port_target_callback(msg, topic);

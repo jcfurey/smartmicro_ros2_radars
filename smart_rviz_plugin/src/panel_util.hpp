@@ -13,6 +13,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <rclcpp/qos.hpp>
 
 namespace smart_rviz_plugin
 {
@@ -23,6 +24,14 @@ inline std::string unique_node_name(const std::string & base)
 {
   static std::atomic<unsigned> counter{0};
   return base + "_" + std::to_string(counter++);
+}
+
+/// Subscription QoS for driver data topics: best effort matches both the default reliable
+/// publishers and a best-effort override (qos_overrides...reliability). Ten pending
+/// messages leave room for the spin_all catch-up after a GUI stall (C41).
+inline rclcpp::QoS data_qos()
+{
+  return rclcpp::SensorDataQoS(rclcpp::KeepLast(10));
 }
 
 /// Strict unsigned parser: whole string, decimal or 0x-prefixed hexadecimal, <= max.
