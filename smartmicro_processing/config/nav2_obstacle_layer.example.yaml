@@ -15,21 +15,29 @@ local_costmap:
         enabled: true
         observation_sources: radar_obstacles lidar_clearing
         radar_obstacles:
-          # Per-scan, sensor-frame evidence from umrr96_processing: persistent
-          # static returns, ghost-filtered movers on confirmed tracks, track
-          # positions, and anything non-ghost within safety_range. z is
-          # flattened to obstacle_height in the sensor frame.
+          # Per-scan evidence from umrr96_processing: persistent static returns,
+          # ghost-filtered movers on confirmed tracks, track positions, and
+          # anything non-ghost within safety_range. It only marks: clearing needs
+          # another source on this layer (lidar raytracing below) or STVL decay.
           topic: /umrr96_processing/obstacles
           data_type: "PointCloud2"
-          sensor_frame: ""        # the cloud's own frame (umrr96)
+          sensor_frame: ""        # the cloud's frame; umrr96 measures ranges from the radar
           marking: true
           clearing: false
-          min_obstacle_height: 0.10  # global-frame heights: mount height + obstacle_height
+          # Heights are checked in the costmap's global frame. Set the processing
+          # parameter obstacle_frame to a frame rigidly attached to the radar (e.g.
+          # base_link): z is then obstacle_height (0.3) in that frame, within these
+          # limits. With obstacle_frame empty, z is flattened in the radar frame,
+          # which assumes a level mount: a radar 0.5 m up pitched 5 deg down puts
+          # returns beyond ~8 m below min_obstacle_height and they are dropped.
+          min_obstacle_height: 0.10
           max_obstacle_height: 2.0
           obstacle_max_range: 20.0
           observation_persistence: 0.0  # persistence is applied upstream
-          expected_update_rate: 0.2     # ~18 Hz input; flags a stalled radar
-          inf_is_valid: false
+          # obstacles are published only for accepted scans. At 8.33 Hz one rejected
+          # or dropped scan leaves a 240 ms gap: 0.2 s would mark the costmap not
+          # current, and the Jazzy controller aborts after costmap_update_timeout.
+          expected_update_rate: 0.5
         lidar_clearing:
           # Clears radar ghosts that land in space the lidar sees as free.
           topic: /lidar/points
@@ -73,7 +81,6 @@ local_costmap:
       # stack a second persistence window on top of it.
       #   observation_persistence: 0.0
       #   expected_update_rate: 0.0
-      #   inf_is_valid: false
 
       # Alternative: skip the accumulator and let the costmap persist the
       # per-scan Doppler inliers in the sensor frame. Prefer this when TF is
