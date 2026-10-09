@@ -70,6 +70,18 @@ def main():
                 assert mode.wait_for_service(timeout_sec=10), 'Mode service unavailable'
                 assert status.wait_for_service(timeout_sec=5), 'Status service unavailable'
                 assert setter.wait_for_service(timeout_sec=5), 'Set service unavailable'
+                # Before any exchange: idle is OK, not STALE (C72), under the data node's
+                # <model>@<ip> hardware ID.
+                deadline = time.monotonic() + 4
+                idle = []
+                while not idle and time.monotonic() < deadline:
+                    rclpy.spin_once(node, timeout_sec=.1)
+                    # Skip the updater's own 'Node starting up' status.
+                    idle = [s for s in diagnostics if s.name.endswith('Control requests') and
+                            s.message != 'Node starting up']
+                assert idle and idle[0].level == DiagnosticStatus.OK, idle
+                assert idle[0].message.startswith('Idle'), idle
+                assert idle[0].hardware_id == 'umrr96_v1_2_2@127.0.0.1', idle
                 describe = node.create_client(
                     DescribeParameters, '/umrr96_readback_smoke_server/describe_parameters')
                 assert describe.wait_for_service(timeout_sec=5)

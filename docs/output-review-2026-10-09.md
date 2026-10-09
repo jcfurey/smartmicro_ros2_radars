@@ -77,15 +77,18 @@ From the stationary live session and its 2,206-scan static recording
   the fit is 1.0, 1.0 and 4.8 mm/s (x, y, z): about 50× conservative in x/y, and
   z is about five times noisier than x/y. A per-axis, data-driven covariance
   needs a moving recording to calibrate.
-- **Obstacle marks flicker (O8).** The 3-of-5 persistence rule keeps 5–23
-  (mean 14) of about 25 detections per scan of an unchanging room, so a costmap
-  sees cells appear and vanish between scans.
+- **Obstacle persistence works as designed.** It keeps 5–23 (mean 14) of about
+  25 detections per scan: 94.5% of detections in persistent structure cells and
+  37% of flicker detections, which are 69% of all detections in this room.
+  Per-scan consumers (e.g. Nav2's collision monitor) still see the flicker
+  that passes; an ObstacleLayer keeps marks until a clearing source clears them.
 - **Latency (O6).** Receive-stamp age is 0.8 ms and processing adds about 10 ms
   (p95 11.5 ms); the sensor-internal latency before the SDK callback remains
   unknown.
-- **Diagnostics (O7).** One device appears as `umrr96_v1_2_2@192.168.11.11`
-  (data node) and `umrr96@192.168.11.11` (readback), and the adapter as
-  `udp@192.168.11.17:55555`.
+- **Diagnostics (O7).** One device appeared as `umrr96_v1_2_2@192.168.11.11`
+  (data node), `umrr96@192.168.11.11` (readback) and `umrr96` (processing).
+  Fixed the same day: all three use `umrr96_v1_2_2@<ip>` (processing via its
+  new `hardware_id` parameter); the adapter stays `udp@192.168.11.17:55555`.
 - **RadarScan (O9)** works live at 18.18 Hz when built against radar_msgs; it is
   still not a declared dependency.
 
@@ -101,7 +104,7 @@ Status: `planned`, `in progress`, `done`, `deferred`. Quick wins first.
 | O4 | **Fixed-frame tracking:** tracker, persistence and background in `odom` via TF at each scan's stamp, giving ground velocities and a background that survives sensor motion. | C34 remainder; builds on C49, C51 | planned |
 | O5 | **Fusable ego velocity:** planar (vx, vy) option or vz variance from elevation quality; documented `twist0_config`/rejection threshold for robot_localization; optional `base_link` output with lever-arm correction from an IMU yaw rate. | Needs measured `base_link → umrr96` | planned |
 | O6 | **Timing:** `stamp_offset_s` latency parameter recorded in `RadarTiming` (quick); acquisition-time stamps from `acquisition_start` when the time base is SMS/PTP; latency calibration by Doppler-vs-IMU cross-correlation. | S21 | planned |
-| O7 | **Diagnostics:** one hardware ID (`model@ip`) in every node; frequency + stamp-age monitors on `port_targets_N` and `obstacles`; fault reports as diagnostics once `criticality` semantics are known. | S23 | planned |
+| O7 | **Diagnostics:** one hardware ID (`model@ip`) in every node; frequency + stamp-age monitors on `port_targets_N` and `obstacles`; fault reports as diagnostics once `criticality` semantics are known. | S23 | in progress (hardware IDs unified 2026-10-09) |
 | O8 | **Nav2:** complete STVL example with decay as the primary radar-only configuration; investigate a radar layer that expires its own marks. | Navigation investigation | planned |
 | O9 | **Driver cloud conveniences:** optional `intensity` alias (power or rcs) for PCL/LIO tools; set `is_dense` from actual XYZ validity; RadarScan on by default once the Doppler sign is verified (O14). | | planned |
 | O10 | **Namespacing:** relative names in RViz configs, configurable panel endpoints, readback services under their own names (`umrr96_tuning/...`) instead of moving the driver's to `data_receiver/`. | C39, S26 | planned |

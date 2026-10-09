@@ -59,6 +59,11 @@ class RadarAccumulation(Node):
                              'Sensor TF frame required on input clouds.')
         self.fixed_frame = declare(self, 'fixed_frame', 'odom',
                                    'Output frame for pose compensation; must be fixed.')
+        self.hardware_id = declare(
+            self, 'hardware_id', '',
+            "Diagnostic hardware_id; set it to the driver's <model>@<ip> (e.g. "
+            'umrr96_v1_2_2@192.168.11.11) so aggregators group this node with the radar. '
+            'Empty uses expected_frame_id.') or self.frame
         for frame in (self.frame, self.fixed_frame):
             if not frame or frame.startswith('/') or any(c.isspace() for c in frame):
                 raise ValueError('Frame names must be nonempty without whitespace/leading slash')
@@ -340,7 +345,7 @@ class RadarAccumulation(Node):
                       **{'dropped_' + key: value for key, value in self.dropped.items()})
         header = Header(stamp=Time(nanoseconds=now).to_msg())
         self.diagnostics_pub.publish(DiagnosticArray(header=header, status=[DiagnosticStatus(
-            name=self.get_fully_qualified_name() + '/evidence', hardware_id=self.frame,
+            name=self.get_fully_qualified_name() + '/evidence', hardware_id=self.hardware_id,
             level=level, message=self.state,
             values=[KeyValue(key=k, value=str(v)) for k, v in values.items()])]))
 

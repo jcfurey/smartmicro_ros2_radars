@@ -132,7 +132,9 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 `/diagnostics` includes `/umrr96_processing/doppler`, rejection reasons, counts,
 condition, residual RMSE, computation time, last velocity age and
 `calibrated=False`, `sensor_moving`, `background_ready` and `background_gap_resets`. An OK diagnostic means numerical checks passed, not measured
-accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
+accuracy. Its `hardware_id` is the `hardware_id` parameter, or `expected_frame_id`
+when empty; set it to the driver's `<model>@<ip>` (e.g. `umrr96_v1_2_2@192.168.11.11`)
+so a diagnostic aggregator groups processing with the radar's own statuses. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
 
 ### Obstacle frame

@@ -925,5 +925,49 @@
   "umrr96_panel_node": "umrr96_config_<pid>_0",
   "panel_read": "sweep=2, range switching=0, antenna=0, CAN targets=0; firmware 5.2.2, ID 0x00038553"
  },
- "data_node_get_radar_mode": "success=false, \"Timed out after 3000 ms\" (readback node answered the same read in 0.88 s)"
+ "data_node_get_radar_mode": "success=false, \"Timed out after 3000 ms\" (readback node answered the same read in 0.88 s)",
+ "persistence_structure_vs_flicker": {
+  "scans": 2206,
+  "structure_cells": 10,
+  "detections": {
+   "structure": 17419,
+   "flicker": 38903
+  },
+  "kept_fraction": {
+   "structure": 0.9448,
+   "flicker": 0.37
+  }
+ },
+ "hardware_id_and_idle_readback_c72": {
+  "/idlecheck/smart_radar_readback: Control requests": {
+   "level": "OK",
+   "message": "Idle; no control request sent yet",
+   "hardware_id": "umrr96_v1_2_2@192.168.11.11"
+  },
+  "/umrr96_processing/doppler": {
+   "level": "OK",
+   "message": "Experimental fit valid; calibration pending",
+   "hardware_id": "umrr96_v1_2_2@192.168.11.11"
+  },
+  "smart_radar: SDK callbacks": {
+   "level": "OK",
+   "message": "No new callback exceptions",
+   "hardware_id": "umrr96_v1_2_2@192.168.11.11"
+  },
+  "smart_radar: Target stream 0": {
+   "level": "OK",
+   "message": "Receiving targets",
+   "hardware_id": "umrr96_v1_2_2@192.168.11.11"
+  },
+  "smart_radar: UDP adapter 0": {
+   "level": "OK",
+   "message": "No new kernel UDP drops; not a liveness check",
+   "hardware_id": "udp@192.168.11.17:55555"
+  },
+  "smart_radar_readback: Control requests": {
+   "level": "OK",
+   "message": "Last request succeeded; no automatic polling",
+   "hardware_id": "umrr96_v1_2_2@192.168.11.11"
+  }
+ }
 }

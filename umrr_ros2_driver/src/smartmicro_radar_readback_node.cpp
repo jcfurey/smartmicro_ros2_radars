@@ -176,14 +176,16 @@ public:
       });
     declare_diagnostic_names(*this);
     diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
-    diagnostics_->setHardwareID("umrr96@" + sensor_ip);
+    // Same <model>@<ip> form as the data node, so both group under one device.
+    diagnostics_->setHardwareID("umrr96_v1_2_2@" + sensor_ip);
     diagnostics_->add("Control requests",
       [this](diagnostic_updater::DiagnosticStatusWrapper & stat) {
         using Status = diagnostic_msgs::msg::DiagnosticStatus;
         if (!last_error_.empty()) {
           stat.summary(Status::WARN, last_error_);
         } else if (!exchanges_) {
-          stat.summary(Status::STALE, "Idle; sensor reachability has not been checked");
+          // Not STALE: no request is not a fault; the data node reports liveness.
+          stat.summary(Status::OK, "Idle; no control request sent yet");
         } else {
           stat.summary(Status::OK, "Last request succeeded; no automatic polling");
         }

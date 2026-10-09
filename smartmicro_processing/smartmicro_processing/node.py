@@ -130,6 +130,11 @@ class RadarProcessing(Node):
                              'TF frame required on input clouds; others are rejected.')
         if not self.frame or self.frame.startswith('/') or any(c.isspace() for c in self.frame):
             raise ValueError('expected_frame_id must be a nonempty TF frame without leading slash')
+        self.hardware_id = declare(
+            self, 'hardware_id', '',
+            "Diagnostic hardware_id; set it to the driver's <model>@<ip> (e.g. "
+            'umrr96_v1_2_2@192.168.11.11) so aggregators group this node with the radar. '
+            'Empty uses expected_frame_id.') or self.frame
         self.max_age = declare(self, 'max_input_age', .5,
                                'Reject input stamps older than this ROS-clock age (s).', .05, 10)
         self.future_tolerance = declare(
@@ -540,7 +545,8 @@ class RadarProcessing(Node):
         else:
             message = self.state
         status = DiagnosticStatus(
-            level=level, name=self.get_fully_qualified_name() + '/doppler', hardware_id=self.frame,
+            level=level, name=self.get_fully_qualified_name() + '/doppler',
+            hardware_id=self.hardware_id,
             message=message,
             values=[KeyValue(key=k, value=str(v)) for k, v in values.items()])
         self.diagnostics_pub.publish(DiagnosticArray(

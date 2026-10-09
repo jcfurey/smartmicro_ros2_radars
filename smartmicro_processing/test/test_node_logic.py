@@ -148,6 +148,30 @@ def test_shadow_half_angle_parameter_reaches_the_obstacle_filter(ros):
         RadarProcessing()
 
 
+@pytest.mark.parametrize('node_type', [RadarProcessing, RadarAccumulation])
+def test_hardware_id_defaults_to_the_frame_and_can_name_the_radar(ros, node_type):
+    ros()
+    node = node_type()
+    try:
+        assert node.hardware_id == 'umrr96'
+    finally:
+        node.destroy_node()
+    rclpy.try_shutdown()
+    ros('hardware_id:=umrr96_v1_2_2@192.168.11.11')
+    node = node_type()
+    try:
+        node.diagnostics_pub = Recorder()
+        if node_type is RadarProcessing:
+            node.publish_diagnostics()
+        else:
+            node.publish_diagnostics(
+                DiagnosticStatus.OK, 0, 0, node.get_clock().now().nanoseconds)
+        status = node.diagnostics_pub.messages[-1].status[0]
+        assert status.hardware_id == 'umrr96_v1_2_2@192.168.11.11'
+    finally:
+        node.destroy_node()
+
+
 def test_track_ids_are_exact_uint32():
     field = next(f for f in TRACK_FIELDS if f.name == 'track_id')
     assert field.datatype == PointField.UINT32 and field.offset == 24

@@ -127,7 +127,8 @@ Both nodes publish standard `/diagnostics` via `diagnostic_updater`:
   count as valid frames. Object/fault traffic does not mask target-stream silence.
 - **Control requests:** attempted exchanges, invalid requests, communication
   failures, timeouts, rejected batches, replies and reply age. An unused channel
-  is `STALE` (reachability unknown); a failed exchange gives `WARN` until a
+  is `OK` ("Idle; no control request sent yet"; liveness is the data node's
+  target-stream status); a failed exchange gives `WARN` until a
   successful exchange. `OK` describes the last request, not continuous connection
   monitoring. Diagnostics do not poll or write the radar. A synchronous control
   request can delay that node's diagnostic update until it replies or times out.
