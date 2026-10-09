@@ -211,7 +211,7 @@ def test_driver_runtime():
                 s.name == status_a + 'SDK callbacks' and s.level == DiagnosticStatus.OK and
                 int({v.key: v.value for v in s.values}.get('instruction_timeouts', '0')) >= 2
                 for s in statuses))
-            assert any(s.name == 'runtime_b: Target stream 0' for s in statuses)
+            wait(lambda: any(s.name == 'runtime_b: Target stream 0' for s in statuses))
             # Firmware download replies are deferred to a worker thread (C4).
             download = node.create_client(FirmwareDownload, topic + 'firmware_download')
             response = call(download, FirmwareDownload.Request(sensor_id=0, file_path='/none'))
@@ -515,3 +515,58 @@ def test_status_per_configured_stream():
         node.destroy_node()
         rclpy.shutdown()
     assert process.returncode == 0, output
+
+
+@pytest.mark.parametrize('executable, arguments, ready', [
+    ('smartmicro_radar_node_exe', None, 'Radar services are ready'),
+    ('smartmicro_radar_readback_node',
+     ['-p', 'sensor_id:=230739', '-p', 'interface_name:=lo', '-p', 'host_ip:=127.0.0.1',
+      '-p', 'sensor_ip:=127.0.0.1', '-p', 'startup_can_target_output:=-1'],
+     'Readback ready for sensor'),
+])
+def test_sdk_configuration_path_is_set_before_other_threads(executable, arguments, ready):
+    """The SDK path is set once, before rclcpp::init starts middleware threads (C65)."""
+    path = Path(get_package_prefix('umrr_ros2_driver')) / 'lib/umrr_ros2_driver' / executable
+    with tempfile.TemporaryDirectory(prefix='umrr-setenv-test-') as directory:
+        if arguments is None:  # Data node: one loopback sensor; nothing is sent.
+            params = Path(directory) / 'params.yaml'
+            params.write_text(yaml.safe_dump({'/**': {'ros__parameters': {
+                'master_data_serial_type': 'port_based', 'master_inst_serial_type': 'port_based',
+                'adapters': {'adapter_0': {'hw_type': 'eth', 'hw_dev_id': 4,
+                                           'hw_iface_name': 'lo', 'hw_ip_address': '127.0.0.1',
+                                           'port': unused_port()}},
+                'sensors': {'sensor_0': _eth_sensor(port=unused_port(), inst_type='port_based',
+                                                    data_type='port_based')}}}}))
+            arguments = ['--params-file', str(params)]
+        else:
+            arguments = arguments + ['-p', f'host_port:={unused_port()}',
+                                     '-p', f'sensor_port:={unused_port()}']
+        log = Path(directory) / 'setenv.log'
+        output = Path(directory) / 'output.log'
+        with output.open('w') as stream:
+            process = subprocess.Popen(
+                [str(path), '--ros-args', '-r', '__ns:=/setenv_probe'] + arguments,
+                stdout=stream, stderr=subprocess.STDOUT,
+                env=dict(os.environ, TMPDIR=directory,
+                         LD_PRELOAD=os.environ['SMARTMICRO_SETENV_PROBE'],
+                         SMARTMICRO_SETENV_PROBE_LOG=str(log)))
+            try:
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline and process.poll() is None and (
+                        ready not in output.read_text()):
+                    time.sleep(.1)
+                assert ready in output.read_text(), output.read_text()
+            finally:
+                process.send_signal(signal.SIGINT)
+                try:
+                    process.wait(timeout=8)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+        assert process.returncode == 0, output.read_text()
+        # One setenv (the constructor's activate() is a no-op), while the only threads
+        # besides main are LTTng-UST listeners started by library constructors ("-ust").
+        lines = log.read_text().splitlines()
+        assert len(lines) == 1, lines
+        threads = [name for name in lines[0].split('|') if name]
+        assert len([name for name in threads if not name.endswith('-ust')]) == 1, threads

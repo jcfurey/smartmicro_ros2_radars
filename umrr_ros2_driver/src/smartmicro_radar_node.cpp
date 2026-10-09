@@ -160,8 +160,18 @@ namespace drivers
 namespace radar
 {
 SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_options)
-: rclcpp::Node{"smartmicro_radar_node", node_options}
+: SmartmicroRadarNode{node_options, std::make_unique<RuntimeConfig>("smartmicro-data")}
 {
+}
+
+SmartmicroRadarNode::SmartmicroRadarNode(
+  const rclcpp::NodeOptions & node_options, std::unique_ptr<RuntimeConfig> runtime_config)
+: rclcpp::Node{"smartmicro_radar_node", node_options},
+  runtime_config_{std::move(runtime_config)}
+{
+  if (!runtime_config_) {
+    throw std::invalid_argument("SmartmicroRadarNode requires an SDK configuration directory");
+  }
   callback_gate_.set_error_handler([logger = get_logger()](const std::string & message) {
       RCLCPP_ERROR(logger, "%s", message.c_str());
     });
@@ -169,7 +179,7 @@ SmartmicroRadarNode::SmartmicroRadarNode(const rclcpp::NodeOptions & node_option
     update_config_files_from_params();
     update_service = std::make_shared<UpdateService>();
 
-    runtime_config_.activate();
+    runtime_config_->activate();
     setup_diagnostics();
 
     initialize_services();
@@ -1482,10 +1492,10 @@ void SmartmicroRadarNode::update_config_files_from_params()
   auto config = nlohmann::json::parse(std::ifstream{kConfigFilePath});
   config[kDataSerialTypeJsonTag] = master_data_serial_type;
   config[kInstSerialTypeJsonTag] = master_inst_serial_type;
-  config["config_path"] = runtime_config_.path.string();
+  config["config_path"] = runtime_config_->path.string();
   config["shared_lib_path"] =
-    runtime_config_.sdk_library_path(config["shared_lib_path"].get<std::string>());
-  runtime_config_.write("smart_access_config.json", config);
+    runtime_config_->sdk_library_path(config["shared_lib_path"].get<std::string>());
+  runtime_config_->write("smart_access_config.json", config);
 
   auto hw_inventory = nlohmann::json::parse(std::ifstream{kHwInventoryFilePath});
   auto & hw_items = hw_inventory[kHwItemsJsonTag];
@@ -1508,7 +1518,7 @@ void SmartmicroRadarNode::update_config_files_from_params()
     hw_item[kBaudRateTag] = adapter.baudrate;
     hw_items.push_back(hw_item);
   }
-  runtime_config_.write("hw_inventory.json", hw_inventory);
+  runtime_config_->write("hw_inventory.json", hw_inventory);
 
   auto routing_table = nlohmann::json::parse(std::ifstream{kRoutingTableFilePath});
   auto & clients = routing_table[kClientsJsonTag];
@@ -1533,7 +1543,7 @@ void SmartmicroRadarNode::update_config_files_from_params()
     clients.push_back(client);
   }
 
-  runtime_config_.write("routing_table.json", routing_table);
+  runtime_config_->write("routing_table.json", routing_table);
 }
 
 }  // namespace radar

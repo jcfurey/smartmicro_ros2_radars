@@ -173,6 +173,16 @@ The Smart Access SDK is a process-wide singleton. Load at most one of these
 components per process (container), and never the data node together with the
 readback node.
 
+The SDK reads the path of its configuration only from the environment variable
+`SMART_ACCESS_CFG_FILE_PATH` (its `Init()` takes no path), and glibc `setenv` is not
+safe against a concurrent `getenv` in another thread. The standalone executables
+create the private configuration directory and set the variable before
+`rclcpp::init`, when only the main thread (and LTTng-UST listener threads started
+by library constructors) exist. A component constructed in a container sets it in
+its constructor while the container's middleware and executor threads already
+run, as before 2026-10-09 in every case; prefer the executables where that risk
+matters.
+
 ## Install layout
 
 The vendor libraries (`libsmart_access.so`, `libcom_lib.so`, `libosal.so` and the

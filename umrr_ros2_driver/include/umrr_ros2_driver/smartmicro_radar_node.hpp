@@ -115,6 +115,17 @@ public:
   ///
   explicit SmartmicroRadarNode(const rclcpp::NodeOptions & node_options);
 
+  ///
+  /// @brief      Constructs the node with a private SDK configuration directory that
+  ///             the caller created, and activated before rclcpp::init (standalone
+  ///             executable; see RuntimeConfig::activate).
+  ///
+  /// @param[in]  node_options    Node options for this node.
+  /// @param[in]  runtime_config  The SDK configuration directory; owned by the node.
+  ///
+  SmartmicroRadarNode(
+    const rclcpp::NodeOptions & node_options, std::unique_ptr<RuntimeConfig> runtime_config);
+
   ~SmartmicroRadarNode() override;
 
 private:
@@ -376,7 +387,7 @@ private:
     const std::string & topic, size_t depth);
 
   // Declared first so its directory outlives the node's publishers/services.
-  RuntimeConfig runtime_config_{"smartmicro-data"};
+  std::unique_ptr<RuntimeConfig> runtime_config_;
   SdkCallbackGate callback_gate_;
   // Liveness per configured stream: target lists, and object lists (pub_type mse).
   std::array<StreamHealth, detail::kMaxSensorCount> target_health_;

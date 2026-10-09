@@ -275,6 +275,9 @@ if(BUILD_TESTING)
 
     add_executable(radar_test_sender test/radar_test_sender.cpp)
     target_link_libraries(radar_test_sender ${smartmicro_core_targets})
+    # LD_PRELOAD probe: thread count when the SDK configuration path is set (C65).
+    add_library(setenv_probe MODULE test/setenv_probe.cpp)
+    target_link_libraries(setenv_probe ${CMAKE_DL_LIBS})
 
     # Field-mapping regression test for the templated stream codecs (M1): mocked
     # SDK lists, generated from the SDK headers, run through every model's codecs.
@@ -315,7 +318,8 @@ if(BUILD_TESTING)
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py
         TIMEOUT 90 ENV ${offline_environment}
-        "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>")
+        "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>"
+        "SMARTMICRO_SETENV_PROBE=$<TARGET_FILE:setenv_probe>")
     set_tests_properties(test_umrr96_views test_umrr96_measure test_readback test_driver_runtime PROPERTIES RUN_SERIAL TRUE)
 
     # Linters run explicitly on first-party files: automatic discovery would

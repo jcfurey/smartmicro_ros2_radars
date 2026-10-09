@@ -84,8 +84,16 @@ class ReadbackNode : public rclcpp::Node
 {
 public:
   explicit ReadbackNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
-  : Node("smart_radar_readback", options)
+  : ReadbackNode(options, std::make_unique<RuntimeConfig>("smartmicro-readback"))
+  {}
+
+  // With an SDK configuration directory activated before rclcpp::init.
+  ReadbackNode(const rclcpp::NodeOptions & options, std::unique_ptr<RuntimeConfig> config)
+  : Node("smart_radar_readback", options), config_(std::move(config))
   {
+    if (!config_) {
+      throw std::invalid_argument("ReadbackNode requires an SDK configuration directory");
+    }
     const auto sensor_id = startup_parameter(*this, "sensor_id", 0, 1, UINT32_MAX);
     const auto host_port = startup_parameter(*this, "host_port", 55556, 1, 65535);
     const auto sensor_port = startup_parameter(*this, "sensor_port", 55555, 1, 65535);
@@ -110,21 +118,21 @@ public:
       throw std::invalid_argument("startup_can_target_output must be -1, 0 or 1");
     }
 
-    config_.write("smart_access_config.json", {
+    config_->write("smart_access_config.json", {
         {"name", "UMRR-96 readback"}, {"version", "1.0.0"},
         {"client_id", 0xc0000001u}, {"role", "master"}, {"alive", false},
-        {"shared_lib_path", config_.sdk_library_path(SMARTMICRO_SDK_LIBRARY_PATH)},
-        {"config_path", config_.path.string()}, {"download_path", ""},
+        {"shared_lib_path", config_->sdk_library_path(SMARTMICRO_SDK_LIBRARY_PATH)},
+        {"config_path", config_->path.string()}, {"download_path", ""},
         {"user_interface_name", "base"}, {"user_interface_major_v", 1},
         {"user_interface_minor_v", 0}, {"user_interface_patch_v", 2},
         {"instruction_serialization_type", "can_based"},
         {"data_serialization_type", "can_based"}});
-    config_.write("hw_inventory.json", {
+    config_->write("hw_inventory.json", {
         {"name", "Readback socket"}, {"version", "1.1.0"},
         {"hwItems", Json::array({{
             {"type", "eth"}, {"dev_id", 1}, {"iface_name", interface},
             {"ip_address", host_ip}, {"port", host_port}}})}});
-    config_.write("routing_table.json", {
+    config_->write("routing_table.json", {
         {"name", "Readback route"}, {"version", "1.0.0"},
         {"clients", Json::array({{
             {"client_id", sensor_id_}, {"link_type", "eth"}, {"dev_id", 1},
@@ -134,7 +142,7 @@ public:
             {"user_interface_name", "umrr96_t153_automotive"},
             {"user_interface_major_v", 1}, {"user_interface_minor_v", 2},
             {"user_interface_patch_v", 2}}})}});
-    config_.activate();
+    config_->activate();
     services_ = com::master::CommunicationServicesIface::Get();
     if (!services_->Init()) {
       throw std::runtime_error("Readback SDK initialization failed");
@@ -391,7 +399,7 @@ private:
   std::string startup_can_state_{"unchanged"};
   rclcpp::TimerBase::SharedPtr startup_timer_;
   rclcpp::Clock steady_clock_{RCL_STEADY_TIME};  // Log throttling independent of sim time.
-  RuntimeConfig config_{"smartmicro-readback"};
+  std::unique_ptr<RuntimeConfig> config_;
   uint64_t exchanges_{}, invalid_requests_{}, failed_requests_{}, timeouts_{};
   uint64_t responses_{}, sensor_rejections_{};
   std::string last_error_;
@@ -408,6 +416,12 @@ private:
 std::shared_ptr<rclcpp::Node> make_readback_node(const rclcpp::NodeOptions & options)
 {
   return std::make_shared<ReadbackNode>(options);
+}
+
+std::shared_ptr<rclcpp::Node> make_readback_node(
+  const rclcpp::NodeOptions & options, std::unique_ptr<RuntimeConfig> config)
+{
+  return std::make_shared<ReadbackNode>(options, std::move(config));
 }
 }  // namespace smartmicro::drivers::radar
 

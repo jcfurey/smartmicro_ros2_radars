@@ -64,12 +64,29 @@ public:
     return result;
   }
 
+  // The SDK reads its configuration path only from this environment variable
+  // (libcom_lib getenv; Init() takes no path). setenv is not thread-safe against a
+  // concurrent getenv, so the standalone executables call activate() before
+  // rclcpp::init starts middleware threads; the node constructors call it again,
+  // which is then a no-op. A node loaded into a component container sets it while
+  // the container's other threads run (see doc/interfaces.md).
+  static constexpr const char * kEnvironmentVariable = "SMART_ACCESS_CFG_FILE_PATH";
+
   void activate() const
   {
     const auto filename = (path / "smart_access_config.json").string();
-    if (setenv("SMART_ACCESS_CFG_FILE_PATH", filename.c_str(), 1) != 0) {
+    if (active()) {
+      return;
+    }
+    if (setenv(kEnvironmentVariable, filename.c_str(), 1) != 0) {
       throw std::runtime_error("Could not set SDK configuration path");
     }
+  }
+
+  bool active() const
+  {
+    const char * current = std::getenv(kEnvironmentVariable);
+    return current && (path / "smart_access_config.json").string() == current;
   }
 
   std::filesystem::path path;
