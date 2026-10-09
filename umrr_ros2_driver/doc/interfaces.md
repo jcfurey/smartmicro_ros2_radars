@@ -33,7 +33,9 @@ available (`apt install ros-lyrical-radar-msgs`; CMake option
 `radar_msgs/RadarScan` on `smart_radar/radar_scan_N`: same header and detection
 order, `range` [m], `azimuth`/`elevation` [rad], `doppler_velocity` = the SDK
 radial speed [m/s] without sign conversion (see `radial_speed` below) and
-`amplitude` = power [dB]. The scan is only built while it has subscribers.
+`amplitude` = power [dB]. A cycle without targets gives an empty scan (before
+2026-10-09 such a cycle was undefined behaviour and aborted builds with
+`_GLIBCXX_ASSERTIONS`). The scan is only built while it has subscribers.
 Setting the parameter on a build without radar_msgs fails at startup. radar_msgs
 is not a declared package dependency, so rosdep does not install it.
 

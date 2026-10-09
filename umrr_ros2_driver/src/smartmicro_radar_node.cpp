@@ -20,7 +20,6 @@
 #ifdef UMRR_HAVE_RADAR_MSGS
 #include <radar_msgs/msg/radar_scan.hpp>
 #endif
-#include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <umrr_ros2_driver/sensor_models.hpp>
 #include <umrr_ros2_driver/service_parsing.hpp>
 #include <umrr_ros2_driver/udp_socket_health.hpp>
@@ -452,23 +451,10 @@ void SmartmicroRadarNode::publish_radar_scan(
     return;
   }
   // Same detections, header and order as the target cloud. doppler_velocity is
-  // the SDK radial speed without sign conversion; amplitude is power [dB].
+  // the SDK radial speed without sign conversion; amplitude is power [dB]. A cycle
+  // without targets is published as an empty scan.
   auto scan = std::make_unique<radar_msgs::msg::RadarScan>();
-  scan->header = cloud.header;
-  scan->returns.resize(cloud.width);
-  sensor_msgs::PointCloud2ConstIterator<float> range(cloud, "range");
-  sensor_msgs::PointCloud2ConstIterator<float> azimuth(cloud, "azimuth_angle");
-  sensor_msgs::PointCloud2ConstIterator<float> elevation(cloud, "elevation_angle");
-  sensor_msgs::PointCloud2ConstIterator<float> speed(cloud, "radial_speed");
-  sensor_msgs::PointCloud2ConstIterator<float> power(cloud, "power");
-  for (auto & detection : scan->returns) {
-    detection.range = *range;
-    detection.azimuth = *azimuth;
-    detection.elevation = *elevation;
-    detection.doppler_velocity = *speed;
-    detection.amplitude = *power;
-    ++range, ++azimuth, ++elevation, ++speed, ++power;
-  }
+  fill_radar_scan(cloud, *scan);
   publisher->publish(std::move(scan));
 #else
   (void)sensor_idx;

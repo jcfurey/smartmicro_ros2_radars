@@ -214,5 +214,34 @@ public:
     write(data, 44, p.status);
   }
 };
+
+// Copies a RadarCloudBuilder target cloud into a radar_msgs/RadarScan (a template, so
+// this header does not need the optional radar_msgs): same header and order; range,
+// azimuth, elevation, doppler_velocity = radial_speed, amplitude = power. An empty
+// cloud gives an empty scan; PointCloud2 iterators take data.front() and must not be
+// built on an empty cloud.
+template<typename ScanT>
+void fill_radar_scan(const sensor_msgs::msg::PointCloud2 & cloud, ScanT & scan)
+{
+  scan.header = cloud.header;
+  scan.returns.clear();
+  if (cloud.width == 0 || cloud.height == 0 || cloud.data.empty()) {
+    return;
+  }
+  scan.returns.resize(static_cast<size_t>(cloud.width) * cloud.height);
+  sensor_msgs::PointCloud2ConstIterator<float> range(cloud, "range");
+  sensor_msgs::PointCloud2ConstIterator<float> azimuth(cloud, "azimuth_angle");
+  sensor_msgs::PointCloud2ConstIterator<float> elevation(cloud, "elevation_angle");
+  sensor_msgs::PointCloud2ConstIterator<float> speed(cloud, "radial_speed");
+  sensor_msgs::PointCloud2ConstIterator<float> power(cloud, "power");
+  for (auto & detection : scan.returns) {
+    detection.range = *range;
+    detection.azimuth = *azimuth;
+    detection.elevation = *elevation;
+    detection.doppler_velocity = *speed;
+    detection.amplitude = *power;
+    ++range, ++azimuth, ++elevation, ++speed, ++power;
+  }
+}
 }  // namespace smartmicro::drivers::radar
 #endif  // UMRR_ROS2_DRIVER__POINT_CLOUD_BUILDER_HPP_

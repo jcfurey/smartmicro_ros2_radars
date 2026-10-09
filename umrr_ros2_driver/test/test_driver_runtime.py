@@ -304,8 +304,24 @@ def test_driver_runtime():
                 SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
             previous_count = len(clouds)
             wait(lambda: len(clouds) >= previous_count + 3)
-            stop(driver_processes[0])
             stop(restarted_sender)
+            # A cycle without targets: an empty cloud and an empty RadarScan (C53).
+            empty = bytearray(fixture[:32])
+            struct.pack_into('>I', empty, 16, len(empty))  # Generic header port size.
+            struct.pack_into('<H', empty, 28, 0)  # Number of targets.
+            empty_path = run / 'empty_port.bin'
+            empty_path.write_bytes(empty)
+            empty_sender = launch([os.environ['SMARTMICRO_TEST_SENDER'], str(empty_path)],
+                                  SMART_ACCESS_CFG_FILE_PATH=str(sim / 'com_lib_config.json'))
+            wait(lambda: any(c.width == 0 for c in clouds[previous_count:]))
+            if RadarScan is not None:
+                scan_count = len(scans)
+                wait(lambda: any(not s.returns for s in scans[scan_count:]))
+                empty_scan = next(s for s in scans[scan_count:] if not s.returns)
+                assert empty_scan.header.frame_id == 'umrr96_test'
+            assert driver_processes[0].poll() is None
+            stop(driver_processes[0])
+            stop(empty_sender)
             assert len(list(run.glob('smartmicro-data-*'))) == 1
             stop(driver_processes[1])
             assert not list(run.glob('smartmicro-data-*'))

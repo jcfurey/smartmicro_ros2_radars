@@ -249,6 +249,8 @@ if(BUILD_TESTING)
     ament_add_gtest(test_point_cloud_builder test/test_point_cloud_builder.cpp)
     target_include_directories(test_point_cloud_builder PRIVATE include)
     target_link_libraries(test_point_cloud_builder ${sensor_msgs_TARGETS})
+    # Container precondition checks, e.g. front() on an empty PointCloud2 data vector.
+    target_compile_definitions(test_point_cloud_builder PRIVATE _GLIBCXX_ASSERTIONS)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(test_point_cloud_builder PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
         set_property(TARGET test_point_cloud_builder APPEND_STRING PROPERTY LINK_FLAGS " -fsanitize=address,undefined")
