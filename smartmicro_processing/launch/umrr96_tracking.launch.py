@@ -42,7 +42,7 @@ def generate_launch_description():
             'rviz_config', default_value=PathJoinSubstitution([
                 processing_share, 'rviz', 'umrr96_classified.rviz']),
             description='RViz configuration; defaults to current-scan classification '
-                        '(absolute topic names, no namespace)'),
+                        '(relative topic names)'),
         DeclareLaunchArgument(
             'publish_description', default_value='true', choices=['true', 'false'],
             description='Publish the standalone sensor URDF shown in RViz; set false if '

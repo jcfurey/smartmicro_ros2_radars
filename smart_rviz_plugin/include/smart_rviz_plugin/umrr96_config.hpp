@@ -43,6 +43,7 @@ private:
   enum class Operation { None, Read, Write, Identity, AdvancedRead, AdvancedWrite };
   enum class AdvancedRead { Refresh, BeforeWrite, Verify, Recover };
 
+  bool connect_ros(const QString & ns);
   void tick();
   void read_settings(bool verify = false);
   void read_identity();
@@ -65,6 +66,9 @@ private:
   void fail_advanced(const QString & reason);
 
   QLineEdit * sensor_{};
+  // Empty: RViz's namespace. Otherwise the namespace of the driver, readback and views.
+  QLineEdit * namespace_{};
+  QString applied_namespace_;
   QLabel * identity_{};
   QLabel * metrics_{};
   QLabel * feedback_{};

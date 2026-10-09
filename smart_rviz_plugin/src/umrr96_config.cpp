@@ -69,6 +69,14 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   refresh_->setObjectName("refresh");
   device->addWidget(refresh_);
   layout->addLayout(device);
+  auto endpoints = new QHBoxLayout;
+  endpoints->addWidget(new QLabel("Namespace", this));
+  namespace_ = new QLineEdit(this);
+  namespace_->setObjectName("namespace");
+  namespace_->setToolTip("Namespace of the radar's driver, readback and views nodes. "
+    "Empty uses RViz's namespace (the launch file's namespace argument).");
+  endpoints->addWidget(namespace_);
+  layout->addLayout(endpoints);
   identity_ = new QLabel("Firmware: waiting for sensor", this);
   identity_->setObjectName("identity");
   layout->addWidget(identity_);
@@ -207,24 +215,15 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   filter_apply_->setEnabled(false);
   layout->addStretch();
 
-  node_ = std::make_shared<rclcpp::Node>(panel_util::unique_node_name("umrr96_config"),
-    rclcpp::NodeOptions().use_global_arguments(false));
-  getter_ = node_->create_client<GetMode>("/smart_radar/get_radar_mode");
-  status_ = node_->create_client<GetStatus>("/smart_radar/get_radar_status");
-  setter_ = node_->create_client<SetMode>("/smart_radar/set_radar_mode");
-  filter_setter_ = node_->create_client<rcl_interfaces::srv::SetParametersAtomically>(
-    "/umrr96_views/set_parameters_atomically");
-  filter_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
-    "/smart_radar/filter_status", rclcpp::QoS(1).transient_local(),
-    [this](std_msgs::msg::String::ConstSharedPtr msg) {filter_status(msg->data);});
-  header_ = node_->create_subscription<umrr_ros2_msgs::msg::PortTargetHeader>(
-    "/smart_radar/port_targetheader_0", rclcpp::SensorDataQoS(),
-    [this](umrr_ros2_msgs::msg::PortTargetHeader::ConstSharedPtr msg) {
-      arrivals_.push_back(Clock::now());
-      targets_ = msg->number_of_targets;
-      cycle_ms_ = msg->cycle_time * 1000.0;
+  if (!connect_ros({})) {throw std::runtime_error(feedback_->text().toStdString());}
+  connect(namespace_, &QLineEdit::editingFinished, this, [this] {
+      if (namespace_->text().trimmed() == applied_namespace_) {return;}
+      if (connect_ros(namespace_->text())) {
+        changed_sensor();
+      } else {
+        namespace_->setText(applied_namespace_);
+      }
     });
-  executor_.add_node(node_);
   connect(refresh_, &QPushButton::clicked, this, [this] {read_settings();});
   connect(apply_, &QPushButton::clicked, this, &Umrr96Config::apply);
   connect(preset_, &QPushButton::clicked, this, [this] {
@@ -240,6 +239,50 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   connect(timer_, &QTimer::timeout, this, &Umrr96Config::tick);
   timer_->start(50);
   controls();
+}
+
+bool Umrr96Config::connect_ros(const QString & ns)
+{
+  // Relative endpoints resolve in RViz's namespace, or in the panel's Namespace (C39).
+  const auto name = panel_util::unique_node_name("umrr96_config");
+  rclcpp::Node::SharedPtr node;
+  try {
+    node = std::make_shared<rclcpp::Node>(
+      name, panel_util::node_options(name, ns.trimmed().toStdString()));
+  } catch (const std::exception & error) {
+    feedback_->setText("Invalid namespace: " + QString::fromUtf8(error.what()));
+    return false;
+  }
+  if (node_) {
+    cancel_pending();
+    if (filter_pending_) {filter_setter_->remove_pending_request(filter_pending_id_);}
+    filter_pending_ = false;
+    executor_.remove_node(node_);
+  }
+  node_ = node;
+  getter_ = node_->create_client<GetMode>("smart_radar/get_radar_mode");
+  status_ = node_->create_client<GetStatus>("smart_radar/get_radar_status");
+  setter_ = node_->create_client<SetMode>("smart_radar/set_radar_mode");
+  filter_setter_ = node_->create_client<rcl_interfaces::srv::SetParametersAtomically>(
+    "umrr96_views/set_parameters_atomically");
+  filter_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
+    "smart_radar/filter_status", rclcpp::QoS(1).transient_local(),
+    [this](std_msgs::msg::String::ConstSharedPtr msg) {filter_status(msg->data);});
+  header_ = node_->create_subscription<umrr_ros2_msgs::msg::PortTargetHeader>(
+    "smart_radar/port_targetheader_0", rclcpp::SensorDataQoS(),
+    [this](umrr_ros2_msgs::msg::PortTargetHeader::ConstSharedPtr msg) {
+      arrivals_.push_back(Clock::now());
+      targets_ = msg->number_of_targets;
+      cycle_ms_ = msg->cycle_time * 1000.0;
+    });
+  executor_.add_node(node_);
+  applied_namespace_ = ns.trimmed();
+  namespace_->setPlaceholderText(QString("RViz namespace: %1").arg(node_->get_namespace()));
+  // Nothing measured or reported on the previous endpoints applies any more.
+  arrivals_.clear();
+  filter_ready_ = decay_ready_ = filter_dirty_ = false;
+  filter_actual_->setText("Waiting for view node…");
+  return true;
 }
 
 Umrr96Config::~Umrr96Config()
@@ -431,6 +474,7 @@ void Umrr96Config::controls()
   if (!apply_) {return;}
   const bool idle = operation_ == Operation::None;
   sensor_->setEnabled(idle);
+  namespace_->setEnabled(idle);
   refresh_->setEnabled(idle);
   for (auto choice : choices_) {choice->setEnabled(idle && have_actual_);}
   preset_->setEnabled(idle && have_actual_);
@@ -602,6 +646,11 @@ void Umrr96Config::load(const rviz_common::Config & config)
   rviz_common::Panel::load(config);
   QString id;
   if (config.mapGetString("Sensor ID", &id)) {sensor_->setText(id);}
+  QString ns;
+  if (config.mapGetString("Namespace", &ns) && ns.trimmed() != applied_namespace_) {
+    connect_ros(ns);
+  }
+  namespace_->setText(applied_namespace_);
   changed_sensor();
 }
 
@@ -609,6 +658,7 @@ void Umrr96Config::save(rviz_common::Config config) const
 {
   rviz_common::Panel::save(config);
   config.mapSetValue("Sensor ID", sensor_->text());
+  config.mapSetValue("Namespace", applied_namespace_);
 }
 }  // namespace smart_rviz_plugin
 

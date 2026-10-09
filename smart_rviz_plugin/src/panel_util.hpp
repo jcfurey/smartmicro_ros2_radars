@@ -13,7 +13,9 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <vector>
 #include <unistd.h>
+#include <rclcpp/node_options.hpp>
 #include <rclcpp/qos.hpp>
 
 namespace smart_rviz_plugin
@@ -26,6 +28,20 @@ inline std::string unique_node_name(const std::string & base)
 {
   static std::atomic<unsigned> counter{0};
   return base + "_" + std::to_string(::getpid()) + "_" + std::to_string(counter++);
+}
+
+/// Options for a panel's own node. Global arguments stay enabled, so the namespace and
+/// remappings RViz was started with (a launch file's namespace:=front gives
+/// `-r __ns:=/front`) apply to the panel's relative endpoints as to the displays (C39).
+/// Local arguments take precedence: the `__node` rule keeps the unique panel name when
+/// launch renames RViz's node, and a non-empty `ns` replaces the process namespace.
+inline rclcpp::NodeOptions node_options(const std::string & name, const std::string & ns = {})
+{
+  std::vector<std::string> arguments{"--ros-args", "-r", "__node:=" + name};
+  if (!ns.empty()) {
+    arguments.insert(arguments.end(), {"-r", "__ns:=" + (ns.front() == '/' ? ns : "/" + ns)});
+  }
+  return rclcpp::NodeOptions().arguments(arguments);
 }
 
 /// Subscription QoS for driver data topics: best effort matches both the default reliable

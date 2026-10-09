@@ -35,9 +35,9 @@ bool is_radar_cloud(const std::string & name)
 
 void SmartRadarRecorder::initialize()
 {
-  node_ = std::make_shared<rclcpp::Node>(
-    panel_util::unique_node_name("smart_radar_recorder_gui_node"),
-    rclcpp::NodeOptions().use_global_arguments(false));
+  // Relative names resolve in RViz's namespace (C39).
+  const auto node_name = panel_util::unique_node_name("smart_radar_recorder_gui_node");
+  node_ = std::make_shared<rclcpp::Node>(node_name, panel_util::node_options(node_name));
   executor_.add_node(node_);
 
   gui_layout_ = new QVBoxLayout();

@@ -25,7 +25,7 @@ Visualization Manager:
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /umrr96/robot_description
+        Value: umrr96/robot_description
       Visual Enabled: true
       Collision Enabled: false
       TF Prefix: ''
@@ -43,7 +43,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /umrr96_accumulation/stationary_preview/accumulated_targets
+        Value: umrr96_accumulation/stationary_preview/accumulated_targets
       Position Transformer: XYZ
       Color Transformer: Intensity
       Channel Name: support_scans
@@ -65,7 +65,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /umrr96_accumulation/stationary_preview/confirmed_targets
+        Value: umrr96_accumulation/stationary_preview/confirmed_targets
       Position Transformer: XYZ
       Color Transformer: Intensity
       Channel Name: age_seconds
@@ -85,7 +85,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /umrr96_processing/doppler_inliers
+        Value: umrr96_processing/doppler_inliers
       Position Transformer: XYZ
       Color Transformer: FlatColor
       Color: 255; 255; 255
