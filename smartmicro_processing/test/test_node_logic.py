@@ -11,6 +11,7 @@ from geometry_msgs.msg import TransformStamped
 import numpy as np
 import pytest
 import rclpy
+from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import PointField
 from sensor_msgs_py.point_cloud2 import create_cloud, read_points
@@ -74,6 +75,42 @@ def test_python_defaults_equal_the_shipped_yaml(ros, node_type, name):
             assert node.has_parameter(key), key
             default = node.get_parameter(key).value
             assert type(default) is type(value) and default == value, (key, default, value)
+    finally:
+        node.destroy_node()
+
+
+@pytest.mark.parametrize('node_type,topic', [
+    (RadarProcessing, '/umrr96_processing/obstacles'),
+    (RadarAccumulation, '/umrr96_accumulation/accumulated_targets')])
+def test_publishers_are_reliable_by_default_and_overridable(ros, node_type, topic):
+    # Best-effort outputs left a default (reliable) subscriber with nothing but an
+    # incompatible-QoS warning, and qos_overrides were ignored.
+    ros()
+    node = node_type()
+    try:
+        publishers = [p for p in node.publishers if p.topic_name != '/parameter_events']
+        assert topic in [p.topic_name for p in publishers] and len(publishers) >= 3
+        for publisher in publishers:
+            qos = publisher.qos_profile
+            assert qos.reliability == QoSReliabilityPolicy.RELIABLE, publisher.topic_name
+            assert qos.durability == QoSDurabilityPolicy.VOLATILE
+            assert qos.history == QoSHistoryPolicy.KEEP_LAST and qos.depth >= 5
+            prefix = f'qos_overrides.{publisher.topic_name}.publisher.'
+            for policy in ('reliability', 'history', 'depth'):
+                assert node.has_parameter(prefix + policy), prefix + policy
+    finally:
+        node.destroy_node()
+    rclpy.try_shutdown()
+    ros(f'qos_overrides.{topic}.publisher.reliability:=best_effort',
+        f'qos_overrides.{topic}.publisher.depth:=2')
+    node = node_type()
+    try:
+        by_topic = {p.topic_name: p.qos_profile for p in node.publishers}
+        assert by_topic[topic].reliability == QoSReliabilityPolicy.BEST_EFFORT
+        assert by_topic[topic].depth == 2
+        others = [qos for name, qos in by_topic.items()
+                  if name not in (topic, '/parameter_events')]
+        assert all(qos.reliability == QoSReliabilityPolicy.RELIABLE for qos in others)
     finally:
         node.destroy_node()
 

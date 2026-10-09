@@ -43,8 +43,9 @@ def test_installed_processing_handles_motion_invalid_frames_disconnect_and_clock
     publisher = node.create_publisher(PointCloud2, '/test_radar/targets', qos_profile_sensor_data)
     clock_pub = node.create_publisher(Clock, '/clock', 10)
     for name, messages in outputs.items():
+        # A default (reliable) subscriber must receive too, not only sensor-data ones.
         node.create_subscription(PointCloud2, '/umrr96_processing/' + name, messages.append,
-                                 qos_profile_sensor_data)
+                                 10 if name == 'classified_targets' else qos_profile_sensor_data)
     node.create_subscription(TwistWithCovarianceStamped,
                              '/umrr96_processing/experimental_velocity',
                              velocities.append, 10)

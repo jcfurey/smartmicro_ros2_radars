@@ -26,7 +26,7 @@ from .cloud import (empty_cloud, empty_like, GateConfig, measurements, select_me
 from .doppler import fit_velocity, FitConfig
 from .ghosts import ghost_reasons, ghost_rejection_mask, GhostConfig, GhostReason
 from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter, to_frame
-from .ros_support import declare, DiagnosticsRateLimiter
+from .ros_support import declare, DiagnosticsRateLimiter, output_publisher
 from .tracker import MovingObjectTracker, TrackerConfig
 
 # Relative by default so a namespace moves the input with the node; remap it in launch.
@@ -169,13 +169,13 @@ class RadarProcessing(Node):
         self.fast_scans = 0
         self.last_fit_stamp = None  # input stamp of the last valid fit (ns)
         self.background_gap_resets = 0
-        self.track_pub = self.create_publisher(PointCloud2, '~/tracked_objects',
-                                               qos_profile_sensor_data)
-        self.marker_pub = self.create_publisher(MarkerArray, '~/track_markers', 10)
+        # Outputs are reliable KEEP_LAST with qos_overrides (output_publisher); the
+        # input subscription stays sensor-data QoS.
+        self.track_pub = output_publisher(self, PointCloud2, '~/tracked_objects')
+        self.marker_pub = output_publisher(self, MarkerArray, '~/track_markers', 10)
         self.obstacle_config = _declare_config(self, ObstacleConfig, OBSTACLE_PARAMETERS)
         self.persistence = PersistenceFilter(self.obstacle_config)
-        self.obstacle_pub = self.create_publisher(PointCloud2, '~/obstacles',
-                                                  qos_profile_sensor_data)
+        self.obstacle_pub = output_publisher(self, PointCloud2, '~/obstacles')
         self.obstacle_frame = declare(
             self, 'obstacle_frame', '',
             'Frame of ~/obstacles; empty keeps the input frame. Otherwise a frame rigidly '
@@ -193,14 +193,12 @@ class RadarProcessing(Node):
         self.obstacle_tf_failures = self.obstacle_tf_changes = 0
         self.obstacle_tf_error = None  # why the last scan's obstacles were withheld
         self.obstacle_mount = None
-        self.cloud_publishers = {
-            name: self.create_publisher(PointCloud2, '~/' + name, qos_profile_sensor_data)
-            for name in CLOUD_OUTPUTS}
-        self.audit_pub = self.create_publisher(DetectionAudit, '~/detection_audit',
-                                               qos_profile_sensor_data)
-        self.velocity_pub = self.create_publisher(TwistWithCovarianceStamped,
-                                                  '~/experimental_velocity', 10)
-        self.diagnostics_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.cloud_publishers = {name: output_publisher(self, PointCloud2, '~/' + name)
+                                 for name in CLOUD_OUTPUTS}
+        self.audit_pub = output_publisher(self, DetectionAudit, '~/detection_audit')
+        self.velocity_pub = output_publisher(self, TwistWithCovarianceStamped,
+                                             '~/experimental_velocity', 10)
+        self.diagnostics_pub = output_publisher(self, DiagnosticArray, '/diagnostics', 10)
         self.diagnostics_limiter = DiagnosticsRateLimiter(diagnostics_period)
         topic = declare(self, 'input_topic', DEFAULT_INPUT,
                         'Input PointCloud2. Prefer remapping the relative default name; '

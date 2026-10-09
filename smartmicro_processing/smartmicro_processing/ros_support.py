@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Parameter declaration and diagnostics rate limiting shared by the processing nodes."""
+"""Parameters, output QoS and diagnostics rate limiting shared by the processing nodes."""
 import math
 import time
 
 from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor
+from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
+from rclpy.qos_overriding_options import QoSOverridingOptions
 
 
 def as_float(name, value):
@@ -41,6 +43,24 @@ def declare(node, name, default, description, low=None, high=None, step=None,
             descriptor.integer_range = [IntegerRange(
                 from_value=int(low), to_value=int(high), step=int(step or 0))]
     return node.declare_parameter(name, default, descriptor).value
+
+
+def output_publisher(node, msg_type, topic, depth=5):
+    """
+    Create a reliable, volatile KEEP_LAST(``depth``) publisher with overridable QoS.
+
+    The startup parameters ``qos_overrides.<topic>.publisher.{reliability,history,depth}``
+    (fully qualified topic) replace these defaults, e.g. ``reliability: best_effort``.
+    A reliable publisher matches both reliable (default) and best-effort
+    (sensor-data) subscribers. Each publisher gets its own profile because
+    rclpy applies the overrides to the profile object in place.
+    """
+    profile = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST, depth=depth,
+                         reliability=QoSReliabilityPolicy.RELIABLE,
+                         durability=QoSDurabilityPolicy.VOLATILE)
+    return node.create_publisher(
+        msg_type, topic, profile,
+        qos_overriding_options=QoSOverridingOptions.with_default_policies())
 
 
 class DiagnosticsRateLimiter:
