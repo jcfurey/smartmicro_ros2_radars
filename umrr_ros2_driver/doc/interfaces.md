@@ -112,6 +112,12 @@ node is started (`ros2 run ... -r __ns:=/front`, a launch file or a component
 container); setting the parameter explicitly overrides it. Before 2026-10-09 only
 the launch files set it.
 
+`UDP adapter N` reports the kernel's drop counter of the Ethernet adapter's socket
+(`/proc/net/udp`). The socket is matched by local port and, when `hw_ip_address` is
+set, by local address, so adapters sharing a port on different addresses each get
+their own counters; the status is `WARN` ("unavailable or ambiguous") only if
+more than one of the process's sockets still matches.
+
 ## Launch files
 
 `umrr96_live.launch.py` (driver, readback, views, RViz):

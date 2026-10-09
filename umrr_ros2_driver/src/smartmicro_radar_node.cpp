@@ -306,7 +306,8 @@ void SmartmicroRadarNode::setup_diagnostics()
       [this, i, previous_inode = std::string{}, previous_drops = uint64_t{}]
       (diagnostic_updater::DiagnosticStatusWrapper & status) mutable {
         using Status = diagnostic_msgs::msg::DiagnosticStatus;
-        const auto socket = udp_socket_health(static_cast<uint16_t>(m_adapters[i].port));
+        const auto socket = udp_socket_health(
+          static_cast<uint16_t>(m_adapters[i].port), m_adapters[i].hw_ip_address);
         status.hardware_id = "udp@" +
         (m_adapters[i].hw_ip_address.empty() ? m_adapters[i].hw_iface_name :
         m_adapters[i].hw_ip_address) + ":" + std::to_string(m_adapters[i].port);
