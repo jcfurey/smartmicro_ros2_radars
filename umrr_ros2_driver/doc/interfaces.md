@@ -22,7 +22,7 @@ Topic and service names are relative and keep their historical form, with a
 | `smart_radar/port_faultreport_N` | `PortFaultReportsMsg` (models with fault reports) |
 | `smart_radar/timing_N` | `RadarTiming` |
 | `smart_radar/umrr96_raw_quality_N` | `Umrr96RawQuality` (UMRR-96 Ethernet) |
-| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command`, `set_ip_address`, `firmware_download` | services |
+| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command`, `set_ip_address`, `firmware_download` | data node services; `umrr96_live.launch.py` moves the first three (see [service routing](#service-routing)) |
 
 ### Optional `radar_msgs/RadarScan`
 
@@ -44,6 +44,7 @@ or the `namespace` launch argument. Everything then appears under
 apply in any namespace. Individual topics can still be remapped, for example
 `-r smart_radar/port_targets_0:=points`.
 
+This and the next paragraphs describe the data node's services.
 `firmware_download` replies when the sensor reports a final status (minutes);
 the update runs on a worker thread, so diagnostics and the other services keep
 running meanwhile. Service requests are validated completely before anything is
@@ -71,6 +72,50 @@ been applied. A successful `set_ip_address` adds a `note` to restart the radar.
 Before 2026-09-30 these services replied at once with "Success: Request sent"
 and only logged the sensor's answer. Every SDK instruction batch is released
 after its reply or timeout (previously none were).
+
+### Service routing
+
+Which node owns the root service names depends on the launch file:
+
+| Launch | `smart_radar/{set_radar_mode,get_radar_mode,get_radar_status}` | `smart_radar/data_receiver/{...}` | `smart_radar/{send_command,set_ip_address,firmware_download}` |
+|--------|------------------|------------------|------------------|
+| `radar.launch.py`, or the data executable alone | data node | — | data node |
+| `umrr96_live.launch.py`, and `smartmicro_processing`'s `umrr96_tracking.launch.py` (includes it) | readback node | data node (remapped) | data node |
+
+The readback node (`smart_radar_readback`) differs from the data node behind the
+same names:
+
+- It handles one UMRR-96 Type 153 (interface 1.2.2): requests whose `sensor_id`
+  is not its startup parameter `sensor_id` are rejected ("Sensor ID does not
+  match this readback node"), so the data node's IDs (for example 100 in
+  `radar.params.template.yaml`) do not work there.
+- It is synchronous: the service callback waits for the sensor reply for up to
+  `timeout_ms` (default 2000 ms), and calls are handled one at a time.
+- `get_radar_mode` reads section `auto_interface_0dim` and `get_radar_status`
+  section `auto_interface` only, 1–10 unique names per request.
+- `set_radar_mode` writes section `auto_interface_0dim` only, and only the
+  UMRR-96 tuning whitelist: `uint8` (`value_types: 3`) `frequency_sweep_idx`
+  0–2, `range_toggle_mode` 0–3, `tx_antenna_idx` 0–2,
+  `output_control_target_list_can` 0–1, `prf_selector_manual` 0–1,
+  `prf_set_selector` 0, `prf_manual_value_idx` 0–2, and `float32`
+  (`value_types: 0`) `tv_min_speed_sweep_idx_{0,1,2}` /
+  `tv_max_speed_sweep_idx_{0,1,2}` within ±150, always as a min/max pair with
+  min ≤ max. The whole request is validated before anything is sent.
+- It has no `send_command`, `set_ip_address` or `firmware_download`; those stay
+  with the data node.
+
+Replies use the JSON above. With the bench parameter file:
+
+```bash
+ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode \
+  '{sensor_id: 230739, section_name: auto_interface_0dim, params: [frequency_sweep_idx], param_types: [3]}'
+# The data node's version of the same read:
+ros2 service call /smart_radar/data_receiver/get_radar_mode umrr_ros2_msgs/srv/GetMode \
+  '{sensor_id: 230739, section_name: auto_interface_0dim, params: [frequency_sweep_idx], param_types: [3]}'
+```
+
+See [UMRR-96 bring-up](../../docs/umrr96-bringup.md#read-parameters-and-status)
+for why the readback node exists.
 
 ### QoS
 
@@ -106,12 +151,15 @@ nothing for that sensor.
 interface and addresses; supply your own elsewhere), `namespace` (default
 empty), `use_sim_time` (`false`), `rviz` (`true`; closing RViz ends the launch,
 use `false` headless), `targets_topic` (views input, default
-`smart_radar/port_targets_0`), `view`, `rviz_config`, `publish_description`,
-`description_frame_id`.
+`smart_radar/port_targets_0`), `view`, `rviz_config`, `publish_description`
+(`false`; includes `smartmicro_description` in its own launch scope, without its
+viewer), `description_frame_id`, `description_sensor_name`. The readback node
+takes over the root mode/status service names; see
+[service routing](#service-routing).
 
 `radar.launch.py` (driver only): `params_file` (default
 `param/radar.params.template.yaml`), `namespace`, `node_name` (`smart_radar`),
-`use_sim_time`.
+`use_sim_time`. All services are the data node's.
 
 ## Components and processes
 

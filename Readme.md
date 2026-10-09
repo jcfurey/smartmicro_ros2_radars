@@ -220,6 +220,30 @@ To set up the ***adapters***, configure the following parameters:
 The smartmicro radars come equipped with numerous features and modes of operation. Using the ros2 services provided one
 may access these modes and send commands to the sensor. A list of available sensor operations is under umrr_ros2_driver/smartmicro/user_interfaces/ after running ./smart_extract.sh.
 
+### Which node answers
+The service names are the same in both launch files, but not the node behind them:
+
+| Service | `radar.launch.py` | `umrr96_live.launch.py` |
+| :------ | :---------------- | :---------------------- |
+| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status` | data node | UMRR-96 readback node `smart_radar_readback` |
+| `smart_radar/data_receiver/set_radar_mode`, `get_radar_mode`, `get_radar_status` | — | data node (remapped) |
+| `smart_radar/send_command`, `set_ip_address`, `firmware_download` | data node | data node |
+
+The data node accepts any configured sensor (`sensors.sensor_<N>.id`) and any
+section of its interface, and replies when the sensor answers. The readback node
+(also used by `smartmicro_processing`'s `umrr96_tracking.launch.py`) answers
+synchronously, within `smart_radar_readback.timeout_ms` (default 2 s), and only
+for its own `smart_radar_readback.sensor_id`; it reads `auto_interface_0dim`
+parameters and `auto_interface` statuses and writes only the UMRR-96 tuning
+parameters listed in the [bring-up notes](docs/umrr96-bringup.md#temporary-tuning).
+Requests for other sensor IDs or sections are rejected. Both reply with the same
+JSON (see [interfaces](umrr_ros2_driver/doc/interfaces.md#service-routing)).
+
+The examples below use `radar.launch.py` with the template parameters (UMRR-A4,
+sensor ID 100). With `umrr96_live.launch.py`, call the `smart_radar/data_receiver/...`
+names for these requests, or use the readback node's sensor ID (230739 in the
+bench file) at the usual names.
+
 A ros2 `SetMode` service should be called to implement these mode changes. These are the inputs to a ros2 `SetMode` service call:
 - `params`: name/names of the mode instructions (specific to the sensor).
 - `values`: the mode of operation (specific to sensor where the modes are same).
@@ -238,6 +262,9 @@ A ros2 'GetMode' service can be called to get the actual sensor modes. The input
 
 For instance, getting the `Index of center frequency (center_frequency_idx)` of a UMRR-A4 sensor to `(1)` mode would require the following call:
 `ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode "{section_name: auto_interface_0dim, sensor_id: 100, params: ['center_frequency_idx'], param_types: [3]}"`
+
+With `umrr96_live.launch.py` and the bench file, the readback node reads the UMRR-96 sweep:
+`ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode "{section_name: auto_interface_0dim, sensor_id: 230739, params: ['frequency_sweep_idx'], param_types: [3]}"`
 
 Similarly, a ros2 `SendCommand` service could be used to send commands to the sensors. There are three inputs for sending a command:
 - `command`: name of the command (specific to the sensor interface)
