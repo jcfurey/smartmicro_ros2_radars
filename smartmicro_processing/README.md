@@ -129,6 +129,17 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 
+The consumer outputs `obstacles`, `tracked_objects`, `detection_audit` and
+`experimental_velocity` are published on every accepted scan (the twist only
+for valid fits). The subset and display clouds (`quality_targets`,
+`doppler_inliers`, `doppler_outliers`, `unclassified_targets`,
+`moving_targets`, `moving_ghosts`, `tracked_targets`, `classified_targets`)
+are built and published only while they have subscribers; a subscriber
+receives from the next scan on. Their decisions are computed either way
+(`detection_audit` carries them). Replaying the 2026-10-09 static capture
+(2,206 scans) without subscribers, per-scan processing went from a median of
+8.7 ms (p95 9.6 ms) to 7.5 ms (p95 8.3 ms).
+
 `/diagnostics` includes `/umrr96_processing/doppler`, rejection reasons, counts,
 condition, residual RMSE, computation time, last velocity age and
 `calibrated=False`, `sensor_moving`, `background_ready` and `background_gap_resets`. An OK diagnostic means numerical checks passed, not measured
@@ -279,7 +290,8 @@ data is cleared due to stale/rejected input or a clock reset, the audit sends on
 cause in `status`. It is a display invalidation, not another sensor observation.
 Malformed or freshness-rejected inputs do not receive per-point assignments;
 their whole-scan reason remains in diagnostics. The colored cloud clears on the
-same watchdog/rejection transitions as existing outputs. Every empty clear keeps
+same watchdog/rejection transitions as existing outputs. A clear reaches every
+output that published since the previous clear. Every empty clear keeps
 its output's schema: subset clouds carry the last accepted input's fields,
 `tracked_objects` and `obstacles` their own, so readers that select fields by
 name keep working.

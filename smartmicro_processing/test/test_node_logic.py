@@ -50,16 +50,17 @@ def cloud(ns, points, frame='umrr96'):
 
 
 class Recorder:
-    """Publisher stand-in with one subscriber."""
+    """Publisher stand-in with ``subscribers`` subscribers (one by default)."""
 
-    def __init__(self):
+    def __init__(self, subscribers=1):
         self.messages = []
+        self.subscribers = subscribers
 
     def publish(self, message):
         self.messages.append(message)
 
     def get_subscription_count(self):
-        return 1
+        return self.subscribers
 
 
 @pytest.mark.parametrize('node_type,name', [(RadarProcessing, 'umrr96_processing.yaml'),
@@ -565,6 +566,45 @@ def recorded_node():
     for name in ('track_pub', 'obstacle_pub', 'audit_pub', 'diagnostics_pub'):
         setattr(node, name, Recorder())
     return node
+
+
+def test_subset_clouds_are_built_only_with_subscribers(ros):
+    # All eight subset/display clouds used to be built and published on every scan.
+    ros()
+    node = recorded_node()
+    try:
+        subscribed = {'doppler_inliers', 'classified_targets'}
+        node.cloud_publishers = {name: Recorder(int(name in subscribed))
+                                 for name in node.cloud_publishers}
+        node.velocity_pub = Recorder()
+        outputs = node.cloud_publishers
+        now = node.get_clock().now().nanoseconds
+        for k in range(3):
+            node.receive(moving_sensor_cloud(now - (40 - 10 * k) * 1_000_000, np.zeros(3)))
+        assert {name for name, r in outputs.items() if r.messages} == subscribed
+        assert [m.width for m in outputs['doppler_inliers'].messages] == [30] * 3
+        assert outputs['classified_targets'].messages[-1].width == 30
+        assert node.stats['displayed'] == 30  # counted without building the display
+        for name in ('obstacle_pub', 'track_pub', 'audit_pub', 'velocity_pub'):
+            assert len(getattr(node, name).messages) == 3, name
+        node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))  # rejected: clears
+        assert {name for name, r in outputs.items() if r.messages} == subscribed
+        for name in subscribed:
+            assert len(outputs[name].messages) == 4 and outputs[name].messages[-1].width == 0
+        assert node.obstacle_pub.messages[-1].width == 0
+        assert node.audit_pub.messages[-1].event == DetectionAudit.CLEAR
+        # A late subscriber gets the next scan; the next clear reaches it too.
+        outputs['moving_targets'].subscribers = 1
+        node.receive(moving_sensor_cloud(now - 5_000_000, np.zeros(3)))
+        assert [m.width for m in outputs['moving_targets'].messages] == [0]
+        outputs['doppler_inliers'].subscribers = 0
+        node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))
+        assert [m.width for m in outputs['moving_targets'].messages] == [0, 0]
+        # Unsubscribed since its last scan, but it carried data: cleared as well.
+        assert [m.width for m in outputs['doppler_inliers'].messages][-2:] == [30, 0]
+        assert not outputs['quality_targets'].messages
+    finally:
+        node.destroy_node()
 
 
 @pytest.mark.parametrize('frame', ['', 'base_link'])

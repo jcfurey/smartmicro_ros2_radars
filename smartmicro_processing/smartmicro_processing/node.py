@@ -20,7 +20,7 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from umrr_ros2_msgs.msg import DetectionAudit
 from visualization_msgs.msg import Marker, MarkerArray
 
-from .classification import classified_cloud, classify, cleared_audit
+from .classification import classified_cloud, classify, cleared_audit, drawable
 from .cloud import (empty_cloud, empty_like, GateConfig, measurements, select_measurements,
                     subset_cloud)
 from .doppler import fit_velocity, FitConfig
@@ -31,6 +31,9 @@ from .tracker import MovingObjectTracker, TrackerConfig
 
 # Relative by default so a namespace moves the input with the node; remap it in launch.
 DEFAULT_INPUT = 'smart_radar/port_targets_0'
+# Subset and display clouds: built and published only while they have subscribers.
+# obstacles, tracked_objects, tracks, detection_audit and experimental_velocity are
+# published on every accepted scan.
 CLOUD_OUTPUTS = ('quality_targets', 'doppler_inliers', 'doppler_outliers', 'unclassified_targets',
                  'moving_targets', 'moving_ghosts', 'tracked_targets', 'classified_targets')
 FIT_PARAMETERS = {
@@ -195,6 +198,7 @@ class RadarProcessing(Node):
         self.obstacle_mount = None
         self.cloud_publishers = {name: output_publisher(self, PointCloud2, '~/' + name)
                                  for name in CLOUD_OUTPUTS}
+        self.subsets_published = set()  # CLOUD_OUTPUTS published since the last clear
         self.audit_pub = output_publisher(self, DetectionAudit, '~/detection_audit')
         self.velocity_pub = output_publisher(self, TwistWithCovarianceStamped,
                                              '~/experimental_velocity', 10)
@@ -242,6 +246,9 @@ class RadarProcessing(Node):
         """
         Publish one empty cloud per output after they carried data.
 
+        Subset and display clouds are cleared only if they were published
+        since the last clear (they are built only with subscribers).
+
         Each clear keeps its output's own schema: subset clouds the last
         accepted input's layout, ``tracked_objects`` and ``obstacles`` their
         fixed fields. The stamp is the last accepted input stamp, never a newer
@@ -260,9 +267,11 @@ class RadarProcessing(Node):
         subset = (empty_like(self.last_input, header) if self.last_input is not None
                   else empty_cloud(header))
         audit = cleared_audit(header, reason)
-        for name, publisher in self.cloud_publishers.items():
-            publisher.publish(classified_cloud(header, np.empty((0, 5)), audit)
-                              if name == 'classified_targets' else subset)
+        for name in sorted(self.subsets_published):  # each output that carried data
+            self.cloud_publishers[name].publish(
+                classified_cloud(header, np.empty((0, 5)), audit)
+                if name == 'classified_targets' else subset)
+        self.subsets_published.clear()
         self.audit_pub.publish(audit)
         self.track_pub.publish(create_cloud(header, TRACK_FIELDS, []))
         self.obstacle_pub.publish(create_cloud(
@@ -312,7 +321,7 @@ class RadarProcessing(Node):
         self.last_input_rejected = False
         selected = values[indices]
         result = fit_velocity(selected[:, :3], selected[:, 3], self.fit_config)
-        self.cloud_publishers['quality_targets'].publish(subset_cloud(cloud, indices))
+        self.publish_subset('quality_targets', lambda: subset_cloud(cloud, indices))
         if result.valid:
             movers = ~result.inliers
             mover_reasons = ghost_reasons(selected[movers, :3], result.residuals[movers],
@@ -399,14 +408,14 @@ class RadarProcessing(Node):
                          static_only_advisory=0)
             mover_reasons = np.empty(0, dtype=np.uint8)
         for name, subset in partitions.items():
-            self.cloud_publishers[name].publish(subset_cloud(cloud, subset))
+            self.publish_subset(name, lambda subset=subset: subset_cloud(cloud, subset))
         audit = classify(cloud.header, values, self.gate_config, result, indices,
                          mover_reasons, partitions['tracked_targets'],
                          ghost_rejected=ghosts if result.valid else None)
-        display = classified_cloud(cloud.header, values, audit)
         self.audit_pub.publish(audit)
-        self.cloud_publishers['classified_targets'].publish(display)
-        stats.update(audited=len(audit.source_index), displayed=display.width)
+        self.publish_subset('classified_targets',
+                            lambda: classified_cloud(cloud.header, values, audit))
+        stats.update(audited=len(audit.source_index), displayed=len(drawable(values)[1]))
         self.outputs_hold_data = True
         self.state = result.reason
         stats.update(obstacles_published=self.obstacle_tf_error is None)
@@ -420,6 +429,14 @@ class RadarProcessing(Node):
     @property
     def sensor_moving(self):
         return self.fast_scans >= MOVING_SCANS
+
+    def publish_subset(self, name, build):
+        """Build and publish a subset/display cloud only while it has subscribers."""
+        publisher = self.cloud_publishers[name]
+        if not publisher.get_subscription_count():
+            return
+        publisher.publish(build())
+        self.subsets_published.add(name)
 
     def publish_obstacles(self, header, points):
         """

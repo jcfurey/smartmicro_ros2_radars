@@ -58,12 +58,17 @@ def classify(header, values, gate_config, fit, indices, mover_reasons, tracked_i
         track_associated=tracked.tolist())
 
 
+def drawable(values):
+    """Return float32 XYZ and the rows whose position is finite there (drawable)."""
+    with np.errstate(over='ignore', invalid='ignore'):
+        xyz = np.asarray(values[:, :3], dtype=np.float32)
+    return xyz, np.flatnonzero(np.isfinite(xyz).all(axis=1))
+
+
 def classified_cloud(header, values, audit):
     """Render finite XYZ from this scan only; the audit still includes nonfinite positions."""
     # This display adapter is deliberately separate from byte-preserving raw/subset clouds.
-    with np.errstate(over='ignore', invalid='ignore'):
-        xyz = np.asarray(values[:, :3], dtype=np.float32)
-    indices = np.flatnonzero(np.isfinite(xyz).all(axis=1))
+    xyz, indices = drawable(values)
     points = np.zeros(len(indices), dtype=DISPLAY_DTYPE)
     for column, name in enumerate('xyz'):
         points[name] = xyz[indices, column]
