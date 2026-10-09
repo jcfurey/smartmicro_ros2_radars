@@ -107,7 +107,9 @@ memory, computation and output age on the intended scene.
 
 Every output cycle expires observations by ROS timestamp. A steady-clock watchdog
 also clears all evidence and pending input after 0.5 s without an accepted scan,
-including when `/clock` stops. Empty inlier scans cannot renew old observations:
+including when `/clock` stops. The state becomes `input_stale` only when no
+nonempty input arrived either; rejected scans that keep arriving keep their
+rejection reason, so `/diagnostics` stays at its 1 s rate. Empty inlier scans cannot renew old observations:
 clouds with no points (upstream clears or scans without inliers) are counted as
 `empty_inputs` and otherwise ignored. They neither refresh the watchdog, so
 upstream staleness still clears history, nor advance the stamp used for the

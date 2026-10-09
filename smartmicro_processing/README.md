@@ -313,9 +313,11 @@ watchdog clears the output clouds and reports stale input after 0.5 s without da
 including when simulation time pauses. Clouds are cleared once, on the transition
 from published data, with the last accepted input stamp rather than a newer
 `now()`, so a downstream monotonic-stamp check still accepts the next scan.
-Rejections are logged as throttled warnings. `/diagnostics` is published
-immediately on a state change and otherwise at most once per
-`diagnostics_period` (1 s). Invalid estimates publish **no twist**;
+Rejections are logged as throttled warnings. While rejected scans keep
+arriving, the rejection reason stays the state; `input_stale` means no input at
+all for `stale_timeout` (or an aged last accepted scan with no newer input).
+`/diagnostics` is published immediately on a state change and otherwise at
+most once per `diagnostics_period` (1 s). Invalid estimates publish **no twist**;
 downstream consumers must enforce their own timestamp timeout and must not reuse
 the last twist indefinitely. A backward ROS clock jump clears the timestamp
 epoch so bag replay can recover. No zero-velocity replacement or pose/TF is

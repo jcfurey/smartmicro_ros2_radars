@@ -4,6 +4,7 @@ from itertools import product
 import math
 from pathlib import Path
 import time
+from types import SimpleNamespace
 
 from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import TransformStamped
@@ -13,6 +14,7 @@ import rclpy
 from rclpy.time import Time
 from sensor_msgs.msg import PointField
 from sensor_msgs_py.point_cloud2 import create_cloud, read_points
+from smartmicro_processing import accumulation_node, node as processing_node, ros_support
 from smartmicro_processing.accumulation import pose_discontinuity, pose_step_limits
 from smartmicro_processing.accumulation_node import RadarAccumulation
 from smartmicro_processing.cloud import empty_cloud
@@ -362,6 +364,80 @@ def test_processing_clears_keep_each_output_schema(ros):
                 assert messages[-1].width == 0 and messages[-1].fields == fields
                 assert messages[-1].point_step == 24
                 assert messages[0].fields == fields and messages[0].point_step == 24
+    finally:
+        node.destroy_node()
+
+
+@pytest.fixture
+def steady(monkeypatch):
+    """Replace the steady clock used by the nodes and the diagnostics rate limiter."""
+    clock = SimpleNamespace(now=1000.0)
+    fake = SimpleNamespace(monotonic=lambda: clock.now)
+    for module in (processing_node, accumulation_node, ros_support):
+        monkeypatch.setattr(module, 'time', fake)
+    return clock
+
+
+def diagnostic_states(recorder):
+    return [{v.key: v.value for v in m.status[0].values}['state'] for m in recorder.messages]
+
+
+def test_processing_rejections_keep_their_state_without_flooding_diagnostics(ros, steady):
+    ros()
+    node = recorded_node()
+    try:
+        ros_time = node.get_clock().now().nanoseconds
+        node.now_ns = lambda: ros_time
+        node.receive(moving_sensor_cloud(ros_time - 20_000_000, np.zeros(3)))
+        assert diagnostic_states(node.diagnostics_pub) == ['valid']
+        # 3 s of wrong-frame scans at 18 Hz while the 10 Hz watchdog keeps running:
+        # the accepted stamp ages past max_input_age but input is not silent.
+        for tick in range(1, 541):
+            steady.now += 1 / 180
+            ros_time += 1_000_000_000 // 180
+            if tick % 10 == 0:
+                node.receive(cloud(ros_time, [[2, 1, 0, 0, 30]], frame='other'))
+            if tick % 18 == 0:
+                node.watchdog()
+        states = diagnostic_states(node.diagnostics_pub)
+        assert set(states[1:]) == {'unexpected_frame'} and node.state == 'unexpected_frame'
+        assert len(states) <= 1 + 1 + 3  # the change, then at most one per second
+        steady.now += 1.0  # input silent: the watchdog now reports staleness
+        node.watchdog()
+        assert node.state == 'input_stale'
+    finally:
+        node.destroy_node()
+
+
+def test_accumulation_rejections_keep_their_state_without_flooding_diagnostics(ros, steady):
+    ros('mode:=stationary_preview')
+    node = RadarAccumulation()
+    evidence, confirmed = Recorder(), Recorder()
+    try:
+        node.evidence_pub, node.confirmed_pub = evidence, confirmed
+        node.published_data = {evidence: None, confirmed: None}
+        node.empty_heartbeat = {publisher: DiagnosticsRateLimiter()
+                                for publisher in (evidence, confirmed)}
+        node.diagnostics_pub = Recorder()
+        ros_time = node.get_clock().now().nanoseconds
+        node.now_ns = lambda: ros_time
+        node.receive(cloud(ros_time - 10_000_000, [[2, 0, 0, 0, 30]]))
+        node.publish()
+        assert diagnostic_states(node.diagnostics_pub) == ['stationary_preview']
+        for tick in range(1, 541):
+            steady.now += 1 / 180
+            ros_time += 1_000_000_000 // 180
+            if tick % 10 == 0:
+                node.receive(cloud(ros_time, [[2, 0, 0, 0, 30]], frame='other'))
+            if tick % 18 == 0:
+                node.publish()
+        states = diagnostic_states(node.diagnostics_pub)
+        assert set(states[1:]) == {'unexpected_frame'} and node.state == 'unexpected_frame'
+        assert len(states) <= 1 + 1 + 3
+        assert not node.evidence.frames  # history still expires without accepted scans
+        steady.now += 1.0
+        node.publish()
+        assert node.state == 'input_stale'
     finally:
         node.destroy_node()
 

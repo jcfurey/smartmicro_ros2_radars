@@ -206,6 +206,7 @@ class RadarProcessing(Node):
         self.last_input = None  # last accepted cloud: its layout shapes subset clears
         self.last_now = None
         self.last_receipt_wall = None
+        self.last_input_rejected = False
         self.last_fit_wall = None
         self.outputs_hold_data = False
         self.state = 'waiting_for_input'
@@ -267,6 +268,7 @@ class RadarProcessing(Node):
 
     def reject(self, reason, detail=''):
         self.rejected_inputs += 1
+        self.last_input_rejected = True
         self.state = reason
         self.stats = {}
         self.clear_clouds(reason)
@@ -304,6 +306,7 @@ class RadarProcessing(Node):
             return
         self.last_stamp = stamp
         self.last_input = cloud
+        self.last_input_rejected = False
         selected = values[indices]
         result = fit_velocity(selected[:, :3], selected[:, 3], self.fit_config)
         self.cloud_publishers['quality_targets'].publish(subset_cloud(cloud, indices))
@@ -490,7 +493,10 @@ class RadarProcessing(Node):
                          or wall - self.last_receipt_wall > self.stale_timeout)
         stale_measurement = (self.last_stamp is not None
                              and (now - self.last_stamp) * 1e-9 > self.max_age)
-        if stale_receipt or stale_measurement:
+        # While scans keep arriving but are rejected, their reason stays the state
+        # (outputs were cleared on rejection); alternating states would flood
+        # /diagnostics, which publishes every state change at once.
+        if stale_receipt or (stale_measurement and not self.last_input_rejected):
             if self.state != 'input_stale':
                 self.state = 'input_stale'
                 self.stats = {}
