@@ -18,6 +18,8 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_ghost_candidates test/test_ghost_candidates.py TIMEOUT 30)
   ament_add_pytest_test(test_tracker test/test_tracker.py TIMEOUT 30)
   ament_add_pytest_test(test_obstacles test/test_obstacles.py TIMEOUT 30)
+  # Resolves the robot launch's includes and conditions without starting processes.
+  ament_add_pytest_test(test_robot_launch test/test_robot_launch.py TIMEOUT 60)
   ament_add_pytest_test(test_vectorized_equivalence test/test_vectorized_equivalence.py
     TIMEOUT 60)
   set(SMARTMICRO_PROCESSING_TEST_DOMAIN_ID 178 CACHE STRING "Isolated processing test domain")

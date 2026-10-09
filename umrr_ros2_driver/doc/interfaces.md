@@ -22,7 +22,7 @@ Topic and service names are relative and keep their historical form, with a
 | `smart_radar/port_faultreport_N` | `PortFaultReportsMsg` (models with fault reports) |
 | `smart_radar/timing_N` | `RadarTiming` |
 | `smart_radar/umrr96_raw_quality_N` | `Umrr96RawQuality` (UMRR-96 Ethernet) |
-| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command`, `set_ip_address`, `firmware_download` | data node services; `umrr96_live.launch.py` moves the first three (see [service routing](#service-routing)) |
+| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status`, `send_command`, `set_ip_address`, `firmware_download` | data node services; `umrr96_live.launch.py` and the launches including it move the first three (see [service routing](#service-routing)) |
 
 ### Optional `radar_msgs/RadarScan`
 
@@ -209,16 +209,62 @@ initialization ("Only one ETH iface is allowed").
 `params_file` (default: the cam-ripper bench file, which hard-codes a host
 interface and addresses; supply your own elsewhere), `namespace` (default
 empty), `use_sim_time` (`false`), `rviz` (`true`; closing RViz ends the launch,
-use `false` headless), `targets_topic` (views input, default
+use `false` headless), `views` (`true`; `false` leaves the views node to
+`umrr96_viz.launch.py`), `targets_topic` (views input, default
 `smart_radar/port_targets_0`), `view`, `rviz_config`, `publish_description`
 (`false`; includes `smartmicro_description` in its own launch scope, without its
 viewer), `description_frame_id`, `description_sensor_name`. The readback node
 takes over the root mode/status service names; see
 [service routing](#service-routing).
 
+For a robot the same nodes are split into two launches (2026-10-09), each
+including its parts in their own launch scope (C52). Start both with the same
+`namespace`:
+
+- `smartmicro_processing`'s `umrr96_robot.launch.py` (headless: driver and
+  readback through `umrr96_live.launch.py rviz:=false views:=false`, plus
+  processing; no RViz, views node or other Qt process): `driver_params`
+  (required; the bench file is not a default), `processing_params`, `namespace`,
+  `frame_id` (`umrr96`; must match `sensor_0.frame_id`, used as processing's
+  `expected_frame_id` and the description frame), `use_sim_time`,
+  `publish_description` (`false`), `description_sensor_name`, and the
+  processing experiment switches. Services are routed as in
+  `umrr96_live.launch.py`. The packages still declare RViz and Qt as run
+  dependencies (S19).
+- `umrr96_viz.launch.py` (views node and RViz, on any machine in the robot's ROS
+  domain; starts no driver, readback or processing node and opens no sensor
+  connection): `namespace`, `views_params` (a file with an `umrr96_views`
+  section; default the bench file, of which only that section is read),
+  `use_sim_time`, `views` (`true`), `targets_topic`, `rviz` (`true`; closing
+  RViz ends only this launch), `view`, `rviz_config` (e.g.
+  `smartmicro_processing`'s `rviz/umrr96_classified.rviz`), `publish_description`
+  (`false`), `description_frame_id`, `description_sensor_name`.
+
 `radar.launch.py` (driver only): `params_file` (default
 `param/radar.params.template.yaml`), `namespace`, `node_name` (`smart_radar`),
 `use_sim_time`. All services are the data node's.
+
+## RViz configurations and panels
+
+The shipped configurations (`config/rviz/*.rviz` here and those of
+`smart_rviz_plugin`, `smartmicro_processing` and `smartmicro_description`) use
+relative names such as `smart_radar/fan_image`, `umrr96_processing/obstacles`
+and `umrr96/robot_description`, which RViz resolves in its node namespace. The
+launch files start RViz in their `namespace`; by hand use `rviz2 -d <config>
+--ros-args -r __ns:=/front`. The live and viz launches remap
+`umrr96/robot_description` to `<description_sensor_name>/robot_description`.
+Only RViz's tool topics (`/initialpose`, `/goal_pose`, `/clicked_point`) stay
+absolute. Before 2026-10-09 the names were absolute and displays stayed empty
+with a namespace (C39).
+
+The `smart_rviz_plugin` panels create their nodes in RViz's namespace under their
+own names (a launch file's RViz node name does not rename them) and use relative
+endpoints: `smart_radar/{set,get}_radar_mode`, `get_radar_status`,
+`send_command`, `firmware_download`, `filter_status`, `port_targetheader_0` and
+`umrr96_views/set_parameters_atomically`. The UMRR-96 Configuration panel's
+`Namespace` field (saved as `Namespace`; empty means RViz's namespace) points it
+at a radar in another namespace. The Status, Recorder and Fault Reports panels
+list matching topics of every namespace.
 
 ## Components and processes
 

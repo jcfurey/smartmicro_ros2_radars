@@ -4,7 +4,9 @@ Run the connected UMRR-96: data driver, readback/control node, views and RViz.
 With rviz:=true (the default) closing RViz stops the whole launch; use
 rviz:=false on headless machines. The default params_file is the cam-ripper
 bench configuration (host interface enp68s0f0, 192.168.11.x addresses); pass
-params_file:=<your file> for any other host or sensor.
+params_file:=<your file> for any other host or sensor. For a robot, use
+smartmicro_processing's umrr96_robot.launch.py (headless) and this package's
+umrr96_viz.launch.py (views and RViz, on any machine) instead.
 """
 
 import os
@@ -60,6 +62,7 @@ def generate_launch_description():
         parameters=[params_file, use_sim_time],
         # Relative names: the views follow the driver into the namespace.
         remappings=[('smart_radar/port_targets_0', LaunchConfiguration('targets_topic'))],
+        condition=IfCondition(LaunchConfiguration('views')),
         output='log',
     )
     rviz = Node(
@@ -69,6 +72,10 @@ def generate_launch_description():
         namespace=namespace,
         arguments=['-d', LaunchConfiguration('rviz_config')],
         parameters=[use_sim_time],
+        # The configurations' names are relative (C39), so RViz follows the namespace;
+        # the description topic is named after the description's sensor name.
+        remappings=[('umrr96/robot_description',
+                     [LaunchConfiguration('description_sensor_name'), '/robot_description'])],
         condition=IfCondition(LaunchConfiguration('rviz')),
         output='log',
     )
@@ -92,6 +99,11 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'rviz', default_value='true', choices=['true', 'false'],
             description='Start RViz; closing it stops the launch. false for headless use.',
+        ),
+        DeclareLaunchArgument(
+            'views', default_value='true', choices=['true', 'false'],
+            description='Start the views node (fan image, density grid, filtered targets); '
+                        'false when umrr96_viz.launch.py runs them elsewhere.',
         ),
         DeclareLaunchArgument(
             'targets_topic', default_value='smart_radar/port_targets_0',
