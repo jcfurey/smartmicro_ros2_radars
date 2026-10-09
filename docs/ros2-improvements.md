@@ -41,6 +41,8 @@ hardware configuration as part of this batch.
 ## Follow-up work
 
 A full code review with an issue register is in [review-2026-09-24](review-2026-09-24.md).
+The topic inventory and planned output changes (O1–O14) are in the
+[output surface review](output-review-2026-10-09.md).
 Filtering measurements and next steps: [umrr96-filtering-20260924](umrr96-filtering-20260924.md).
 The sensor-output priorities are tracked separately in
 [UMRR-96 output improvements](umrr96-output-priorities.md), with implementation,

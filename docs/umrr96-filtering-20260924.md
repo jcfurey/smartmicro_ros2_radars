@@ -220,6 +220,25 @@ people walking in opposite directions are not merged) was evaluated and not
 adopted: ghosts removed fell from 93.7% to 83.5% and ghost-track scans rose
 from 0.7% to 6.3%: many `walk` ghosts carry the opposite sign.
 
+## Changes after this note (2026-10-09)
+
+The measurements above predate these fixes from the
+[2026-10-09 review](review-2026-09-24.md#review-2026-10-09); the recordings are
+no longer on disk, so they were not re-scored:
+
+- **C50:** the shadow rule drops a novel static return only within
+  `shadow_half_angle_deg` (default 15°) of the bearing of a track it lies behind.
+  The 0.14 far ghost points/scan above were measured with the any-bearing rule
+  (`shadow_half_angle_deg: 180`); the default's effect on ghosts is unmeasured.
+- **C51:** `obstacle_frame` (e.g. `base_link`) flattens `obstacles` in a frame
+  rigidly attached to the radar; empty keeps the sensor frame, which needs a
+  level mount for Nav2's height limits.
+- **C49:** the tracker uses the radar-relative Doppler; the compensated
+  residual is used only by its ghost rule. Zero-Doppler support is off while the
+  sensor moves. Track velocities are relative to the radar.
+- **C54:** the background restarts its warm-up when valid fits are more than
+  `stale_timeout` apart.
+
 ## Limits
 
 - One room, one person, stationary radar; parameters are tuned on the same

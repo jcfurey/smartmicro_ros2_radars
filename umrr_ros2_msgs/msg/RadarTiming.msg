@@ -2,7 +2,8 @@
 # Match it to the associated cloud/header or fault report by stamp and frame_id.
 std_msgs/Header header
 uint32 sensor_id
-# Original SDK timestamp in microseconds. Clock epoch/synchronization is unverified.
+# Original SDK timestamp in microseconds; 0 when the list carries none (CAN objects).
+# Clock epoch/synchronization is unverified.
 uint64 device_timestamp_us
 uint8 TARGETS=0
 uint8 OBJECTS=1
