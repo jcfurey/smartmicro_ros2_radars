@@ -8,6 +8,42 @@ user-interface (UIF) serialization files under
 `smartmicro/user_interfaces/*/serialization`; where the vendor does not declare
 a unit, this page says so rather than guessing.
 
+## Robot integration
+
+A robot should consume only these topics (names relative to the radar's
+namespace; `N` is the sensor index). Start them with `smartmicro_processing`'s
+`umrr96_robot.launch.py` (see [launch files](#launch-files)).
+
+| Topic | Producer, type | Frame | Stamp | QoS | Rate | Intended consumer |
+|-------|----------------|-------|-------|-----|------|-------------------|
+| `smart_radar/port_targets_N` | driver, `PointCloud2` ([fields](#targets-smart_radarport_targets_n-smart_radarcan_targets_n-72-byte-stride)) | `sensors.sensor_N.frame_id` | ROS receive time in the SDK callback, minus `stamp_offset_s` when configured; device time in `timing_N` | reliable, `KEEP_LAST` `history_size`, [overridable](#qos) | every scan: 18.18 Hz with the sensor's CAN target output off, 8.33 Hz with it on | Own processing, radar-inertial estimation (per-point Doppler; sign unverified, O14), mapping |
+| `smart_radar/radar_scan_N` (optional) | driver, `radar_msgs/RadarScan` | as the cloud | as the cloud | as the cloud | as the cloud, only with subscribers | `radar_msgs` consumers; needs a radar_msgs build and `publish_radar_scan: true` ([details](#optional-radar_msgsradarscan)) |
+| `umrr96_processing/obstacles` | processing, `PointCloud2` x, y, z | `obstacle_frame` (a frame rigid to the radar, e.g. `base_link`; default the sensor frame) | input cloud's stamp | reliable, `KEEP_LAST` 5, `qos_overrides` | every accepted scan | Nav2 obstacle/STVL layer marking, collision monitor |
+| `umrr96_processing/tracks` | processing, `radar_msgs/RadarTracks` | sensor frame, or `tracking_frame` (velocities then over ground) | input cloud's stamp | as `obstacles` | every accepted scan | Track consumers (people, vehicles) |
+| `umrr96_processing/tracked_objects` | processing, `PointCloud2` x, y, z, vx, vy, speed, track_id, age | as `tracks` | as `tracks` | as `obstacles` | as `tracks` | The same tracks without radar_msgs |
+| `umrr96_processing/experimental_velocity` | processing, `TwistWithCovarianceStamped` | sensor frame, at the radar origin | input cloud's stamp | as `obstacles` | accepted Doppler fits only | Experimental ego velocity, e.g. `robot_localization` ([processing README](../../smartmicro_processing/README.md)) |
+
+All of them are in sensor or robot frames at receive time, so consumers look up
+TF at the stamp; the sensor's internal latency is not measured yet. Health is on
+`/diagnostics` under hardware ID `<model>@<ip>` (driver and readback; processing
+with its `hardware_id` parameter set).
+Processing outputs were best effort before 2026-10-09.
+
+**Visualization and debugging only.** Robots should not depend on these; their
+names, content and presence may change, and some exist only while another
+process (views, RViz) runs:
+
+- views node (`umrr96_live.launch.py`, `umrr96_viz.launch.py`):
+  `smart_radar/filtered_targets_0`, `filter_status`, `fan_image`,
+  `fan_image/compressed`, `fan_targets`, `fan_guides`, `density_grid`,
+  `density_cells`;
+- processing subsets and audit: `umrr96_processing/{quality_targets,
+  doppler_inliers, doppler_outliers, unclassified_targets, moving_targets,
+  moving_ghosts, tracked_targets, classified_targets, detection_audit,
+  track_markers}`;
+- accumulation evidence clouds (`umrr96_accumulation/...`) and the driver's
+  header, raw-quality and fault-report topics (sensor bring-up and support).
+
 ## Topics, services and namespaces
 
 Topic and service names are relative and keep their historical form, with a
