@@ -25,7 +25,9 @@ class TrackerConfig:
     static_gate: float = 0.5  # m, zero-Doppler detections this close support a track
     standing_support: bool = False  # preserve pre-stop background and require current support
     standing_hold: float = 30.0  # absolute cap on static-only support in the experiment
-    ghost_range_gap: float = 1.5  # m, track-level ghost rule (see ghosts.py)
+    # Track-level ghost rule; the node sets both from GhostConfig (range_gap,
+    # speed_tolerance) so one parameter moves the point and track rules together.
+    ghost_range_gap: float = 1.5  # m
     ghost_speed_tolerance: float = 0.25  # m/s
     background_range_bin: float = 0.5  # m, polar background cell size
     background_azimuth_bin_deg: float = 3.0

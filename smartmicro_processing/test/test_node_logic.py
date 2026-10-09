@@ -230,6 +230,27 @@ def test_standing_support_parameters_reach_the_tracker(ros):
         node.destroy_node()
 
 
+def test_ghost_parameters_set_the_track_level_ghost_rule(ros):
+    # The tracker kept its own 1.5 m / 0.25 m/s copy whatever the YAML said.
+    ros()
+    node = RadarProcessing()
+    try:
+        assert node.tracker.config.ghost_range_gap == node.ghost_config.range_gap == 1.5
+        assert node.tracker.config.ghost_speed_tolerance == node.ghost_config.speed_tolerance
+    finally:
+        node.destroy_node()
+    rclpy.try_shutdown()
+    ros('range_gap:=2.5', 'speed_tolerance:=0.4')
+    node = RadarProcessing()
+    try:
+        assert node.ghost_config.range_gap == 2.5 and node.ghost_config.speed_tolerance == .4
+        assert node.tracker.config.ghost_range_gap == 2.5
+        assert node.tracker.config.ghost_speed_tolerance == .4
+        assert node.tracker.config is node.tracker_config
+    finally:
+        node.destroy_node()
+
+
 def test_association_parameters_reach_the_tracker(ros):
     ros('joint_association:=true', 'association_uncertainty:=false', 'association_doppler:=true')
     node = RadarProcessing()

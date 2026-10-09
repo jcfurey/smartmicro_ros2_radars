@@ -22,6 +22,7 @@
     max_velocity_std: 1.0
     max_speed: 15.0
     # Multipath-ghost rejection for moving_targets (85% ghosts removed, 97% real kept).
+    # range_gap and speed_tolerance also set the tracker's track-level ghost rule.
     range_gap: 1.5
     speed_tolerance: 0.25
     wall_azimuth_deg: 4.0

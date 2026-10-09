@@ -272,7 +272,9 @@ option retained nine additional person-proxy points and admitted 25 additional
 ghost-proxy points; confirmed far-track presence was unchanged. The public
 dataset showed a much larger loss of ghost suppression. This is an optional
 tradeoff, not a validated replacement default. The tracker retains its separate
-absolute-speed ghost rule. Stronger signed-speed, direction and two-return
+absolute-speed ghost rule: a confirmed track more than `range_gap` farther than
+another with the same (within `speed_tolerance`) or double ego-compensated
+radial speed is hidden. It reads the same two parameters as the point rule. Stronger signed-speed, direction and two-return
 support candidates remain offline experiments because they missed most ghosts
 in the sparse UMRR recording. All variants use current-scan points; no point
 history or RViz decay is added.

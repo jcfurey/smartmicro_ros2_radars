@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Passive experimental Doppler node; the existing estimator retains all TF ownership."""
 import copy
+import dataclasses
 import math
 import time
 
@@ -50,8 +51,10 @@ FIT_PARAMETERS = {
     'max_speed': ('Reject fits faster than this sensor speed (m/s).', .01, 300),
 }
 GHOST_PARAMETERS = {
-    'range_gap': ('Minimum extra range for speed-copy or behind-static hypotheses (m).', .1, 20),
-    'speed_tolerance': ('Compensated-speed match for the same-speed ghost rule (m/s).', .01, 5),
+    'range_gap': ('Minimum extra range for speed-copy or behind-static hypotheses (m); '
+                  'also the track-level ghost rule.', .1, 20),
+    'speed_tolerance': ('Compensated-speed match for the same-speed ghost rule (m/s); '
+                        'also the track-level ghost rule.', .01, 5),
     'wall_azimuth_deg': ('Bearing match for the behind-static-return ghost rule (deg).', .1, 30),
 }
 TRACKER_PARAMETERS = {
@@ -162,7 +165,11 @@ class RadarProcessing(Node):
             self, 'reject_static_only', True,
             'Reject on a nearer static return alone; false keeps that reason advisory '
             'while preserving the same/double-speed rejection rules.')
-        self.tracker_config = _declare_config(self, TrackerConfig, TRACKER_PARAMETERS)
+        # One set of ghost gates: the track-level rule uses the point rule's values.
+        self.tracker_config = dataclasses.replace(
+            _declare_config(self, TrackerConfig, TRACKER_PARAMETERS),
+            ghost_range_gap=self.ghost_config.range_gap,
+            ghost_speed_tolerance=self.ghost_config.speed_tolerance)
         self.tracker = MovingObjectTracker(self.tracker_config)
         self.sensor_moving_speed = declare(
             self, 'sensor_moving_speed', .05,
