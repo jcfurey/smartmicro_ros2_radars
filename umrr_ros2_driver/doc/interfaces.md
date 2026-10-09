@@ -27,7 +27,7 @@ Topic and service names are relative and keep their historical form, with a
 ### Optional `radar_msgs/RadarScan`
 
 When the package is built with [radar_msgs](https://index.ros.org/p/radar_msgs/)
-available (`apt install ros-lyrical-radar-msgs`; CMake option
+available (`rosdep install` or `apt install ros-lyrical-radar-msgs`; CMake option
 `SMARTMICRO_WITH_RADAR_MSGS`, default ON, detects it) and the startup parameter
 `publish_radar_scan: true` is set, every target cloud is also published as
 `radar_msgs/RadarScan` on `smart_radar/radar_scan_N`: same header and detection
@@ -36,8 +36,13 @@ radial speed [m/s] without sign conversion (see `radial_speed` below) and
 `amplitude` = power [dB]. A cycle without targets gives an empty scan (before
 2026-10-09 such a cycle was undefined behaviour and aborted builds with
 `_GLIBCXX_ASSERTIONS`). The scan is only built while it has subscribers.
-Setting the parameter on a build without radar_msgs fails at startup. radar_msgs
-is not a declared package dependency, so rosdep does not install it.
+`publish_radar_scan` stays `false` by default until the Doppler sign is verified
+on hardware (O14). radar_msgs is a declared dependency since 2026-10-09, so
+`rosdep install` provides it and a default build includes the output; it is still
+optional at build time: without it, or with `-DSMARTMICRO_WITH_RADAR_MSGS=OFF`,
+the driver builds without the output, and setting the parameter then fails at
+startup. Unless the option is OFF, a build that finds radar_msgs links and exports
+it.
 
 To run several radars or place one under a robot namespace, set the node
 namespace instead of renaming topics: `ros2 run ... --ros-args -r __ns:=/front`

@@ -19,8 +19,10 @@
   <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
   <depend>umrr_ros2_msgs</depend>
-  <!-- Optional, not declared: radar_msgs enables the RadarScan output when present
-       at build time (see doc/interfaces.md). -->
+  <!-- Declared so rosdep installs it; optional at build time: the RadarScan output is
+       built when radar_msgs is found and SMARTMICRO_WITH_RADAR_MSGS is ON (default),
+       see doc/interfaces.md. -->
+  <depend>radar_msgs</depend>
   <build_depend>nlohmann-json-dev</build_depend>
   <build_export_depend>nlohmann-json-dev</build_export_depend>
 

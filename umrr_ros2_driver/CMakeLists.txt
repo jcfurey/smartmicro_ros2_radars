@@ -33,6 +33,14 @@ find_package(ament_cmake_auto REQUIRED)
 find_package(Threads REQUIRED)
 find_package(nlohmann_json 3.11 REQUIRED)
 
+# radar_msgs is a declared dependency (rosdep installs it) but optional at build time:
+# it enables the RadarScan output when found. OFF keeps ament_auto from finding,
+# linking and exporting it.
+option(SMARTMICRO_WITH_RADAR_MSGS "Build the optional radar_msgs/RadarScan output" ON)
+ament_package_xml()
+if(NOT SMARTMICRO_WITH_RADAR_MSGS)
+  list(REMOVE_ITEM ${PROJECT_NAME}_BUILD_DEPENDS radar_msgs)
+endif()
 ament_auto_find_build_dependencies()
 
 # The vendor ships prebuilt Smart Access libraries per platform; only
@@ -177,17 +185,17 @@ target_link_libraries(smartmicro_radar_node
 set_target_properties(smartmicro_radar_node PROPERTIES
   INSTALL_RPATH "$ORIGIN/${PROJECT_NAME}")
 
-# Optional standard radar_msgs/RadarScan output (parameter publish_radar_scan).
-option(SMARTMICRO_WITH_RADAR_MSGS "Build the optional radar_msgs/RadarScan output" ON)
-if(SMARTMICRO_WITH_RADAR_MSGS)
-  find_package(radar_msgs QUIET)
-endif()
-if(radar_msgs_FOUND)
+# Optional standard radar_msgs/RadarScan output (parameter publish_radar_scan); found
+# by ament_auto_find_build_dependencies() above unless the option is OFF.
+if(SMARTMICRO_WITH_RADAR_MSGS AND radar_msgs_FOUND)
+  set(SMARTMICRO_RADAR_SCAN ON)
   message(STATUS "radar_msgs found: publish_radar_scan is available")
   target_compile_definitions(smartmicro_radar_node PRIVATE UMRR_HAVE_RADAR_MSGS)
   target_link_libraries(smartmicro_radar_node ${radar_msgs_TARGETS})
 else()
-  message(STATUS "radar_msgs not found: building without the RadarScan output")
+  set(SMARTMICRO_RADAR_SCAN OFF)
+  message(STATUS "radar_msgs not found or SMARTMICRO_WITH_RADAR_MSGS=OFF: "
+    "building without the RadarScan output")
 endif()
 
 # Registered as a component; the executable uses its own main (see below) so a
@@ -322,7 +330,8 @@ if(BUILD_TESTING)
     ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py
         TIMEOUT 90 ENV ${offline_environment}
         "SMARTMICRO_TEST_SENDER=$<TARGET_FILE:radar_test_sender>"
-        "SMARTMICRO_SETENV_PROBE=$<TARGET_FILE:setenv_probe>")
+        "SMARTMICRO_SETENV_PROBE=$<TARGET_FILE:setenv_probe>"
+        "SMARTMICRO_RADAR_SCAN_BUILT=$<BOOL:${SMARTMICRO_RADAR_SCAN}>")
     set_tests_properties(test_umrr96_views test_umrr96_measure test_readback test_driver_runtime PROPERTIES RUN_SERIAL TRUE)
 
     # Linters run explicitly on first-party files: automatic discovery would

@@ -29,6 +29,12 @@ try:  # Optional: the driver publishes RadarScan only when built with radar_msgs
     from radar_msgs.msg import RadarScan
 except ImportError:
     RadarScan = None
+# Set by CMake: radar_msgs can be importable while the driver was built without the
+# output (SMARTMICRO_WITH_RADAR_MSGS=OFF).
+RADAR_SCAN_BUILT = os.environ.get(
+    'SMARTMICRO_RADAR_SCAN_BUILT', '0' if RadarScan is None else '1') == '1'
+if not RADAR_SCAN_BUILT:
+    RadarScan = None
 
 
 def unused_port():
@@ -376,7 +382,7 @@ def test_driver_runtime():
 
 def test_radar_scan_requires_radar_msgs():
     """Without radar_msgs, enabling the RadarScan output fails at startup."""
-    if RadarScan is not None:
+    if RADAR_SCAN_BUILT:
         return
     prefix = Path(get_package_prefix('umrr_ros2_driver'))
     with tempfile.TemporaryDirectory(prefix='umrr-radar-scan-test-') as directory:
