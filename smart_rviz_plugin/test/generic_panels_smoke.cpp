@@ -4,14 +4,17 @@
 // subscriptions with periodic discovery, and the bounded recorder.
 #include <QApplication>
 #include <QComboBox>
+#include <QFile>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTableWidget>
+#include <QTemporaryDir>
 #include <QTextEdit>
 #include <QTimer>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -70,7 +73,28 @@ sensor_msgs::msg::PointCloud2 target_cloud(size_t points)
     "peak_idx", 1, PF::UINT16, "pad0", 1, PF::UINT16, "pad1", 1, PF::UINT32);
   modifier.resize(points);
   sensor_msgs::PointCloud2Iterator<float> range(cloud, "range");
-  for (size_t i = 0; i < points; ++i, ++range) {*range = static_cast<float>(i);}
+  sensor_msgs::PointCloud2Iterator<float> rcs(cloud, "rcs");
+  for (size_t i = 0; i < points; ++i, ++range, ++rcs) {
+    *range = static_cast<float>(i);
+    *rcs = .0032f;  // m^2 (C47): two decimals would show 0.00.
+  }
+  return cloud;
+}
+
+sensor_msgs::msg::PointCloud2 object_cloud(size_t points, float heading_rad)
+{
+  sensor_msgs::msg::PointCloud2 cloud;
+  sensor_msgs::PointCloud2Modifier modifier(cloud);
+  using PF = sensor_msgs::msg::PointField;
+  modifier.setPointCloud2Fields(14,
+    "x", 1, PF::FLOAT32, "y", 1, PF::FLOAT32, "z", 1, PF::FLOAT32,
+    "speed_absolute", 1, PF::FLOAT32, "heading", 1, PF::FLOAT32, "length", 1, PF::FLOAT32,
+    "mileage", 1, PF::FLOAT32, "quality", 1, PF::FLOAT32, "acceleration", 1, PF::FLOAT32,
+    "object_id", 1, PF::INT16, "idle_cycles", 1, PF::UINT16, "spline_idx", 1, PF::UINT16,
+    "object_class", 1, PF::UINT8, "status", 1, PF::UINT16);
+  modifier.resize(points);
+  sensor_msgs::PointCloud2Iterator<float> heading(cloud, "heading");
+  for (size_t i = 0; i < points; ++i, ++heading) {*heading = heading_rad;}
   return cloud;
 }
 }  // namespace
@@ -315,6 +339,7 @@ int main(int argc, char ** argv)
         return table->rowCount() == 150 && table->item(149, 10) &&
           table->item(149, 10)->text() == "149.00";
       }, 5, "recorder table update");
+    check(table->item(149, 5)->text() == "0.0032", "RCS [m^2] rounded away in the table");
     // Malformed cloud (missing fields) must be reported, not crash RViz.
     sensor_msgs::msg::PointCloud2 bad;
     bad.width = 3;
@@ -329,9 +354,11 @@ int main(int argc, char ** argv)
     for (int i = 0; i < 8; ++i) {cloud_pub->publish(target_cloud(26));}
     check(cloud_pub->wait_for_all_acked(std::chrono::seconds(5)),
       "Recorder burst was not delivered");
-    // Eight frames hold 208 rows. Seven ticks must reach the 200-row cap;
-    // one-message-per-tick processing can only record 182 rows. No Qt events
-    // run here, so the panel's timer cannot supply extra ticks behind our back.
+    // Eight frames hold 208 rows. Seven ticks must process all eight: the eighth
+    // no longer fits under the 200-row cap and stops the recording with seven
+    // whole frames (C59). One-message-per-tick processing handles only seven
+    // frames and never reaches the cap. No Qt events run here, so the panel's
+    // timer cannot supply extra ticks behind our back.
     for (int i = 0; i < 7; ++i) {
       check(QMetaObject::invokeMethod(recorder.get(), "check_data", Qt::DirectConnection),
         "Recorder tick slot missing");
@@ -341,7 +368,43 @@ int main(int argc, char ** argv)
     check(child<QPushButton>(recorder, "save")->isEnabled() &&
       child<QPushButton>(recorder, "record")->text() == "Record",
       "Recording not stopped at the cap");
-    check(child<QLabel>(recorder, "status")->text().contains("200 rows"), "Cap not exact");
+    check(child<QLabel>(recorder, "status")->text().contains("182 rows held"),
+      "Cap did not keep whole frames: " + child<QLabel>(recorder, "status")->text().toStdString());
+    // CSV: m^2 header, significant digits, and whole frames only.
+    QTemporaryDir csv_dir;
+    check(csv_dir.isValid(), "No temporary directory");
+    const auto csv_path = csv_dir.filePath("targets.csv");
+    recorder->setProperty("save_path", csv_path);
+    child<QPushButton>(recorder, "save")->click();
+    check(child<QLabel>(recorder, "status")->text() == "Recording saved.", "Recording not saved");
+    QFile csv(csv_path);
+    check(csv.open(QIODevice::ReadOnly | QIODevice::Text), "CSV not written");
+    const auto lines = QString::fromUtf8(csv.readAll()).split('\n', Qt::SkipEmptyParts);
+    check(lines.size() == 183 && lines[0].contains("RCS [m^2]") && !lines[0].contains("RCS [dB]"),
+      "CSV header or row count wrong");
+    check(lines[1].split(", ")[6] == "0.0032" && lines[182].split(", ")[2] == "25.00",
+      "CSV RCS rounded or last frame partial");
+
+    // CAN targets carry m^2 since C47; CAN object heading is rad since C2.
+    const std::string can_targets = "/smart_radar/can_targets_5";
+    const std::string can_objects = "/smart_radar/can_objects_5";
+    auto can_target_pub = node->create_publisher<sensor_msgs::msg::PointCloud2>(can_targets, 10);
+    auto can_object_pub = node->create_publisher<sensor_msgs::msg::PointCloud2>(can_objects, 10);
+    wait([&] {return recorder_topic->findText(QString::fromStdString(can_objects)) > 0 &&
+        recorder_topic->findText(QString::fromStdString(can_targets)) > 0;}, 5,
+      "CAN topic discovery");
+    recorder_topic->setCurrentIndex(recorder_topic->findText(QString::fromStdString(can_targets)));
+    check(table->horizontalHeaderItem(5)->text() == "RCS [m^2]", "CAN RCS labelled dB");
+    wait([&] {
+        can_target_pub->publish(target_cloud(4));
+        return table->rowCount() == 4 && table->item(3, 5) && table->item(3, 5)->text() == "0.0032";
+      }, 5, "CAN target table update");
+    recorder_topic->setCurrentIndex(recorder_topic->findText(QString::fromStdString(can_objects)));
+    check(table->horizontalHeaderItem(4)->text() == "Heading [Deg]", "CAN heading header");
+    wait([&] {
+        can_object_pub->publish(object_cloud(3, static_cast<float>(M_PI / 2)));
+        return table->rowCount() == 3 && table->item(2, 4) && table->item(2, 4)->text() == "90.00";
+      }, 5, "CAN object heading in degrees");
     recorder.reset();
     status.reset();
     faults.reset();

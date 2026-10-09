@@ -87,7 +87,10 @@ separate RGB **Radar fan image** display included in the saved RViz configuratio
   (for example with `umrr96_live.launch.py`) are offered. Only the selected
   topic is subscribed.
 - **Recording limit** (default 1,000,000 rows, saved in the RViz config) bounds
-  memory: recording stops at the limit and offers Save/Discard.
+  memory: recording stops before the first frame that would exceed the limit
+  (only whole frames are kept) and offers Save/Discard.
+- Units follow the driver: `rcs` is m² for port and CAN targets (shown with six
+  significant digits), object `heading` is radians and shown/exported in degrees.
 - The subscription holds up to ten pending clouds. Catch-up is limited by
   callback cost; a long GUI stall can still overflow that queue.
 
