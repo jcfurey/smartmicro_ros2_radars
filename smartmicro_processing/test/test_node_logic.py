@@ -268,6 +268,8 @@ def test_accumulation_output_stamp_is_newest_contributing_scan(ros):
         header = recorder.messages[-1].header
         assert Time.from_msg(header.stamp).nanoseconds == second
         assert recorder.messages[-1].width == 2 and confirmed.messages[-1].width == 0
+        # Empty outputs keep the evidence schema, so field-name readers never fail.
+        assert confirmed.messages[-1].fields == recorder.messages[-1].fields
         # Unchanged empty outputs are not republished every cycle.
         count = len(confirmed.messages)
         node.publish()
@@ -309,6 +311,36 @@ def test_processing_clears_once_with_last_accepted_stamp(ros):
         node.diagnostics_limiter.last_time = time.monotonic() - 2
         node.watchdog()
         assert len(diagnostics.messages) == 3
+    finally:
+        node.destroy_node()
+
+
+def test_processing_clears_keep_each_output_schema(ros):
+    ros()
+    node = RadarProcessing()
+    outputs = {name: Recorder() for name in node.cloud_publishers}
+    try:
+        node.cloud_publishers = outputs
+        node.track_pub, node.obstacle_pub = Recorder(), Recorder()
+        node.audit_pub, node.diagnostics_pub = Recorder(), Recorder()
+        fields = FIELDS + [PointField(name='rcs', offset=20, datatype=PointField.FLOAT32,
+                                      count=1)]
+        now = node.get_clock().now().nanoseconds
+        node.receive(create_cloud(Header(frame_id='umrr96', stamp=stamp(now - 20_000_000)),
+                                  fields, np.array([[2, 1, 0, 0, 30, 5]] * 3, np.float32)))
+        node.receive(cloud(now, [[2, 1, 0, 0, 30]], frame='other'))  # rejected: clears
+        tracks, obstacles = node.track_pub.messages, node.obstacle_pub.messages
+        assert [m.width for m in tracks] == [0, 0] and len(obstacles) == 2
+        assert tracks[-1].fields == tracks[0].fields == TRACK_FIELDS
+        assert obstacles[-1].fields == obstacles[0].fields
+        assert [f.name for f in obstacles[-1].fields] == ['x', 'y', 'z']
+        assert not len(read_points(tracks[-1], field_names=['x', 'y', 'vx', 'track_id']))
+        for name, recorder in outputs.items():
+            messages = recorder.messages
+            if name != 'classified_targets':
+                assert messages[-1].width == 0 and messages[-1].fields == fields
+                assert messages[-1].point_step == 24
+                assert messages[0].fields == fields and messages[0].point_step == 24
     finally:
         node.destroy_node()
 

@@ -241,7 +241,10 @@ data is cleared due to stale/rejected input or a clock reset, the audit sends on
 cause in `status`. It is a display invalidation, not another sensor observation.
 Malformed or freshness-rejected inputs do not receive per-point assignments;
 their whole-scan reason remains in diagnostics. The colored cloud clears on the
-same watchdog/rejection transitions as existing outputs.
+same watchdog/rejection transitions as existing outputs. Every empty clear keeps
+its output's schema: subset clouds carry the last accepted input's fields,
+`tracked_objects` and `obstacles` their own, so readers that select fields by
+name keep working.
 
 The September 28 implementation passed 105 processing pytest cases and package
 lint. An [offline comparison](../docs/umrr96-classification-replay-20260928.json)

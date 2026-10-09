@@ -20,7 +20,8 @@ from umrr_ros2_msgs.msg import DetectionAudit
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .classification import classified_cloud, classify, cleared_audit
-from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
+from .cloud import (empty_cloud, empty_like, GateConfig, measurements, select_measurements,
+                    subset_cloud)
 from .doppler import fit_velocity, FitConfig
 from .ghosts import ghost_reasons, ghost_rejection_mask, GhostConfig, GhostReason
 from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter
@@ -183,6 +184,7 @@ class RadarProcessing(Node):
         self.subscription = self.create_subscription(
             PointCloud2, topic, self.receive, qos_profile_sensor_data)
         self.last_stamp = None
+        self.last_input = None  # last accepted cloud: its layout shapes subset clears
         self.last_now = None
         self.last_receipt_wall = None
         self.last_fit_wall = None
@@ -217,8 +219,11 @@ class RadarProcessing(Node):
         """
         Publish one empty cloud per output after they carried data.
 
-        The stamp is the last accepted input stamp, never a newer ``now()``, so
-        downstream monotonic-stamp checks keep accepting the next real scan.
+        Each clear keeps its output's own schema: subset clouds the last
+        accepted input's layout, ``tracked_objects`` and ``obstacles`` their
+        fixed fields. The stamp is the last accepted input stamp, never a newer
+        ``now()``, so downstream monotonic-stamp checks keep accepting the next
+        real scan.
         Tracker and background state are kept: one rejected scan must not discard
         the learned background, and the tracker drops tracks itself after a gap
         longer than ``max_coast``.
@@ -228,14 +233,16 @@ class RadarProcessing(Node):
         self.outputs_hold_data = False
         stamp = (Time(nanoseconds=self.last_stamp).to_msg() if self.last_stamp is not None
                  else self.get_clock().now().to_msg())
-        message = empty_cloud(Header(stamp=stamp, frame_id=self.frame))
-        audit = cleared_audit(message.header, reason)
+        header = Header(stamp=stamp, frame_id=self.frame)
+        subset = (empty_like(self.last_input, header) if self.last_input is not None
+                  else empty_cloud(header))
+        audit = cleared_audit(header, reason)
         for name, publisher in self.cloud_publishers.items():
-            publisher.publish(classified_cloud(message.header, np.empty((0, 5)), audit)
-                              if name == 'classified_targets' else message)
+            publisher.publish(classified_cloud(header, np.empty((0, 5)), audit)
+                              if name == 'classified_targets' else subset)
         self.audit_pub.publish(audit)
-        self.track_pub.publish(message)
-        self.obstacle_pub.publish(message)
+        self.track_pub.publish(create_cloud(header, TRACK_FIELDS, []))
+        self.obstacle_pub.publish(create_cloud(header, OBSTACLE_FIELDS, []))
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
 
     def reject(self, reason, detail=''):
@@ -276,6 +283,7 @@ class RadarProcessing(Node):
             self.reject('invalid_cloud', f': {error}')
             return
         self.last_stamp = stamp
+        self.last_input = cloud
         selected = values[indices]
         result = fit_velocity(selected[:, :3], selected[:, 3], self.fit_config)
         self.cloud_publishers['quality_targets'].publish(subset_cloud(cloud, indices))
