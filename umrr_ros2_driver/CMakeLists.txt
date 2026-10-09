@@ -304,6 +304,7 @@ if(BUILD_TESTING)
     ament_add_pytest_test(test_umrr96_python_lint test/test_umrr96_python_lint.py TIMEOUT 120)
     # Resolves the launch file's conditions without starting processes (C52).
     ament_add_pytest_test(test_live_launch test/test_live_launch.py TIMEOUT 60)
+    ament_add_pytest_test(test_rviz_configs test/test_rviz_configs.py TIMEOUT 30)
     ament_add_pytest_test(test_readback test/readback_smoke.py
         TIMEOUT 60 ENV ${offline_environment})
     ament_add_pytest_test(test_driver_runtime test/test_driver_runtime.py
@@ -341,6 +342,7 @@ if(BUILD_TESTING)
       test/stream_mapping/generate_probe.py
       test/test_driver_runtime.py
       test/test_live_launch.py
+      test/test_rviz_configs.py
       test/test_sdk_patch.py
       test/test_stream_mapping.py)
 
