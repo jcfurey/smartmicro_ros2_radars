@@ -6,6 +6,8 @@ import math
 
 import numpy as np
 
+from .accumulation import transform_measurements
+
 
 @dataclass
 class ObstacleConfig:
@@ -19,6 +21,7 @@ class ObstacleConfig:
     neighbourhood: int = 0  # cells counted around each cell: 0 = own cell, 1 = 3x3
     include_tracks: bool = True  # add each confirmed track position as a point
     shadow_gap: float = 1.5  # m; <= 0 disables the track-shadow rule
+    shadow_half_angle_deg: float = 15.0  # track-shadow bearing half-width; 180 = any bearing
 
     def __post_init__(self):
         if not 1 <= self.persistence_hits <= self.persistence_window <= 64:
@@ -27,6 +30,9 @@ class ObstacleConfig:
         if not all(math.isfinite(v) and v > 0 for v in values) or not math.isfinite(
                 self.obstacle_height):
             raise ValueError('Obstacle scales must be finite and positive')
+        if not (math.isfinite(self.shadow_half_angle_deg)
+                and 0 < self.shadow_half_angle_deg <= 180):
+            raise ValueError('shadow_half_angle_deg must be within (0, 180]')
 
 
 class PersistenceFilter:
@@ -72,16 +78,20 @@ def near_tracks(xyz, track_xy, radius):
 
 
 def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, config,
-                    novel=None):
+                    novel=None, flatten=True):
     """
     Select obstacle evidence and return an (N, 3) array.
 
     Static returns pass when persistent (or inside safety_range). Moving
     returns pass when not ghosts and either near a confirmed track or inside
     safety_range. Ghost-classified returns never pass. With ``novel`` (a mask
-    of static returns outside the learned background), novel static returns
-    more than ``shadow_gap`` beyond the nearest confirmed track are treated as
-    that object's multipath and dropped while the track exists.
+    of static returns outside the learned background), a novel static return
+    within ``shadow_half_angle_deg`` of a confirmed track's bearing and more
+    than ``shadow_gap`` beyond that track's range is treated as the object's
+    multipath and dropped while the track exists. A half-angle of 180 degrees
+    reproduces the earlier rule: beyond the nearest track at any bearing.
+    Track positions get z = 0 (the sensor's height). ``flatten=False`` keeps
+    the measured z for a later transform (see ``to_frame``).
     """
     static_xyz = np.asarray(static_xyz, float).reshape(-1, 3)
     mover_xyz = np.asarray(mover_xyz, float).reshape(-1, 3)
@@ -89,9 +99,13 @@ def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, co
     near_static = np.linalg.norm(static_xyz[:, :2], axis=1) < config.safety_range
     keep = np.asarray(persistent, bool) | near_static
     if novel is not None and config.shadow_gap > 0 and len(track_xy) and len(static_xyz):
-        nearest_track = np.min(np.linalg.norm(track_xy, axis=1))
         ranges = np.linalg.norm(static_xyz[:, :2], axis=1)
-        keep &= ~(np.asarray(novel, bool) & (ranges > nearest_track + config.shadow_gap))
+        offset = (np.arctan2(static_xyz[:, 1], static_xyz[:, 0])[:, None]
+                  - np.arctan2(track_xy[:, 1], track_xy[:, 0])[None])
+        bearing = np.abs(np.angle(np.exp(1j * offset)))
+        behind = ranges[:, None] > np.linalg.norm(track_xy, axis=1)[None] + config.shadow_gap
+        shadowed = np.any(behind & (bearing <= math.radians(config.shadow_half_angle_deg)), 1)
+        keep &= ~(np.asarray(novel, bool) & shadowed)
     keep_static = static_xyz[keep]
     ok = ~np.asarray(mover_ghost, bool)
     near_mover = np.linalg.norm(mover_xyz[:, :2], axis=1) < config.safety_range
@@ -100,6 +114,21 @@ def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, co
     if config.include_tracks and len(track_xy):
         parts.append(np.c_[track_xy, np.zeros(len(track_xy))])
     points = np.vstack(parts)
-    if config.obstacle_height >= 0 and len(points):
+    if flatten and config.obstacle_height >= 0 and len(points):
         points[:, 2] = config.obstacle_height
     return points
+
+
+def to_frame(points, translation, quaternion, height):
+    """
+    Transform sensor-frame points by a target-from-sensor pose (XYZW rotation).
+
+    Afterwards z is set to ``height`` in the target frame; a negative height
+    keeps the transformed z. Raises ValueError for an invalid transform.
+    """
+    points = np.asarray(points, float).reshape(-1, 3)
+    result = transform_measurements(np.c_[points, np.zeros((len(points), 2))],
+                                    translation, quaternion)[:, :3]
+    if height >= 0:
+        result[:, 2] = height
+    return result

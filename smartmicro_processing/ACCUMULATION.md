@@ -107,7 +107,9 @@ memory, computation and output age on the intended scene.
 
 Every output cycle expires observations by ROS timestamp. A steady-clock watchdog
 also clears all evidence and pending input after 0.5 s without an accepted scan,
-including when `/clock` stops. Empty inlier scans cannot renew old observations:
+including when `/clock` stops. The state becomes `input_stale` only when no
+nonempty input arrived either; rejected scans that keep arriving keep their
+rejection reason, so `/diagnostics` stays at its 1 s rate. Empty inlier scans cannot renew old observations:
 clouds with no points (upstream clears or scans without inliers) are counted as
 `empty_inputs` and otherwise ignored. They neither refresh the watchdog, so
 upstream staleness still clears history, nor advance the stamp used for the
@@ -149,10 +151,12 @@ costs; publishing an empty cloud alone does not erase already marked costmap cel
 ## Feeding a Nav2 costmap
 
 **Preferred source (2026-09-24):** `/umrr96_processing/obstacles`, the per-scan
-sensor-frame evidence described in
+evidence described in
 [the filtering notes](../docs/umrr96-filtering-20260924.md#nav2-obstacle-evidence).
 It already applies persistence, ghost rejection and track association, so set
-`observation_persistence: 0.0`. An ObstacleLayer never clears cells on its own:
+`observation_persistence: 0.0`. Set the processing parameter `obstacle_frame`
+(e.g. `base_link`) unless the radar is mounted level; see the
+[processing README](README.md#obstacle-frame). An ObstacleLayer never clears cells on its own:
 pair radar marking with a clearing lidar source, or use STVL decay. The
 accumulator source below remains available.
 
@@ -203,8 +207,10 @@ ros2 run smartmicro_processing umrr96_accumulation_audit \
   --windows 0.3 0.5 1.0 --output /tmp/umrr96-accumulation-replay.json
 ```
 
-The audit calls the same quality adapter, Doppler fitter and accumulation core,
-records its parameters and source hashes, and refuses an existing output file.
+The audit calls the same quality adapter, Doppler fitter and accumulation core
+with the Python defaults (equal to the shipped YAMLs since 2026-10-09; the
+replay below predates that and used a 0.20 m/s residual threshold), records its
+parameters and source hashes, and refuses an existing output file.
 It never fabricates a trajectory. Cell-count gains include noise-driven boundary
 crossings and repeated observations; they are not an independent measurement of
 new surface coverage or accuracy. Compare windows at matched false-obstacle rates

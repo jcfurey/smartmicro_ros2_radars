@@ -16,14 +16,16 @@ from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py.point_cloud2 import create_cloud
 from std_msgs.msg import Header
+from tf2_ros import Buffer, TransformException, TransformListener
 from umrr_ros2_msgs.msg import DetectionAudit
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .classification import classified_cloud, classify, cleared_audit
-from .cloud import empty_cloud, GateConfig, measurements, select_measurements, subset_cloud
+from .cloud import (empty_cloud, empty_like, GateConfig, measurements, select_measurements,
+                    subset_cloud)
 from .doppler import fit_velocity, FitConfig
 from .ghosts import ghost_reasons, ghost_rejection_mask, GhostConfig, GhostReason
-from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter
+from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter, to_frame
 from .ros_support import declare, DiagnosticsRateLimiter
 from .tracker import MovingObjectTracker, TrackerConfig
 
@@ -67,8 +69,8 @@ TRACKER_PARAMETERS = {
     'confirm_hits': ('Hits within confirm_window scans needed to confirm a track.', 1, 64, 1),
     'confirm_window': ('Scan window for track confirmation.', 1, 64, 1),
     'max_coast': ('Delete a track after this long without support (s).', .05, 30),
-    'static_hold': ('A confirmed track may live on novel zero-Doppler support this long (s).',
-                    .01, 600),
+    'static_hold': ('A confirmed track may live on novel zero-Doppler support this long (s); '
+                    'no such support while the sensor is moving.', .01, 600),
     'background_time_constant': ('Memory of the static background used to tell novel '
                                  'zero-Doppler support from walls (s). Valid only while '
                                  'the input frame is fixed in the scene.', 1, 3600),
@@ -87,15 +89,23 @@ OBSTACLE_PARAMETERS = {
     'persistence_window': ('Scan window for static persistence.', 1, 64, 1),
     'safety_range': ('Non-ghost returns nearer than this pass immediately (m).', 0.01, 50),
     'track_radius': ('Moving returns this close to a confirmed track pass (m).', .05, 10),
-    'obstacle_height': ('Output z in the sensor frame (m); negative keeps the measured z, '
-                        'which is unreliable on this sensor.', -1, 10),
-    'shadow_gap': ('Novel static returns this far beyond the nearest confirmed track are '
-                   'treated as its multipath (m); <= 0 disables.', -1, 50),
+    'obstacle_height': ('Output z in obstacle_frame (the input frame when empty) (m); '
+                        'negative keeps the measured z, which is unreliable on this sensor.',
+                        -1, 10),
+    'shadow_gap': ('Novel static returns this far beyond a confirmed track, near its '
+                   'bearing (shadow_half_angle_deg), are treated as its multipath (m); '
+                   '<= 0 disables.', -1, 50),
+    'shadow_half_angle_deg': ('Bearing half-width of the multipath shadow behind a track, '
+                              '(0, 180] (deg). 180 restores the original any-bearing rule, '
+                              'whose ghost suppression was measured; this default is not.',
+                              0, 180),
 }
 OBSTACLE_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
                    for i, n in enumerate('xyz')]
-TRACK_FIELDS = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
-                for i, n in enumerate(('x', 'y', 'z', 'vx', 'vy', 'speed', 'track_id', 'age'))]
+# track_id is UINT32: float32 cannot keep IDs above 2^24 apart (tentative clusters use IDs).
+TRACK_FIELDS = [PointField(name=n, offset=4 * i, count=1, datatype=(
+    PointField.UINT32 if n == 'track_id' else PointField.FLOAT32))
+    for i, n in enumerate(('x', 'y', 'z', 'vx', 'vy', 'speed', 'track_id', 'age'))]
 GATE_PARAMETERS = {
     'min_range': ('Minimum XYZ range of a quality target (m).', 0, 300),
     'max_range': ('Maximum XYZ range of a quality target (m).', 0, 300),
@@ -127,7 +137,9 @@ class RadarProcessing(Node):
             'Reject input stamps further than this ahead of the ROS clock (s).', 0, 1)
         self.stale_timeout = declare(
             self, 'stale_timeout', .5,
-            'Wall-clock time without input before outputs clear and input is stale (s).', .1, 10)
+            'Wall-clock time without input before outputs clear and input is stale (s). '
+            'Also the input-stamp gap after which static persistence (between accepted '
+            'scans) and the background (between valid fits) restart.', .1, 10)
         diagnostics_period = declare(
             self, 'diagnostics_period', 1.0,
             'Minimum period between unchanged /diagnostics messages (s); state changes '
@@ -147,8 +159,11 @@ class RadarProcessing(Node):
         self.sensor_moving_speed = declare(
             self, 'sensor_moving_speed', .05,
             'Fitted sensor speed above which (for 3 consecutive scans) the sensor is moving: '
-            'the sensor-frame background is reset and not used (m/s).', .005, 10)
+            'the sensor-frame background is reset and not used, and tracks get no '
+            'zero-Doppler support (m/s).', .005, 10)
         self.fast_scans = 0
+        self.last_fit_stamp = None  # input stamp of the last valid fit (ns)
+        self.background_gap_resets = 0
         self.track_pub = self.create_publisher(PointCloud2, '~/tracked_objects',
                                                qos_profile_sensor_data)
         self.marker_pub = self.create_publisher(MarkerArray, '~/track_markers', 10)
@@ -156,6 +171,23 @@ class RadarProcessing(Node):
         self.persistence = PersistenceFilter(self.obstacle_config)
         self.obstacle_pub = self.create_publisher(PointCloud2, '~/obstacles',
                                                   qos_profile_sensor_data)
+        self.obstacle_frame = declare(
+            self, 'obstacle_frame', '',
+            'Frame of ~/obstacles; empty keeps the input frame. Otherwise a frame rigidly '
+            'attached to the radar (e.g. base_link): points use the latest TF (a static '
+            'mount is the contract) and z = obstacle_height in that frame. Scans without '
+            'that transform publish no obstacles.')
+        if self.obstacle_frame and (self.obstacle_frame.startswith('/') or any(
+                c.isspace() for c in self.obstacle_frame)):
+            raise ValueError('obstacle_frame must be empty or a TF frame without leading slash')
+        self.transform_obstacles = self.obstacle_frame not in ('', self.frame)
+        self.obstacle_output_frame = self.obstacle_frame or self.frame
+        self.tf_buffer = Buffer() if self.transform_obstacles else None
+        self.tf_listener = (TransformListener(self.tf_buffer, self)
+                            if self.transform_obstacles else None)
+        self.obstacle_tf_failures = self.obstacle_tf_changes = 0
+        self.obstacle_tf_error = None  # why the last scan's obstacles were withheld
+        self.obstacle_mount = None
         self.cloud_publishers = {
             name: self.create_publisher(PointCloud2, '~/' + name, qos_profile_sensor_data)
             for name in CLOUD_OUTPUTS}
@@ -171,8 +203,10 @@ class RadarProcessing(Node):
         self.subscription = self.create_subscription(
             PointCloud2, topic, self.receive, qos_profile_sensor_data)
         self.last_stamp = None
+        self.last_input = None  # last accepted cloud: its layout shapes subset clears
         self.last_now = None
         self.last_receipt_wall = None
+        self.last_input_rejected = False
         self.last_fit_wall = None
         self.outputs_hold_data = False
         self.state = 'waiting_for_input'
@@ -189,6 +223,7 @@ class RadarProcessing(Node):
         if self.last_now is not None and now < self.last_now:
             self.clear_clouds('clock_reset')
             self.last_stamp = None
+            self.last_fit_stamp = None
             self.last_fit_wall = None
             self.last_receipt_wall = None
             self.state = 'clock_reset'
@@ -204,8 +239,11 @@ class RadarProcessing(Node):
         """
         Publish one empty cloud per output after they carried data.
 
-        The stamp is the last accepted input stamp, never a newer ``now()``, so
-        downstream monotonic-stamp checks keep accepting the next real scan.
+        Each clear keeps its output's own schema: subset clouds the last
+        accepted input's layout, ``tracked_objects`` and ``obstacles`` their
+        fixed fields. The stamp is the last accepted input stamp, never a newer
+        ``now()``, so downstream monotonic-stamp checks keep accepting the next
+        real scan.
         Tracker and background state are kept: one rejected scan must not discard
         the learned background, and the tracker drops tracks itself after a gap
         longer than ``max_coast``.
@@ -215,18 +253,22 @@ class RadarProcessing(Node):
         self.outputs_hold_data = False
         stamp = (Time(nanoseconds=self.last_stamp).to_msg() if self.last_stamp is not None
                  else self.get_clock().now().to_msg())
-        message = empty_cloud(Header(stamp=stamp, frame_id=self.frame))
-        audit = cleared_audit(message.header, reason)
+        header = Header(stamp=stamp, frame_id=self.frame)
+        subset = (empty_like(self.last_input, header) if self.last_input is not None
+                  else empty_cloud(header))
+        audit = cleared_audit(header, reason)
         for name, publisher in self.cloud_publishers.items():
-            publisher.publish(classified_cloud(message.header, np.empty((0, 5)), audit)
-                              if name == 'classified_targets' else message)
+            publisher.publish(classified_cloud(header, np.empty((0, 5)), audit)
+                              if name == 'classified_targets' else subset)
         self.audit_pub.publish(audit)
-        self.track_pub.publish(message)
-        self.obstacle_pub.publish(message)
+        self.track_pub.publish(create_cloud(header, TRACK_FIELDS, []))
+        self.obstacle_pub.publish(create_cloud(
+            Header(stamp=stamp, frame_id=self.obstacle_output_frame), OBSTACLE_FIELDS, []))
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
 
     def reject(self, reason, detail=''):
         self.rejected_inputs += 1
+        self.last_input_rejected = True
         self.state = reason
         self.stats = {}
         self.clear_clouds(reason)
@@ -263,6 +305,8 @@ class RadarProcessing(Node):
             self.reject('invalid_cloud', f': {error}')
             return
         self.last_stamp = stamp
+        self.last_input = cloud
+        self.last_input_rejected = False
         selected = values[indices]
         result = fit_velocity(selected[:, :3], selected[:, 3], self.fit_config)
         self.cloud_publishers['quality_targets'].publish(subset_cloud(cloud, indices))
@@ -276,17 +320,29 @@ class RadarProcessing(Node):
             local = np.flatnonzero(movers)[~ghosts]
             speed = float(np.linalg.norm(result.velocity))
             self.fast_scans = self.fast_scans + 1 if speed > self.sensor_moving_speed else 0
+            if (self.last_fit_stamp is not None
+                    and (stamp - self.last_fit_stamp) * 1e-9 > self.stale_timeout):
+                # Sensor motion is unknown across a data gap or a run of failed fits:
+                # the old scene may no longer be background, so warm-up restarts.
+                self.tracker.reset_background()
+                self.background_gap_resets += 1
+            self.last_fit_stamp = stamp
             static = selected[result.inliers, :3]
-            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3],
-                                       result.residuals[local], static,
-                                       sensor_moving=self.sensor_moving)
+            # The EKF runs in the sensor frame, where positions move at the velocity
+            # relative to the radar: feed it the sign-adapted measured Doppler. The
+            # ego-compensated residual is kept for the ghost rule, as in ghosts.py.
+            relative = self.fit_config.doppler_sign * selected[local, 3]
+            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3], relative, static,
+                                       sensor_moving=self.sensor_moving,
+                                       ghost_speed=result.residuals[local])
             self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
             # None until the background is learned: never drop returns as track multipath
             # against an unlearned (or, on a moving sensor, meaningless) background.
             obstacles = obstacle_points(
                 static, self.persistence.step(static), selected[movers, :3], ghosts,
-                [t.x[:2] for t in tracks], self.obstacle_config, self.tracker.static_novel)
-            self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
+                [t.x[:2] for t in tracks], self.obstacle_config, self.tracker.static_novel,
+                flatten=not self.transform_obstacles)
+            self.publish_obstacles(cloud.header, obstacles)
             track_xy = [t.x[:2] for t in tracks]
             on_track = near_tracks(selected[local, :3], track_xy,
                                    self.obstacle_config.track_radius)
@@ -328,8 +384,9 @@ class RadarProcessing(Node):
             points = selected[:, :3]
             obstacles = obstacle_points(points, self.persistence.step(points), np.empty((0, 3)),
                                         np.empty(0, bool), [t.x[:2] for t in tracks],
-                                        self.obstacle_config)
-            self.obstacle_pub.publish(create_cloud(cloud.header, OBSTACLE_FIELDS, obstacles))
+                                        self.obstacle_config,
+                                        flatten=not self.transform_obstacles)
+            self.publish_obstacles(cloud.header, obstacles)
             partitions = {'doppler_inliers': [], 'doppler_outliers': [],
                           'moving_targets': [], 'moving_ghosts': [], 'tracked_targets': [],
                           'unclassified_targets': indices}
@@ -349,6 +406,7 @@ class RadarProcessing(Node):
         stats.update(audited=len(audit.source_index), displayed=display.width)
         self.outputs_hold_data = True
         self.state = result.reason
+        stats.update(obstacles_published=self.obstacle_tf_error is None)
         stats.update(stamp_ns=stamp, receive_age_seconds=age, sensor_moving=self.sensor_moving,
                      reject_static_only=self.reject_static_only,
                      background_ready=self.tracker.background.ready,
@@ -359,6 +417,44 @@ class RadarProcessing(Node):
     @property
     def sensor_moving(self):
         return self.fast_scans >= MOVING_SCANS
+
+    def publish_obstacles(self, header, points):
+        """
+        Publish obstacle evidence at the input stamp in ``obstacle_frame``.
+
+        The mount is static, so the latest transform is the contract, not a
+        fallback. Without it, nothing is published for this scan: Nav2 must
+        not receive sensor-frame points labelled with another frame.
+        """
+        if not self.transform_obstacles:
+            self.obstacle_pub.publish(create_cloud(header, OBSTACLE_FIELDS, points))
+            return
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.obstacle_frame, self.frame, Time()).transform
+            mount = (np.array([transform.translation.x, transform.translation.y,
+                               transform.translation.z]),
+                     np.array([transform.rotation.x, transform.rotation.y,
+                               transform.rotation.z, transform.rotation.w]))
+            points = to_frame(points, *mount, self.obstacle_config.obstacle_height)
+        except (TransformException, ValueError) as error:
+            self.obstacle_tf_failures += 1
+            self.obstacle_tf_error = f'{type(error).__name__}: {error}'
+            self.get_logger().warning(
+                f'Obstacles withheld: no valid transform {self.frame} -> '
+                f'{self.obstacle_frame} ({error})', throttle_duration_sec=5.0)
+            return
+        if self.obstacle_mount is not None and (
+                np.linalg.norm(mount[0] - self.obstacle_mount[0]) > 1e-3
+                or abs(abs(mount[1] @ self.obstacle_mount[1]) - 1) > 1e-6):
+            self.obstacle_tf_changes += 1
+            self.get_logger().warning(
+                f'Transform {self.frame} -> {self.obstacle_frame} changed; obstacle_frame '
+                'must be rigidly attached to the radar', throttle_duration_sec=5.0)
+        self.obstacle_mount = mount
+        self.obstacle_tf_error = None
+        self.obstacle_pub.publish(create_cloud(
+            Header(stamp=header.stamp, frame_id=self.obstacle_frame), OBSTACLE_FIELDS, points))
 
     def publish_tracks(self, header, tracks, now):
         rows = [(t.x[0], t.x[1], 0.0, t.x[2], t.x[3], t.speed, t.track_id, now - t.first_stamp)
@@ -397,7 +493,10 @@ class RadarProcessing(Node):
                          or wall - self.last_receipt_wall > self.stale_timeout)
         stale_measurement = (self.last_stamp is not None
                              and (now - self.last_stamp) * 1e-9 > self.max_age)
-        if stale_receipt or stale_measurement:
+        # While scans keep arriving but are rejected, their reason stays the state
+        # (outputs were cleared on rejection); alternating states would flood
+        # /diagnostics, which publishes every state change at once.
+        if stale_receipt or (stale_measurement and not self.last_input_rejected):
             if self.state != 'input_stale':
                 self.state = 'input_stale'
                 self.stats = {}
@@ -409,7 +508,11 @@ class RadarProcessing(Node):
         level = DiagnosticStatus.OK if self.state == 'valid' else DiagnosticStatus.WARN
         if self.state in ('input_stale', 'waiting_for_input', 'clock_reset'):
             level = DiagnosticStatus.STALE
-        if not self.diagnostics_limiter.due((self.state, level)):
+        # The last accepted scan's obstacles were withheld for want of a transform.
+        withheld = self.obstacle_tf_error is not None and self.outputs_hold_data
+        if withheld:
+            level = DiagnosticStatus.WARN
+        if not self.diagnostics_limiter.due((self.state, level, withheld)):
             return
         age = None if self.last_fit_wall is None else time.monotonic() - self.last_fit_wall
         values = dict(state=self.state, fit_valid=self.state == 'valid', calibrated=False,
@@ -424,11 +527,21 @@ class RadarProcessing(Node):
                       association_doppler=self.tracker.config.association_doppler,
                       received=self.received, valid_fits=self.valid_fits,
                       rejected_inputs=self.rejected_inputs, last_velocity_age_seconds=age,
+                      background_gap_resets=self.background_gap_resets,
+                      obstacle_frame=self.obstacle_output_frame,
+                      obstacle_tf_failures=self.obstacle_tf_failures,
+                      obstacle_tf_changes=self.obstacle_tf_changes,
+                      obstacle_tf_error=self.obstacle_tf_error,
                       **self.stats)
+        if withheld:
+            message = f'{self.state}; obstacles withheld: no transform to {self.obstacle_frame}'
+        elif self.state == 'valid':
+            message = 'Experimental fit valid; calibration pending'
+        else:
+            message = self.state
         status = DiagnosticStatus(
             level=level, name=self.get_fully_qualified_name() + '/doppler', hardware_id=self.frame,
-            message=('Experimental fit valid; calibration pending' if self.state == 'valid'
-                     else self.state),
+            message=message,
             values=[KeyValue(key=k, value=str(v)) for k, v in values.items()])
         self.diagnostics_pub.publish(DiagnosticArray(
             header=Header(stamp=self.get_clock().now().to_msg()), status=[status]))

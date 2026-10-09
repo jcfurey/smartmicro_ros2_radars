@@ -103,7 +103,15 @@ def subset_cloud(cloud, indices):
                        data=data, is_dense=False)
 
 
+def empty_like(cloud, header):
+    """Return an empty cloud with the point layout (fields, byte order, step) of ``cloud``."""
+    return PointCloud2(header=deepcopy(header), height=1, width=0,
+                       fields=deepcopy(cloud.fields), is_bigendian=cloud.is_bigendian,
+                       point_step=cloud.point_step, row_step=0, data=b'', is_dense=False)
+
+
 def empty_cloud(header):
+    """Return an empty cloud with only the required measurement fields."""
     return PointCloud2(header=deepcopy(header), height=1, width=0,
                        fields=[PointField(name=name, offset=4 * i, datatype=PointField.FLOAT32,
                                           count=1) for i, name in enumerate(REQUIRED)],

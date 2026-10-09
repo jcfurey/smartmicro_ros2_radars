@@ -123,17 +123,68 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 | `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`, `reject_static_only`) |
 | `moving_ghosts` | Doppler outliers rejected by the active ghost policy. By default, any same-absolute-speed, double-absolute-speed or behind-static trigger rejects. Speed-copy rules ignore bearing and Doppler sign, so two independent movers more than `range_gap` apart in range can suppress the farther one. See the [criteria comparison](../docs/umrr96-rejection-criteria-20260928.md) for recorded tradeoffs. |
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
-| `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id, age (sensor frame) |
-| `track_markers` | RViz markers for the tracks (built only with subscribers) |
-| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; z flattened to `obstacle_height`. Novel static returns beyond a track (`shadow_gap`) are dropped only once the background is learned (`background_warmup`) and never while the sensor moves |
+| `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id (uint32; the other fields are float32), age (sensor frame). vx, vy and speed are velocity **relative to the radar** in sensor axes; they equal ground velocity only while the radar is stationary |
+| `track_markers` | RViz markers for the tracks (built only with subscribers); labels and arrows show the same radar-relative velocity |
+| `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; in `obstacle_frame` (default: the input frame) with z flattened to `obstacle_height` there (see [obstacle frame](#obstacle-frame)), at the input stamp. Novel static returns more than `shadow_gap` beyond a confirmed track and within `shadow_half_angle_deg` (15°) of its bearing are dropped as its multipath, only once the background is learned (`background_warmup`) and never while the sensor moves (see [track shadow](#track-shadow-rule)) |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
 
 `/diagnostics` includes `/umrr96_processing/doppler`, rejection reasons, counts,
 condition, residual RMSE, computation time, last velocity age and
-`calibrated=False`, `sensor_moving` and `background_ready`. An OK diagnostic means numerical checks passed, not measured
+`calibrated=False`, `sensor_moving`, `background_ready` and `background_gap_resets`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Inspect the clouds in RViz using PointCloud2 displays, sensor-data QoS
 (Best Effort), and fixed frame `umrr96`. No additional TF publisher is required.
+
+### Obstacle frame
+
+Nav2 applies `min_obstacle_height`/`max_obstacle_height` in its global frame.
+With the default `obstacle_frame: ''`, `obstacles` is in the radar frame and z
+is flattened there, which assumes a level mount: a radar 0.5 m up and pitched
+5° down puts flattened returns beyond about 8 m below a 0.10 m minimum, and
+Nav2 drops them silently. Set `obstacle_frame` to a frame rigidly attached to
+the radar (for example `base_link`): points, including track positions, are
+transformed with the latest `obstacle_frame` ← radar transform, z is set to
+`obstacle_height` in that frame, and the cloud keeps the input stamp. Because
+the mount is static, the latest transform is the contract, not a fallback; a
+transform that changes is counted (`obstacle_tf_changes`) and logged. If the
+transform is unavailable, that scan publishes no obstacles (no identity
+fallback): `obstacle_tf_failures` counts it, `obstacles_published` is false and
+the diagnostic turns WARN. Clears use the same frame. Do not use a fixed frame
+such as `odom` here.
+
+### Track shadow rule
+
+A novel static return is dropped from `obstacles` as a confirmed track's
+multipath only when it lies within `shadow_half_angle_deg` of that track's
+bearing and more than `shadow_gap` beyond that track's range. The earlier rule
+dropped every novel static return beyond the nearest track at any bearing, so
+a second, standing person elsewhere in the field of view vanished while
+someone else was tracked. `shadow_half_angle_deg: 180` restores that rule. Its
+ghost suppression was measured on the `walk` capture (far ghost points
+1.97 → 0.14 per scan, [filtering](../docs/umrr96-filtering-20260924.md)); the
+effect of the 15° default on ghosts is unmeasured because that recording is no
+longer available. Synthetic checks cover the geometry only.
+
+### Tracking on a moving radar
+
+The tracker runs in the radar frame. Its constant-velocity EKF is updated with
+each mover cluster's measured Doppler (sign-adapted: radial speed relative to
+the radar), because sensor-frame positions move at the object's velocity minus
+the radar's. The ego-compensated residual (`uᵀ v_object`) only separates movers
+from the static scene and feeds the same-speed ghost rules (`moving_ghosts` and
+the track-level rule). On a stationary radar the two agree to within the fit's
+velocity noise; in synthetic stationary scenes the change left track identities
+unchanged and moved track states by at most 5 mm.
+
+The background also restarts its warm-up when the input-stamp gap between valid
+fits exceeds `stale_timeout` (a data gap or a run of failed fits leaves sensor
+motion unknown); `background_gap_resets` counts these restarts.
+
+While the radar is moving (`sensor_moving`), the background is reset and every
+static return would be novel, so confirmed tracks get no zero-Doppler
+(`static_hold`) support: a track whose mover stops or leaves ends after
+`max_coast`. A person standing still in front of a moving radar is not tracked;
+they reach `obstacles` only through static persistence or `safety_range`.
 
 ### Inspecting a filter decision
 
@@ -207,7 +258,10 @@ data is cleared due to stale/rejected input or a clock reset, the audit sends on
 cause in `status`. It is a display invalidation, not another sensor observation.
 Malformed or freshness-rejected inputs do not receive per-point assignments;
 their whole-scan reason remains in diagnostics. The colored cloud clears on the
-same watchdog/rejection transitions as existing outputs.
+same watchdog/rejection transitions as existing outputs. Every empty clear keeps
+its output's schema: subset clouds carry the last accepted input's fields,
+`tracked_objects` and `obstacles` their own, so readers that select fields by
+name keep working.
 
 The September 28 implementation passed 105 processing pytest cases and package
 lint. An [offline comparison](../docs/umrr96-classification-replay-20260928.json)
@@ -240,8 +294,10 @@ at most 30. Scans with inadequate 3D bearing diversity, excessive fitted speed
 or model uncertainty are rejected. There is no assumption of zero vertical
 velocity, and no integration to a position or orientation estimate.
 
-The 0.20 m/s residual threshold, 0.05 m/s Doppler noise floor and 0.10 m/s
-velocity floor are experimental settings, not manufacturer accuracy claims.
+The 0.05 m/s residual threshold, 0.02 m/s Doppler noise floor and 0.05 m/s
+velocity floor (shipped YAML and Python defaults alike; a test keeps every
+default equal to the shipped YAML) are experimental settings tuned on the
+2026-09-24 stationary captures, not manufacturer accuracy claims.
 Linear covariance uses the weighted bearing geometry and the larger of the
 weighted residual variance, `Σ wᵢrᵢ² / (n − 3)` with the Huber weights evaluated
 at the returned velocity, and the noise floor, plus the velocity-floor variance
@@ -257,9 +313,11 @@ watchdog clears the output clouds and reports stale input after 0.5 s without da
 including when simulation time pauses. Clouds are cleared once, on the transition
 from published data, with the last accepted input stamp rather than a newer
 `now()`, so a downstream monotonic-stamp check still accepts the next scan.
-Rejections are logged as throttled warnings. `/diagnostics` is published
-immediately on a state change and otherwise at most once per
-`diagnostics_period` (1 s). Invalid estimates publish **no twist**;
+Rejections are logged as throttled warnings. While rejected scans keep
+arriving, the rejection reason stays the state; `input_stale` means no input at
+all for `stale_timeout` (or an aged last accepted scan with no newer input).
+`/diagnostics` is published immediately on a state change and otherwise at
+most once per `diagnostics_period` (1 s). Invalid estimates publish **no twist**;
 downstream consumers must enforce their own timestamp timeout and must not reuse
 the last twist indefinitely. A backward ROS clock jump clears the timestamp
 epoch so bag replay can recover. No zero-velocity replacement or pose/TF is
@@ -295,8 +353,12 @@ ros2 run smartmicro_processing umrr96_processing_audit \
   --output /tmp/umrr96-processing-replay.json
 ```
 
-The audit uses the documented default gates/fit (or `--doppler-sign -1`), records
-configuration and input hashes, and refuses to overwrite an existing report.
+The audit uses the Python default gates/fit, which equal the shipped YAML (or
+`--doppler-sign -1`), records configuration and input hashes, and refuses to
+overwrite an existing report. Until 2026-10-09 the Python fit defaults were
+0.20 / 0.05 / 0.10 m/s (residual threshold / noise floor / velocity floor), so
+offline replays used a looser fit than the live node; the September replay
+reports below (and the accumulation replay) record those older values.
 Historical bags bypass the live freshness checks. Fit residuals are reported
 separately from accuracy; the current bag has no reference trajectory.
 

@@ -68,7 +68,7 @@ class Track:
     confirmed: bool = False
     hits: int = 0
     first_stamp: float = 0.0
-    radial_speed: float = 0.0  # last associated cluster speed, for the ghost rule
+    radial_speed: float = 0.0  # last associated cluster's ghost-rule speed (see step)
     ghost: bool = False
     confirmation_evidence: list = field(default_factory=list)
     standing_background: object = None  # cells known before a confirmed mover stopped
@@ -166,12 +166,15 @@ class MovingObjectTracker:
     """
     Constant-velocity EKF tracks from ghost-filtered Doppler movers.
 
-    Measurements are mover-cluster centroids with their mean compensated
-    radial speed (sensor at the origin of the input frame). Tracks confirm
+    Measurements are mover-cluster centroids in the input frame (sensor at
+    its origin) with their mean radial speed *relative to the sensor*, so the
+    state is position and velocity relative to the radar in its own axes; it
+    equals ground velocity only while the radar is stationary. Tracks confirm
     after M-of-N hits, coast briefly without detections, and may hold on
-    nearby zero-Doppler detections for ``static_hold`` seconds (tangential
-    motion or standing still). A tentative track farther than a confirmed one
-    with a similar radial speed is treated as a multipath copy and dropped.
+    nearby novel zero-Doppler detections for ``static_hold`` seconds
+    (tangential motion or standing still) while the sensor is still. A
+    confirmed track farther than another one with a similar ghost-rule
+    (ego-compensated) radial speed is treated as a multipath copy and hidden.
     """
 
     def __init__(self, config=TrackerConfig()):
@@ -184,14 +187,26 @@ class MovingObjectTracker:
         self.static_novel = None
         self.last_step = None
 
-    def measurements(self, mover_xyz, mover_speed):
+    def measurements(self, mover_xyz, mover_speed, ghost_speed=None):
+        """
+        Cluster movers into ``(centroid, mean speed, count)`` tuples.
+
+        With ``ghost_speed`` (one value per mover), each tuple gains the
+        cluster's mean ghost-rule speed as a fourth element.
+        """
         xy = np.asarray(mover_xyz, float).reshape(-1, 3)[:, :2]
         speed = np.asarray(mover_speed, float).reshape(-1)
         labels = cluster(xy, self.config.cluster_radius)
         if not len(xy):
             return []
-        return [(xy[labels == k].mean(0), float(speed[labels == k].mean()),
-                 int((labels == k).sum())) for k in range(labels.max() + 1)]
+        clusters = [labels == k for k in range(labels.max() + 1)]
+        result = [(xy[c].mean(0), float(speed[c].mean()), int(c.sum())) for c in clusters]
+        if ghost_speed is None:
+            return result
+        ghost = np.asarray(ghost_speed, float).reshape(-1)
+        if len(ghost) != len(xy):
+            raise ValueError('ghost_speed needs one value per mover')
+        return [m + (float(ghost[c].mean()),) for m, c in zip(result, clusters)]
 
     def predict(self, track, stamp):
         dt = max(0.0, stamp - track.stamp)
@@ -277,8 +292,8 @@ class MovingObjectTracker:
         if not c.joint_association:
             for track in order:
                 best, best_distance = None, c.gate
-                for i, (position, _, _) in enumerate(measurements):
-                    distance = np.linalg.norm(position - track.x[:2])
+                for i, measurement in enumerate(measurements):
+                    distance = np.linalg.norm(measurement[0] - track.x[:2])
                     if i not in used and distance < best_distance:
                         best, best_distance = i, distance
                 if best is not None:
@@ -297,7 +312,7 @@ class MovingObjectTracker:
             cost = np.full((len(tier), len(available) + len(tier)), miss)
             for row, track in enumerate(tier):
                 for col, index in enumerate(available):
-                    position, speed, _ = measurements[index]
+                    position, speed = measurements[index][:2]
                     if c.association_uncertainty:
                         value = self.association_cost(track, position, speed)
                     else:
@@ -326,6 +341,14 @@ class MovingObjectTracker:
         """Advance without a static/moving split (failed Doppler fit): record a miss."""
         return self.step(stamp, (), (), None)
 
+    def reset_background(self):
+        """Forget the static background and every standing track's saved copy of it."""
+        self.background.reset()
+        for track in self.tracks:
+            track.standing_background = track.standing_anchor = None
+            track.standing_history = []
+            track.standing_verified = False
+
     def standing_observations(self, stamp, static_xy, sensor_moving):
         """Assign each current static point to at most one eligible anchored track."""
         c = self.config
@@ -353,13 +376,20 @@ class MovingObjectTracker:
             result[track.track_id] = static_xy[finite & (owner == i)]
         return result
 
-    def step(self, stamp, mover_xyz, mover_speed, static_xyz=(), sensor_moving=False):
+    def step(self, stamp, mover_xyz, mover_speed, static_xyz=(), sensor_moving=False,
+             ghost_speed=None):
         """
         Advance to ``stamp`` (s); return the confirmed tracks.
 
-        ``static_xyz=None`` means the static returns are unknown: the background
-        is neither learned nor used. ``sensor_moving`` resets the background,
-        which assumes a scene-fixed input frame.
+        ``mover_speed`` is each mover's radial speed relative to the sensor
+        (positive receding): it drives the EKF, confirmation and association
+        in the input frame. ``ghost_speed`` (default: ``mover_speed``) is the
+        speed the track-level ghost rule compares, e.g. the ego-compensated
+        Doppler residual used by ``ghosts.py``; the two agree on a stationary
+        sensor. ``static_xyz=None`` means the static returns are unknown: the
+        background is neither learned nor used. ``sensor_moving`` resets the
+        background, which assumes a scene-fixed input frame, and disables
+        zero-Doppler support: on a moving sensor every static return is novel.
         """
         c = self.config
         if self.last_step is not None and stamp - self.last_step > c.max_coast:
@@ -367,7 +397,12 @@ class MovingObjectTracker:
         self.last_step = stamp
         for track in self.tracks:
             self.predict(track, stamp)
-        measurements = self.measurements(mover_xyz, mover_speed)
+        if ghost_speed is None:  # existing callers and overrides take two arguments
+            measurements = self.measurements(mover_xyz, mover_speed)
+            ghost_means = [m[1] for m in measurements]
+        else:
+            measurements = self.measurements(mover_xyz, mover_speed, ghost_speed)
+            ghost_means = [m[3] for m in measurements]
         # Confirmed tracks retain priority in both association modes.
         order = sorted(self.tracks, key=lambda t: (not t.confirmed, t.track_id))
         matches = self.associate(order, measurements)
@@ -382,7 +417,7 @@ class MovingObjectTracker:
                     evidence = self.confirmation_score(
                         track, measurements[best][0], measurements[best][1])
                 self.update(track, measurements[best][0], measurements[best][1])
-                track.radial_speed = measurements[best][1]
+                track.radial_speed = ghost_means[best]
                 track.last_moving = track.last_support = stamp
                 if c.standing_support:
                     track.standing_anchor = None
@@ -394,12 +429,7 @@ class MovingObjectTracker:
                     -c.confirm_window:]
             track.hits += hit
         if sensor_moving:
-            self.background.reset()
-            if c.standing_support:
-                for track in self.tracks:
-                    track.standing_background = track.standing_anchor = None
-                    track.standing_history = []
-                    track.standing_verified = False
+            self.reset_background()
         if static_xyz is None:
             static_xy = np.empty((0, 2))
             all_static_xy = static_xy
@@ -420,7 +450,8 @@ class MovingObjectTracker:
         for track in self.tracks:
             support = standing.get(track.track_id, static_xy)
             extended = track.track_id in standing
-            if track.confirmed and not track.ghost and track.last_moving < stamp:
+            if (track.confirmed and not track.ghost and track.last_moving < stamp
+                    and not sensor_moving):
                 distances = np.linalg.norm(support - track.x[:2], axis=1)
                 close = distances < c.static_gate
                 if extended:
@@ -445,15 +476,16 @@ class MovingObjectTracker:
                     if weight >= threshold)
         for track in self.tracks:
             track.ghost = track.confirmed and self.is_ghost(track)
-        for i, (position, speed, _) in enumerate(measurements):
+        for i, measurement in enumerate(measurements):
             if i in used:
                 continue
+            position, speed = measurement[:2]
             r = max(np.linalg.norm(position), 1e-3)
             velocity = position / r * speed  # radial component only until more hits
             self.tracks.append(Track(
                 self.next_id, np.r_[position, velocity],
                 np.diag([c.position_std ** 2] * 2 + [1.0, 1.0]), stamp, stamp, stamp, [True],
-                hits=1, radial_speed=speed, first_stamp=stamp,
+                hits=1, radial_speed=ghost_means[i], first_stamp=stamp,
                 confirmation_evidence=[1.] if c.evidence_confirmation else []))
             self.next_id += 1
         self.tracks = [t for t in self.tracks if stamp - t.last_support <= c.max_coast
@@ -462,7 +494,7 @@ class MovingObjectTracker:
         return [t for t in self.tracks if t.confirmed and not t.ghost]
 
     def is_ghost(self, track):
-        """Farther than another confirmed track with a similar measured radial speed."""
+        """Farther than another confirmed track with a similar ghost-rule radial speed."""
         c = self.config
         r = np.linalg.norm(track.x[:2])
         for other in self.tracks:

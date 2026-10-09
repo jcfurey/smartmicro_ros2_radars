@@ -27,8 +27,9 @@
     reject_static_only: true
     # Moving-object tracker (walk-through: person tracked in 96% of walking scans,
     # ghost tracks in 0.7% of labelled scans). The background model assumes the
-    # radar is fixed in the scene: it restarts (and the obstacle shadow rule is off)
-    # while the fitted sensor speed exceeds sensor_moving_speed for 3 scans.
+    # radar is fixed in the scene: it restarts (and the obstacle shadow rule and
+    # static_hold support are off) while the fitted sensor speed exceeds
+    # sensor_moving_speed for 3 scans. Track vx/vy are relative to the radar.
     cluster_radius: 0.6
     gate: 1.2
     # Independent opt-ins; launch arguments with the same names can override these.
@@ -56,8 +57,19 @@
     persistence_window: 5
     safety_range: 1.0
     track_radius: 0.8
-    obstacle_height: 0.3  # sensor frame; set so mount height + this is within the layer limits
+    # Empty publishes obstacles in the radar frame (z flattened there: a level mount is
+    # assumed). Set a frame rigidly attached to the radar, e.g. base_link, to flatten
+    # in that frame; its latest TF is used (static mount) and scans without it publish
+    # no obstacles.
+    obstacle_frame: ''
+    obstacle_height: 0.3  # z in obstacle_frame; keep it within the layer's height limits
+    # Shadow rule: a novel static return more than shadow_gap beyond a confirmed track
+    # and within +/- shadow_half_angle_deg of its bearing is dropped as that track's
+    # multipath. The walk ghost figures above (and far ghosts 1.97 -> 0.14 per scan)
+    # were measured with the earlier any-bearing rule, which 180 restores. The effect
+    # of 15 deg on ghosts is unmeasured: that recording is no longer available.
     shadow_gap: 1.5
+    shadow_half_angle_deg: 15.0
     max_input_age: 0.5
     future_tolerance: 0.05
     stale_timeout: 0.5

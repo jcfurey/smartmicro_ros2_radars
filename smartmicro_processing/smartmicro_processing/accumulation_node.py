@@ -125,6 +125,7 @@ class RadarAccumulation(Node):
         self.listener = TransformListener(self.buffer, self) if self.buffer is not None else None
         self.pending = deque()
         self.last_stamp = self.last_clock = self.last_receipt = None
+        self.last_arrival = None  # any nonempty input, accepted or rejected
         self.last_pose = self.last_transformed_stamp = None
         self.last_processed_stamp = None
         self.last_scan_voxels = 0
@@ -148,6 +149,7 @@ class RadarAccumulation(Node):
         self.last_scan_voxels = 0
         if reset_input:
             self.last_stamp = self.last_receipt = self.last_processed_stamp = None
+            self.last_arrival = None
         if reset_tf and self.buffer is not None:
             self.buffer.clear()
 
@@ -175,6 +177,7 @@ class RadarAccumulation(Node):
             # receipt watchdog, so upstream staleness still clears history.
             self.empty_inputs += 1
             return
+        self.last_arrival = time.monotonic()
         stamp = cloud.header.stamp.sec * 1_000_000_000 + cloud.header.stamp.nanosec
         if cloud.header.frame_id != self.frame:
             self.reject('unexpected_frame',
@@ -292,10 +295,13 @@ class RadarAccumulation(Node):
 
     def publish(self):
         now = self.now_ns()
-        if (self.last_receipt is not None
-                and time.monotonic() - self.last_receipt > self.stale_timeout):
+        wall = time.monotonic()
+        if self.last_receipt is not None and wall - self.last_receipt > self.stale_timeout:
             self.clear_history()  # Also expires evidence while the bag clock is paused.
-            self.state = 'input_stale'
+            # Rejected scans that keep arriving keep their reason as the state, so
+            # /diagnostics does not flip between it and input_stale every cycle.
+            if self.last_arrival is None or wall - self.last_arrival > self.stale_timeout:
+                self.state = 'input_stale'
         self.process_pending(now)
         level = DiagnosticStatus.OK if self.state == 'accumulating' else DiagnosticStatus.WARN
         if self.state in ('input_stale', 'waiting_for_input', 'clock_reset'):
