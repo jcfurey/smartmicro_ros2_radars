@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Passive experimental Doppler node; the existing estimator retains all TF ownership."""
+from collections import deque
 import copy
 import dataclasses
 import math
@@ -30,6 +31,7 @@ from .ghosts import ghost_reasons, ghost_rejection_mask, GhostConfig, GhostReaso
 from .obstacles import near_tracks, obstacle_points, ObstacleConfig, PersistenceFilter, to_frame
 from .ros_support import declare, DiagnosticsRateLimiter, output_publisher
 from .tracker import MovingObjectTracker, TrackerConfig
+from .tracking_frame import SensorPose
 
 # Relative by default so a namespace moves the input with the node; remap it in launch.
 DEFAULT_INPUT = 'smart_radar/port_targets_0'
@@ -90,6 +92,8 @@ TRACKER_PARAMETERS = {
 # Consecutive valid fits faster than sensor_moving_speed before the sensor counts as moving;
 # the stationary captures never exceeded 0.05 m/s in two consecutive scans.
 MOVING_SCANS = 3
+# With tracking_frame, scans waiting for their TF beyond this are processed (coasted) at once.
+MAX_PENDING_SCANS = 16
 OBSTACLE_PARAMETERS = {
     'persistence_hits': ('Static returns pass when their polar cell was hit in this many of '
                          'the last persistence_window scans.', 1, 64, 1),
@@ -206,9 +210,33 @@ class RadarProcessing(Node):
             raise ValueError('obstacle_frame must be empty or a TF frame without leading slash')
         self.transform_obstacles = self.obstacle_frame not in ('', self.frame)
         self.obstacle_output_frame = self.obstacle_frame or self.frame
-        self.tf_buffer = Buffer() if self.transform_obstacles else None
-        self.tf_listener = (TransformListener(self.tf_buffer, self)
-                            if self.transform_obstacles else None)
+        self.tracking_frame = declare(
+            self, 'tracking_frame', '',
+            'Fixed frame for the tracker (e.g. odom): each scan uses TF at its stamp, '
+            'tracks carry ground position and velocity and are published in this frame; '
+            'scans without that transform coast the tracker. Empty tracks in the input '
+            'frame with velocities relative to the radar. Not with standing_support.')
+        if self.tracking_frame and (self.tracking_frame.startswith('/') or any(
+                c.isspace() for c in self.tracking_frame)):
+            raise ValueError('tracking_frame must be empty or a TF frame without leading slash')
+        if self.tracking_frame == self.frame:
+            raise ValueError('tracking_frame must be a fixed frame other than the input frame; '
+                             'leave it empty to track in the input frame')
+        if self.tracking_frame and self.tracker_config.standing_support:
+            raise ValueError('standing_support cannot be combined with tracking_frame: its '
+                             'background cells are sensor-frame polar cells')
+        self.tf_wait = declare(
+            self, 'tf_wait_seconds', .1,
+            'With tracking_frame: wall time a scan waits for TF at its stamp before the '
+            'tracker coasts it; all outputs of a waiting scan are delayed (s).', 0, .5)
+        self.track_frame = self.tracking_frame or self.frame
+        self.pending = deque()  # accepted scans waiting for their tracking_frame TF
+        self.tracking_tf_failures = 0
+        self.tracking_tf_error = None  # why the last processed scan's tracker coasted
+        self.sensor_pose = None  # last tracking_frame <- sensor pose
+        needs_tf = self.transform_obstacles or bool(self.tracking_frame)
+        self.tf_buffer = Buffer() if needs_tf else None
+        self.tf_listener = TransformListener(self.tf_buffer, self) if needs_tf else None
         self.obstacle_tf_failures = self.obstacle_tf_changes = 0
         self.obstacle_tf_error = None  # why the last scan's obstacles were withheld
         self.obstacle_mount = None
@@ -226,6 +254,7 @@ class RadarProcessing(Node):
         self.subscription = self.create_subscription(
             PointCloud2, topic, self.receive, qos_profile_sensor_data)
         self.last_stamp = None
+        self.last_processed_stamp = None  # stamp of the last published scan (clears)
         self.last_input = None  # last accepted cloud: its layout shapes subset clears
         self.last_now = None
         self.last_receipt_wall = None
@@ -237,6 +266,9 @@ class RadarProcessing(Node):
         self.received = self.valid_fits = self.rejected_inputs = 0
         self.watchdog_clock = Clock(clock_type=ClockType.STEADY_TIME)
         self.watchdog_timer = self.create_timer(.1, self.watchdog, clock=self.watchdog_clock)
+        self.pending_timer = (self.create_timer(.01, self.process_pending,
+                                                clock=self.watchdog_clock)
+                              if self.tracking_frame else None)
         self.get_logger().info(
             f'Experimental 3D Doppler processing on {self.subscription.topic_name}; sign, '
             'timing, extrinsics and covariance need physical validation before fusion.')
@@ -245,7 +277,8 @@ class RadarProcessing(Node):
         now = self.get_clock().now().nanoseconds
         if self.last_now is not None and now < self.last_now:
             self.clear_clouds('clock_reset')
-            self.last_stamp = None
+            self.pending.clear()  # scans of the old epoch
+            self.last_stamp = self.last_processed_stamp = None
             self.last_fit_stamp = None
             self.last_fit_wall = None
             self.last_receipt_wall = None
@@ -280,9 +313,11 @@ class RadarProcessing(Node):
         if not self.outputs_hold_data:
             return
         self.outputs_hold_data = False
-        stamp = (Time(nanoseconds=self.last_stamp).to_msg() if self.last_stamp is not None
+        stamp = (Time(nanoseconds=self.last_processed_stamp).to_msg()
+                 if self.last_processed_stamp is not None
                  else self.get_clock().now().to_msg())
         header = Header(stamp=stamp, frame_id=self.frame)
+        track_header = Header(stamp=stamp, frame_id=self.track_frame)
         subset = (empty_like(self.last_input, header) if self.last_input is not None
                   else empty_cloud(header))
         audit = cleared_audit(header, reason)
@@ -292,9 +327,9 @@ class RadarProcessing(Node):
                 if name == 'classified_targets' else subset)
         self.subsets_published.clear()
         self.audit_pub.publish(audit)
-        self.track_pub.publish(create_cloud(header, TRACK_FIELDS, []))
+        self.track_pub.publish(create_cloud(track_header, TRACK_FIELDS, []))
         if self.radar_tracks_pub is not None:
-            self.radar_tracks_pub.publish(radar_tracks.RadarTracks(header=header))
+            self.radar_tracks_pub.publish(radar_tracks.RadarTracks(header=track_header))
         self.obstacle_pub.publish(create_cloud(
             Header(stamp=stamp, frame_id=self.obstacle_output_frame), OBSTACLE_FIELDS, []))
         self.marker_pub.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
@@ -329,8 +364,6 @@ class RadarProcessing(Node):
         if self.last_stamp is not None and stamp <= self.last_stamp:
             self.reject('nonmonotonic_stamp')
             return
-        if self.last_stamp is not None and (stamp - self.last_stamp) * 1e-9 > self.stale_timeout:
-            self.persistence.reset()  # k-of-n counts scans; do not span a data gap
         try:
             values = measurements(cloud)
             indices, stats = select_measurements(values, self.gate_config)
@@ -340,6 +373,64 @@ class RadarProcessing(Node):
         self.last_stamp = stamp
         self.last_input = cloud
         self.last_input_rejected = False
+        scan = (cloud, stamp, values, indices, stats, age, start)
+        if not self.tracking_frame:
+            self.process(*scan)
+            return
+        self.pending.append(scan)
+        self.process_pending()
+
+    def tracking_pose(self, stamp):
+        """Return (pose, None) for tracking_frame <- input frame at ``stamp``, or (None, why)."""
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.tracking_frame, self.frame,
+                Time(nanoseconds=stamp, clock_type=ClockType.ROS_TIME)).transform
+            return SensorPose.from_transform(transform), None
+        except (TransformException, ValueError) as error:
+            return None, f'{type(error).__name__}: {error}'
+
+    def process_pending(self, force=False):
+        """
+        Process waiting scans in arrival order, each once its TF exists.
+
+        A scan whose TF has not arrived within ``tf_wait_seconds`` (or every
+        waiting scan with ``force``, or the oldest beyond MAX_PENDING_SCANS) is
+        processed without it: the tracker coasts. Never blocks the executor.
+        """
+        while self.pending:
+            scan = self.pending[0]
+            pose, error = self.tracking_pose(scan[1])
+            if (pose is None and not force and len(self.pending) <= MAX_PENDING_SCANS
+                    and time.monotonic() - scan[6] < self.tf_wait):
+                return
+            self.pending.popleft()
+            self.process(*scan, pose=pose, pose_error=error)
+
+    def process(self, cloud, stamp, values, indices, stats, age, start, pose=None,
+                pose_error=None):
+        """
+        Classify, track and publish one accepted scan.
+
+        ``pose`` (tracking_frame mode only) is the tracking_frame <- sensor
+        transform at the scan stamp; None there means it was unavailable and
+        the tracker coasts.
+        """
+        processing_start = time.monotonic() if self.tracking_frame else start
+        if (self.last_processed_stamp is not None
+                and (stamp - self.last_processed_stamp) * 1e-9 > self.stale_timeout):
+            self.persistence.reset()  # k-of-n counts scans; do not span a data gap
+        self.last_processed_stamp = stamp
+        if self.tracking_frame:
+            if pose is None:
+                self.tracking_tf_failures += 1
+                self.tracking_tf_error = pose_error
+                self.get_logger().warning(
+                    f'Tracker coasting: no transform {self.frame} -> {self.tracking_frame} '
+                    f'at the scan stamp ({pose_error})', throttle_duration_sec=5.0)
+            else:
+                self.sensor_pose = pose
+                self.tracking_tf_error = None
         selected = values[indices]
         result = fit_velocity(selected[:, :3], selected[:, 3], self.fit_config)
         self.publish_subset('quality_targets', lambda: subset_cloud(cloud, indices))
@@ -361,23 +452,20 @@ class RadarProcessing(Node):
                 self.background_gap_resets += 1
             self.last_fit_stamp = stamp
             static = selected[result.inliers, :3]
-            # The EKF runs in the sensor frame, where positions move at the velocity
-            # relative to the radar: feed it the sign-adapted measured Doppler. The
-            # ego-compensated residual is kept for the ghost rule, as in ghosts.py.
-            relative = self.fit_config.doppler_sign * selected[local, 3]
-            tracks = self.tracker.step(stamp * 1e-9, selected[local, :3], relative, static,
-                                       sensor_moving=self.sensor_moving,
-                                       ghost_speed=result.residuals[local])
-            self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
+            tracks, track_xy = self.track_scan(cloud, stamp, pose, selected[local, :3],
+                                               selected[local, 3], result.residuals[local],
+                                               static)
             # None until the background is learned: never drop returns as track multipath
             # against an unlearned (or, on a moving sensor, meaningless) background.
+            # Track positions unknown in the sensor frame (no tracking TF): every
+            # non-ghost mover passes instead.
             obstacles = obstacle_points(
                 static, self.persistence.step(static), selected[movers, :3], ghosts,
-                [t.x[:2] for t in tracks], self.obstacle_config, self.tracker.static_novel,
-                flatten=not self.transform_obstacles)
+                [] if track_xy is None else track_xy, self.obstacle_config,
+                self.tracker.static_novel, flatten=not self.transform_obstacles,
+                keep_movers=track_xy is None)
             self.publish_obstacles(cloud.header, obstacles)
-            track_xy = [t.x[:2] for t in tracks]
-            on_track = near_tracks(selected[local, :3], track_xy,
+            on_track = near_tracks(selected[local, :3], [] if track_xy is None else track_xy,
                                    self.obstacle_config.track_radius)
             partitions = {'doppler_inliers': indices[result.inliers],
                           'doppler_outliers': indices[movers], 'unclassified_targets': [],
@@ -412,11 +500,10 @@ class RadarProcessing(Node):
             # No valid static/moving split: tracks coast (a recorded miss) and stay marked;
             # fail conservative and pass every quality target through persistence alone
             # (ghosts cannot be told apart here).
-            tracks = self.tracker.coast(stamp * 1e-9)
-            self.publish_tracks(cloud.header, tracks, stamp * 1e-9)
+            tracks, track_xy = self.track_scan(cloud, stamp, pose)
             points = selected[:, :3]
             obstacles = obstacle_points(points, self.persistence.step(points), np.empty((0, 3)),
-                                        np.empty(0, bool), [t.x[:2] for t in tracks],
+                                        np.empty(0, bool), [] if track_xy is None else track_xy,
                                         self.obstacle_config,
                                         flatten=not self.transform_obstacles)
             self.publish_obstacles(cloud.header, obstacles)
@@ -443,9 +530,53 @@ class RadarProcessing(Node):
         stats.update(stamp_ns=stamp, receive_age_seconds=age, sensor_moving=self.sensor_moving,
                      reject_static_only=self.reject_static_only,
                      background_ready=self.tracker.background.ready,
-                     processing_ms=1000 * (time.monotonic() - start))
+                     processing_ms=1000 * (time.monotonic() - processing_start))
+        if self.tracking_frame:
+            stats.update(tf_wait_ms=1000 * (processing_start - start),
+                         tracking_tf_available=pose is not None)
         self.stats = stats
         self.publish_diagnostics()
+
+    def track_scan(self, cloud, stamp, pose, movers=None, doppler=None, residuals=None,
+                   static=None):
+        """
+        Advance the tracker, publish its tracks and return ``(tracks, sensor-frame xy)``.
+
+        Without movers (failed fit) the tracker coasts; in tracking_frame mode
+        also without ``pose``, and the xy are then None (unknown in the sensor frame).
+        """
+        seconds = stamp * 1e-9
+        if not self.tracking_frame:
+            if movers is None:
+                tracks = self.tracker.coast(seconds)
+            else:
+                # The EKF runs in the sensor frame, where positions move at the velocity
+                # relative to the radar: feed it the sign-adapted measured Doppler. The
+                # ego-compensated residual is kept for the ghost rule, as in ghosts.py.
+                tracks = self.tracker.step(seconds, movers, self.fit_config.doppler_sign * doppler,
+                                           static, sensor_moving=self.sensor_moving,
+                                           ghost_speed=residuals)
+            self.publish_tracks(cloud.header, tracks, seconds)
+            return tracks, [t.x[:2] for t in tracks]
+        last = self.sensor_pose  # this scan's pose when available, else the last one
+        if pose is None or movers is None:
+            # The ghost rule ranks coasted tracks by range from the last known sensor position.
+            tracks = self.tracker.coast(seconds, origin=None if last is None else last.origin)
+        else:
+            # Ground frame: positions in tracking_frame, bearings from the sensor position
+            # there, and the ego-compensated residual (world-referenced radial speed) as
+            # the EKF measurement. The background stays in the sensor frame.
+            tracks = self.tracker.step(seconds, pose.to_tracking(movers), residuals, static,
+                                       sensor_moving=self.sensor_moving, ghost_speed=residuals,
+                                       origin=pose.origin,
+                                       static_support_xyz=pose.to_tracking(static))
+        height = 0. if last is None else float(last.translation[2])
+        self.publish_tracks(Header(stamp=cloud.header.stamp, frame_id=self.tracking_frame),
+                            tracks, seconds, height)
+        if pose is None:
+            return tracks, None
+        # Tracks at the sensor's height, back in the sensor frame for obstacles.
+        return tracks, pose.to_sensor([[t.x[0], t.x[1], height] for t in tracks])[:, :2]
 
     @property
     def sensor_moving(self):
@@ -497,13 +628,14 @@ class RadarProcessing(Node):
         self.obstacle_pub.publish(create_cloud(
             Header(stamp=header.stamp, frame_id=self.obstacle_frame), OBSTACLE_FIELDS, points))
 
-    def publish_tracks(self, header, tracks, now):
-        rows = [(t.x[0], t.x[1], 0.0, t.x[2], t.x[3], t.speed, t.track_id, now - t.first_stamp)
-                for t in tracks]
+    def publish_tracks(self, header, tracks, now, height=0.0):
+        """Publish tracks in ``header``'s frame; ``height`` is their z (the sensor's)."""
+        rows = [(t.x[0], t.x[1], height, t.x[2], t.x[3], t.speed, t.track_id,
+                 now - t.first_stamp) for t in tracks]
         self.track_pub.publish(create_cloud(header, TRACK_FIELDS, rows))
         if self.radar_tracks_pub is not None:
             self.radar_tracks_pub.publish(radar_tracks.radar_tracks(
-                header, tracks, self.get_fully_qualified_name()))
+                header, tracks, self.get_fully_qualified_name(), height))
         if not self.marker_pub.get_subscription_count():
             return
         markers = [Marker(action=Marker.DELETEALL)]
@@ -541,6 +673,7 @@ class RadarProcessing(Node):
         # (outputs were cleared on rejection); alternating states would flood
         # /diagnostics, which publishes every state change at once.
         if stale_receipt or (stale_measurement and not self.last_input_rejected):
+            self.process_pending(force=True)  # publish waiting scans before clearing
             if self.state != 'input_stale':
                 self.state = 'input_stale'
                 self.stats = {}
@@ -554,9 +687,11 @@ class RadarProcessing(Node):
             level = DiagnosticStatus.STALE
         # The last accepted scan's obstacles were withheld for want of a transform.
         withheld = self.obstacle_tf_error is not None and self.outputs_hold_data
-        if withheld:
+        # The last processed scan had no tracking_frame transform: the tracker coasted.
+        coasted = self.tracking_tf_error is not None and self.outputs_hold_data
+        if withheld or coasted:
             level = DiagnosticStatus.WARN
-        if not self.diagnostics_limiter.due((self.state, level, withheld)):
+        if not self.diagnostics_limiter.due((self.state, level, withheld, coasted)):
             return
         age = None if self.last_fit_wall is None else time.monotonic() - self.last_fit_wall
         values = dict(state=self.state, fit_valid=self.state == 'valid', calibrated=False,
@@ -577,9 +712,20 @@ class RadarProcessing(Node):
                       obstacle_tf_failures=self.obstacle_tf_failures,
                       obstacle_tf_changes=self.obstacle_tf_changes,
                       obstacle_tf_error=self.obstacle_tf_error,
+                      tracking_frame=self.track_frame,
+                      track_velocity=('ground' if self.tracking_frame
+                                      else 'relative_to_radar'),
+                      tracking_tf_failures=self.tracking_tf_failures,
+                      tracking_tf_error=self.tracking_tf_error,
+                      pending_scans=len(self.pending),
                       **self.stats)
+        notes = []
         if withheld:
-            message = f'{self.state}; obstacles withheld: no transform to {self.obstacle_frame}'
+            notes.append(f'obstacles withheld: no transform to {self.obstacle_frame}')
+        if coasted:
+            notes.append(f'tracker coasting: no transform to {self.tracking_frame}')
+        if notes:
+            message = '; '.join([self.state] + notes)
         elif self.state == 'valid':
             message = 'Experimental fit valid; calibration pending'
         else:

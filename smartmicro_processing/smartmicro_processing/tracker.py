@@ -171,7 +171,10 @@ class MovingObjectTracker:
     Measurements are mover-cluster centroids in the input frame (sensor at
     its origin) with their mean radial speed *relative to the sensor*, so the
     state is position and velocity relative to the radar in its own axes; it
-    equals ground velocity only while the radar is stationary. Tracks confirm
+    equals ground velocity only while the radar is stationary. Alternatively
+    the caller tracks in a fixed frame: centroids in that frame, the sensor
+    position there as ``origin`` and world-referenced (ego-compensated) radial
+    speeds, so the state is ground position and velocity. Tracks confirm
     after M-of-N hits, coast briefly without detections, and may hold on
     nearby novel zero-Doppler detections for ``static_hold`` seconds
     (tangential motion or standing still) while the sensor is still. A
@@ -188,6 +191,7 @@ class MovingObjectTracker:
         # None when the background was not ready (or the static returns were unknown).
         self.static_novel = None
         self.last_step = None
+        self.origin = None  # sensor xy of the current step; None: the frame origin
 
     def measurements(self, mover_xyz, mover_speed, ghost_speed=None):
         """
@@ -220,14 +224,16 @@ class MovingObjectTracker:
         track.P = F @ track.P @ F.T + q * G @ G.T
         track.stamp = stamp
 
-    def update(self, track, position, radial_speed):
+    def update(self, track, position, radial_speed, origin=None):
+        """EKF update; the radial speed is along the bearing from ``origin`` (the sensor)."""
         px, py, vx, vy = track.x
-        r = math.hypot(px, py)
+        dx, dy = (px, py) if origin is None else (px - origin[0], py - origin[1])
+        r = math.hypot(dx, dy)
         H = np.zeros((3, 4))
         H[0, 0] = H[1, 1] = 1
         z = np.array([position[0], position[1], radial_speed])
         if r > 1e-3:
-            ux, uy = px / r, py / r
+            ux, uy = dx / r, dy / r
             predicted_vr = ux * vx + uy * vy
             H[2] = [(vx - ux * predicted_vr) / r, (vy - uy * predicted_vr) / r, ux, uy]
         else:
@@ -239,13 +245,14 @@ class MovingObjectTracker:
         track.x = track.x + K @ (z - h)
         track.P = (np.eye(4) - K @ H) @ track.P
 
-    def confirmation_score(self, track, position, radial_speed):
+    def confirmation_score(self, track, position, radial_speed, origin=None):
         """Bounded per-scan consistency, not a calibrated probability."""
         c = self.config
         position_error = np.linalg.norm(position - track.x[:2]) / max(
             2 * c.position_std, c.cluster_radius / 2)
-        radius = np.linalg.norm(track.x[:2])
-        predicted = float(track.x[:2] @ track.x[2:] / radius) if radius > 1e-3 else 0.
+        offset = track.x[:2] if origin is None else track.x[:2] - origin
+        radius = np.linalg.norm(offset)
+        predicted = float(offset @ track.x[2:] / radius) if radius > 1e-3 else 0.
         speed_error = (radial_speed - predicted) / max(
             3 * c.radial_speed_std, c.ghost_speed_tolerance)
         return math.exp(-.5 * (position_error ** 2 + speed_error ** 2))
@@ -261,17 +268,18 @@ class MovingObjectTracker:
         return (c.evidence_confirmation and hits >= 6
                 and sum(track.confirmation_evidence) >= 4.5)
 
-    def association_cost(self, track, position, radial_speed):
+    def association_cost(self, track, position, radial_speed, origin=None):
         """Squared innovation distance using the current EKF uncertainty model."""
         c = self.config
         if np.linalg.norm(position - track.x[:2]) >= c.gate:
             return math.inf
         H = np.zeros((3, 4))
         H[0, 0] = H[1, 1] = 1.
-        radius = np.linalg.norm(track.x[:2])
+        offset = track.x[:2] if origin is None else track.x[:2] - origin
+        radius = np.linalg.norm(offset)
         predicted = 0.
         if radius > 1e-3:
-            unit = track.x[:2] / radius
+            unit = offset / radius
             predicted = float(unit @ track.x[2:])
             H[2, :2] = (track.x[2:] - unit * predicted) / radius
             H[2, 2:] = unit
@@ -316,7 +324,8 @@ class MovingObjectTracker:
                 for col, index in enumerate(available):
                     position, speed = measurements[index][:2]
                     if c.association_uncertainty:
-                        value = self.association_cost(track, position, speed)
+                        value = self.association_cost(track, position, speed,
+                                                      **self.origin_argument())
                     else:
                         distance = np.linalg.norm(position - track.x[:2])
                         value = distance / c.gate if distance < c.gate else math.inf
@@ -339,9 +348,13 @@ class MovingObjectTracker:
         # Zero-Doppler support: the object is at rest or moving tangentially; damp speed.
         track.x[2:] *= 0.8
 
-    def coast(self, stamp):
+    def coast(self, stamp, origin=None):
         """Advance without a static/moving split (failed Doppler fit): record a miss."""
-        return self.step(stamp, (), (), None)
+        return self.step(stamp, (), (), None, origin=origin)
+
+    def origin_argument(self):
+        """Keyword arguments for the current step's sensor origin (none at the frame origin)."""
+        return {} if self.origin is None else {'origin': self.origin}
 
     def reset_background(self):
         """Forget the static background and every standing track's saved copy of it."""
@@ -379,7 +392,7 @@ class MovingObjectTracker:
         return result
 
     def step(self, stamp, mover_xyz, mover_speed, static_xyz=(), sensor_moving=False,
-             ghost_speed=None):
+             ghost_speed=None, origin=None, static_support_xyz=None):
         """
         Advance to ``stamp`` (s); return the confirmed tracks.
 
@@ -392,8 +405,19 @@ class MovingObjectTracker:
         background is neither learned nor used. ``sensor_moving`` resets the
         background, which assumes a scene-fixed input frame, and disables
         zero-Doppler support: on a moving sensor every static return is novel.
+
+        Fixed-frame tracking: ``mover_xyz`` in the tracking frame, ``origin``
+        the sensor's xy there (bearings, radial predictions, ranges of the
+        ghost rule and new-track velocities are taken from it) and
+        ``mover_speed`` the world-referenced radial speed. ``static_xyz``
+        stays in the sensor frame for the background (polar cells around the
+        sensor); ``static_support_xyz`` gives the same returns in the tracking
+        frame for zero-Doppler support. Standing support is sensor-frame only.
         """
         c = self.config
+        self.origin = None if origin is None else np.asarray(origin, float).reshape(2)
+        if static_support_xyz is not None and c.standing_support:
+            raise ValueError('standing_support needs the background and tracks in one frame')
         if self.last_step is not None and stamp - self.last_step > c.max_coast:
             self.tracks = []  # no coasting through a data gap longer than max_coast
         self.last_step = stamp
@@ -417,8 +441,10 @@ class MovingObjectTracker:
                 used.add(best)
                 if c.evidence_confirmation:
                     evidence = self.confirmation_score(
-                        track, measurements[best][0], measurements[best][1])
-                self.update(track, measurements[best][0], measurements[best][1])
+                        track, measurements[best][0], measurements[best][1],
+                        **self.origin_argument())
+                self.update(track, measurements[best][0], measurements[best][1],
+                            **self.origin_argument())
                 track.radial_speed = ghost_means[best]
                 track.last_moving = track.last_support = stamp
                 if c.standing_support:
@@ -446,6 +472,11 @@ class MovingObjectTracker:
             novel = ~self.background.is_background(static_xy)
             self.static_novel = novel if ready else None
             self.background.update(stamp, static_xy)
+            if static_support_xyz is not None:  # the same returns in the tracking frame
+                support_xy = np.asarray(static_support_xyz, float).reshape(-1, 3)[:, :2]
+                if len(support_xy) != len(static_xy):
+                    raise ValueError('static_support_xyz needs one row per static return')
+                static_xy = support_xy
             static_xy = static_xy[novel]
         standing = (self.standing_observations(stamp, all_static_xy, sensor_moving)
                     if static_xyz is not None else {})
@@ -477,13 +508,14 @@ class MovingObjectTracker:
                     key for key, weight in self.background.occupancy.items()
                     if weight >= threshold)
         for track in self.tracks:
-            track.ghost = track.confirmed and self.is_ghost(track)
+            track.ghost = track.confirmed and self.is_ghost(track, **self.origin_argument())
         for i, measurement in enumerate(measurements):
             if i in used:
                 continue
             position, speed = measurement[:2]
-            r = max(np.linalg.norm(position), 1e-3)
-            velocity = position / r * speed  # radial component only until more hits
+            offset = position if self.origin is None else position - self.origin
+            r = max(np.linalg.norm(offset), 1e-3)
+            velocity = offset / r * speed  # radial component only until more hits
             self.tracks.append(Track(
                 self.next_id, np.r_[position, velocity],
                 np.diag([c.position_std ** 2] * 2 + [1.0, 1.0]), stamp, stamp, stamp, [True],
@@ -495,14 +527,18 @@ class MovingObjectTracker:
                             or sum(t.history) >= c.confirm_hits - 1)]
         return [t for t in self.tracks if t.confirmed and not t.ghost]
 
-    def is_ghost(self, track):
-        """Farther than another confirmed track with a similar ghost-rule radial speed."""
+    def is_ghost(self, track, origin=None):
+        """Farther from the sensor than another confirmed track with a similar ghost speed."""
         c = self.config
-        r = np.linalg.norm(track.x[:2])
+
+        def distance(t):
+            return np.linalg.norm(t.x[:2] if origin is None else t.x[:2] - origin)
+
+        r = distance(track)
         for other in self.tracks:
             if other is track or not other.confirmed:
                 continue
-            if r - np.linalg.norm(other.x[:2]) <= c.ghost_range_gap:
+            if r - distance(other) <= c.ghost_range_gap:
                 continue
             # First-order bounce repeats the speed; second-order roughly doubles it.
             for factor in (1.0, 2.0):

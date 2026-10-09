@@ -78,7 +78,7 @@ def near_tracks(xyz, track_xy, radius):
 
 
 def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, config,
-                    novel=None, flatten=True):
+                    novel=None, flatten=True, keep_movers=False):
     """
     Select obstacle evidence and return an (N, 3) array.
 
@@ -91,7 +91,8 @@ def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, co
     multipath and dropped while the track exists. A half-angle of 180 degrees
     reproduces the earlier rule: beyond the nearest track at any bearing.
     Track positions get z = 0 (the sensor's height). ``flatten=False`` keeps
-    the measured z for a later transform (see ``to_frame``).
+    the measured z for a later transform (see ``to_frame``). ``keep_movers``
+    passes every non-ghost mover, for scans whose track positions are unknown.
     """
     static_xyz = np.asarray(static_xyz, float).reshape(-1, 3)
     mover_xyz = np.asarray(mover_xyz, float).reshape(-1, 3)
@@ -109,7 +110,8 @@ def obstacle_points(static_xyz, persistent, mover_xyz, mover_ghost, track_xy, co
     keep_static = static_xyz[keep]
     ok = ~np.asarray(mover_ghost, bool)
     near_mover = np.linalg.norm(mover_xyz[:, :2], axis=1) < config.safety_range
-    on_track = near_tracks(mover_xyz, track_xy, config.track_radius)
+    on_track = (np.ones(len(mover_xyz), bool) if keep_movers
+                else near_tracks(mover_xyz, track_xy, config.track_radius))
     parts = [keep_static, mover_xyz[ok & (on_track | near_mover)]]
     if config.include_tracks and len(track_xy):
         parts.append(np.c_[track_xy, np.zeros(len(track_xy))])

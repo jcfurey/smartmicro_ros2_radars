@@ -78,7 +78,7 @@ YAML. They can be combined; `/diagnostics` reports the selected settings.
 | Parameter / launch argument | When enabled |
 | --- | --- |
 | `evidence_confirmation` | Six sufficiently consistent position/Doppler hits can confirm early; the existing 8-of-10 fallback remains. |
-| `standing_support` | Current static returns outside a saved background can support an anchored stopped mover, up to `standing_hold` (30 s). Requires a warmed background in a fixed scene frame; sensor movement resets it. |
+| `standing_support` | Current static returns outside a saved background can support an anchored stopped mover, up to `standing_hold` (30 s). Requires a warmed background in a fixed scene frame; sensor movement resets it. Not with `tracking_frame`. |
 | `joint_association` | Match tracks to measurements jointly by distance, one-to-one, with confirmed-track priority and the existing distance gate. |
 
 For example, enable standing support with the live view:
@@ -123,9 +123,9 @@ and [merged-option validation](../docs/umrr96-opt-in-integration-20260928.md).
 | `moving_targets` | Doppler outliers that pass single-scan multipath-ghost rejection (`range_gap`, `speed_tolerance`, `wall_azimuth_deg`, `reject_static_only`) |
 | `moving_ghosts` | Doppler outliers rejected by the active ghost policy. By default, any same-absolute-speed, double-absolute-speed or behind-static trigger rejects. Speed-copy rules ignore bearing and Doppler sign, so two independent movers more than `range_gap` apart in range can suppress the farther one. See the [criteria comparison](../docs/umrr96-rejection-criteria-20260928.md) for recorded tradeoffs. |
 | `tracked_targets` | `moving_targets` within `track_radius` of a confirmed track: the ghost-resistant moving-object cloud (lags a new object by the ~0.4 s confirmation) |
-| `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id (uint32; the other fields are float32), age (sensor frame). vx, vy and speed are velocity **relative to the radar** in sensor axes; they equal ground velocity only while the radar is stationary |
+| `tracked_objects` | Confirmed moving-object tracks: x, y, z, vx, vy, speed, track_id (uint32; the other fields are float32), age, at the input stamp. By default in the sensor frame, where vx, vy and speed are velocity **relative to the radar** in sensor axes (ground velocity only while the radar is stationary); with `tracking_frame` in that frame with **ground** velocity (see [fixed-frame tracking](#fixed-frame-tracking)) |
 | `tracks` | `radar_msgs/RadarTracks`: the same confirmed tracks with UUIDs and EKF covariances (see [typed tracks](#typed-tracks)); only when radar_msgs is installed |
-| `track_markers` | RViz markers for the tracks (built only with subscribers); labels and arrows show the same radar-relative velocity |
+| `track_markers` | RViz markers for the tracks (built only with subscribers), in the same frame with the same velocity |
 | `obstacles` | Nav2 marking evidence: persistent static returns, ghost-filtered movers on tracks, track positions, non-ghost returns within `safety_range`; in `obstacle_frame` (default: the input frame) with z flattened to `obstacle_height` there (see [obstacle frame](#obstacle-frame)), at the input stamp. Novel static returns more than `shadow_gap` beyond a confirmed track and within `shadow_half_angle_deg` (15°) of its bearing are dropped as its multipath, only once the background is learned (`background_warmup`) and never while the sensor moves (see [track shadow](#track-shadow-rule)) |
 | `unclassified_targets` | Quality targets when the velocity fit is rejected |
 | `experimental_velocity` | `TwistWithCovarianceStamped` at the input stamp/frame, published only for accepted numerical fits |
@@ -143,7 +143,9 @@ receives from the next scan on. Their decisions are computed either way
 
 `/diagnostics` includes `/umrr96_processing/doppler`, rejection reasons, counts,
 condition, residual RMSE, computation time, last velocity age and
-`calibrated=False`, `sensor_moving`, `background_ready` and `background_gap_resets`. An OK diagnostic means numerical checks passed, not measured
+`calibrated=False`, `sensor_moving`, `background_ready`, `background_gap_resets`,
+`tracking_frame`, `track_velocity` (`relative_to_radar` or `ground`),
+`tracking_tf_failures` and `pending_scans`. An OK diagnostic means numerical checks passed, not measured
 accuracy. Its `hardware_id` is the `hardware_id` parameter, or `expected_frame_id`
 when empty; set it to the driver's `<model>@<ip>` (e.g. `umrr96_v1_2_2@192.168.11.11`)
 so a diagnostic aggregator groups processing with the radar's own statuses. Inspect the clouds in RViz using PointCloud2 displays
@@ -221,7 +223,7 @@ longer available. Synthetic checks cover the geometry only.
 
 ### Tracking on a moving radar
 
-The tracker runs in the radar frame. Its constant-velocity EKF is updated with
+By default (`tracking_frame: ''`) the tracker runs in the radar frame. Its constant-velocity EKF is updated with
 each mover cluster's measured Doppler (sign-adapted: radial speed relative to
 the radar), because sensor-frame positions move at the object's velocity minus
 the radar's. The ego-compensated residual (`uᵀ v_object`) only separates movers
@@ -239,6 +241,44 @@ static return would be novel, so confirmed tracks get no zero-Doppler
 (`static_hold`) support: a track whose mover stops or leaves ends after
 `max_coast`. A person standing still in front of a moving radar is not tracked;
 they reach `obstacles` only through static persistence or `safety_range`.
+
+### Fixed-frame tracking
+
+`tracking_frame` (startup; e.g. `odom`) runs the tracker in a fixed frame. For
+each scan the node looks up `tracking_frame` ← input frame **at the scan stamp**.
+Mover points and zero-Doppler support points are transformed into that frame,
+the tracker gets the radar's position there, and the EKF's radial measurement
+is the ego-compensated residual: the object's ground velocity along the bearing
+from the radar (`result.residuals`), rotated into the tracking frame with the
+bearing. The state is therefore ground position and velocity.
+`tracked_objects`, `tracks` and `track_markers` are published in
+`tracking_frame` at the scan stamp; vx, vy and speed are ground velocity in that
+frame and z is the radar's height there. Ground velocity requires a frame that
+is fixed in the world and continuous (`odom`; not `map`, whose corrections jump).
+
+- **Waiting for TF.** Scans are queued in arrival order and processed as soon as
+  their transform exists; a 10 ms steady timer retries, so the executor never
+  blocks. A scan waits at most `tf_wait_seconds` (0.1 s), and all of its outputs
+  are delayed by the wait (`tf_wait_ms` in diagnostics).
+- **Missing TF.** There is no latest or identity fallback: the tracker coasts
+  for that scan (a recorded miss; tracks are published at their predicted
+  positions), `tracking_tf_failures` counts it, `tracking_tf_error` gives the
+  reason and the diagnostic is WARN ("tracker coasting"). Track positions are
+  then unknown in the radar frame, so `obstacles` passes every non-ghost mover
+  instead of only those near tracks, adds no track points and applies no
+  shadow rule, and `tracked_targets` is empty.
+- **Radar frame parts.** The background model, static persistence and the
+  shadow rule stay in the radar frame and are still reset while the radar moves
+  (no `static_hold` support then); `obstacles` stays in the radar frame (or
+  `obstacle_frame`), with track positions transformed back at the radar's height.
+  `standing_support` is rejected together with `tracking_frame` at startup: its
+  saved background cells are radar-frame polar cells.
+
+Synthetic check (radar driving at 1 m/s with a 0.5 rad heading in `odom`,
+approach, follower and a turning radar at 0.15 rad/s with a crossing walker;
+0.1 m / 0.05 m/s noise on the walker's returns): one identity per walker,
+track position within 0.17 m of the walker and ground velocity within 0.28 m/s
+(mean 0.06 m/s) of truth. Untested on hardware.
 
 ### Inspecting a filter decision
 
