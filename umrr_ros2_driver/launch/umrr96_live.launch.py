@@ -17,7 +17,7 @@ from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -30,16 +30,12 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     use_sim_time = {
         'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}
-    # Diagnostic status names carry the node's namespace only when one is set, so two
-    # radars do not report under the same "smart_radar: ..." names; unchanged otherwise.
-    diagnostic_names = {'diagnostic_updater.use_fqn': ParameterValue(
-        PythonExpression(["'true' if '", namespace, "' else 'false'"]), value_type=bool)}
     radar = Node(
         package='umrr_ros2_driver',
         executable='smartmicro_radar_node_exe',
         name='smart_radar',
         namespace=namespace,
-        parameters=[params_file, use_sim_time, diagnostic_names],
+        parameters=[params_file, use_sim_time],
         remappings=[
             ('smart_radar/set_radar_mode', 'smart_radar/data_receiver/set_radar_mode'),
             ('smart_radar/get_radar_mode', 'smart_radar/data_receiver/get_radar_mode'),
@@ -52,7 +48,7 @@ def generate_launch_description():
         executable='smartmicro_radar_readback_node',
         name='smart_radar_readback',
         namespace=namespace,
-        parameters=[params_file, use_sim_time, diagnostic_names],
+        parameters=[params_file, use_sim_time],
         output='log',
     )
     views = Node(

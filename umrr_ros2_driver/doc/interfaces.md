@@ -101,6 +101,17 @@ differs from its adapter's `hw_type`, or a `frame_id` starts with `/` (tf2
 rejects such frames). Each of these previously started a node that published
 nothing for that sensor.
 
+### Diagnostics
+
+Both nodes publish `/diagnostics` at about 1 Hz through `diagnostic_updater`.
+Status names are `<node name>: <status>`; a node with a namespace uses its fully
+qualified name (`/front/smart_radar: Target stream 0`), so two radars never report
+under the same name. This is the default of the parameter
+`diagnostic_updater.use_fqn` whenever the node namespace is not `/`, however the
+node is started (`ros2 run ... -r __ns:=/front`, a launch file or a component
+container); setting the parameter explicitly overrides it. Before 2026-10-09 only
+the launch files set it.
+
 ## Launch files
 
 `umrr96_live.launch.py` (driver, readback, views, RViz):

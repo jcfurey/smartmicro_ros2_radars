@@ -40,6 +40,7 @@ using SetMode = umrr_ros2_msgs::srv::SetMode;
 using com::master::InstructionBatch;
 using com::master::ResponseBatch;
 
+using smartmicro::drivers::radar::declare_diagnostic_names;
 using smartmicro::drivers::radar::RuntimeConfig;
 using smartmicro::drivers::radar::startup_parameter;
 
@@ -158,6 +159,7 @@ public:
       [this](const SetMode::Request::SharedPtr request, SetMode::Response::SharedPtr response) {
         response->res = write(*request).dump(2);
       });
+    declare_diagnostic_names(*this);
     diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
     diagnostics_->setHardwareID("umrr96@" + sensor_ip);
     diagnostics_->add("Control requests",

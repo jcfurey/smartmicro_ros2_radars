@@ -252,6 +252,7 @@ void SmartmicroRadarNode::setup_diagnostics()
   {
     throw std::invalid_argument("diagnostics.stale_timeout must be within 0.1..3600 s");
   }
+  declare_diagnostic_names(*this);
   diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
   // hardware_id identifies the physical device: <model>@<ip> for Ethernet,
   // <model>@can<dev_id> for CAN (the client id is reported as a value).

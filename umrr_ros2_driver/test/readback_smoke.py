@@ -219,6 +219,7 @@ def test_startup_can_output():
             host_port = available.getsockname()[1]
         process = subprocess.Popen([
             str(executable), '--ros-args', '-r', '__node:=umrr96_readback_startup',
+            '-r', '__ns:=/rb_startup',
             '-p', 'sensor_id:=230739', '-p', 'interface_name:=lo',
             '-p', 'host_ip:=127.0.0.1', '-p', 'sensor_ip:=127.0.0.1',
             '-p', f'host_port:={host_port}', '-p', f'sensor_port:={sensor_port}',
@@ -228,7 +229,9 @@ def test_startup_can_output():
         states = []
         node.create_subscription(DiagnosticArray, '/diagnostics', lambda m: states.extend(
             {v.key: v.value for v in s.values}.get('startup_can_target_output')
-            for s in m.status if 'umrr96_readback_startup' in s.name), 10)
+            # Namespaced: fully qualified status name by default (C57).
+            for s in m.status
+            if s.name == '/rb_startup/umrr96_readback_startup: Control requests'), 10)
         try:
             # The first attempt is sent about 1 s after startup, without any client call.
             peer.settimeout(5)

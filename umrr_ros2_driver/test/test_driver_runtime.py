@@ -119,11 +119,15 @@ def test_driver_runtime():
                     parameters['qos_overrides'] = {
                         '/driver_runtime/b/smart_radar/port_targets_0': {
                             'publisher': {'reliability': 'best_effort', 'depth': 3}}}
+                    # An explicit value wins over the namespaced default (C57).
+                    parameters['diagnostic_updater'] = {'use_fqn': False}
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
                     str(executable), '--ros-args', '-r', f'__ns:=/driver_runtime/{name}',
                     '-r', f'__node:=runtime_{name}', '--params-file', str(params)]))
+            # Namespaced nodes report fully qualified status names by default (C57).
+            status_a = '/driver_runtime/a/runtime_a: '
             wait(lambda: node.count_publishers(topic + 'port_targets_0') and
                  node.count_publishers('/driver_runtime/b/smart_radar/port_targets_0'))
             qos_a = node.get_publishers_info_by_topic(topic + 'port_targets_0')[0].qos_profile
@@ -197,9 +201,10 @@ def test_driver_runtime():
                 section_name='auto_interface_0dim', sensor_id=200, params=[], param_types=[]))
             assert 'non-empty' in response.res, response.res
             wait(lambda: any(
-                s.name == 'runtime_a: SDK callbacks' and s.level == DiagnosticStatus.OK and
+                s.name == status_a + 'SDK callbacks' and s.level == DiagnosticStatus.OK and
                 int({v.key: v.value for v in s.values}.get('instruction_timeouts', '0')) >= 2
                 for s in statuses))
+            assert any(s.name == 'runtime_b: Target stream 0' for s in statuses)
             # Firmware download replies are deferred to a worker thread (C4).
             download = node.create_client(FirmwareDownload, topic + 'firmware_download')
             response = call(download, FirmwareDownload.Request(sensor_id=0, file_path='/none'))
@@ -284,20 +289,20 @@ def test_driver_runtime():
                     ranges = [float(r['range']) for r in point_cloud2.read_points(cloud)]
                     assert [r.range for r in scan.returns] == ranges
             wait(lambda: any(
-                s.name == 'runtime_a: UDP adapter 0' and
+                s.name == status_a + 'UDP adapter 0' and
                 {v.key: v.value for v in s.values}.get('kernel_counters_available') == 'True'
                 for s in statuses))
             assert matched >= 3
             # The fixture deliberately repeats its original counter. ROS stamps still advance.
             assert len({t.device_timestamp_us for t in timing}) == 1
             assert len({(c.header.stamp.sec, c.header.stamp.nanosec) for c in clouds}) >= 5
-            wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
+            wait(lambda: any(s.name == status_a + 'Target stream 0' and
                              s.level == DiagnosticStatus.WARN and
                              int({v.key: v.value for v in s.values}.get(
                                  'timestamp_repeats', '0')) > 0 for s in statuses))
             stop(sender)
             statuses.clear()
-            wait(lambda: any(s.name == 'runtime_a: Target stream 0' and
+            wait(lambda: any(s.name == status_a + 'Target stream 0' and
                              s.level == DiagnosticStatus.STALE for s in statuses))
             restarted_sender = launch(
                 [os.environ['SMARTMICRO_TEST_SENDER'], str(fixture_path)],
