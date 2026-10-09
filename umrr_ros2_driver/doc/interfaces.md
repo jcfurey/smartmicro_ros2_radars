@@ -130,10 +130,11 @@ timestamp anomaly (repeated, backwards or zero) and `OK` otherwise. Before
 still reported `OK`.
 
 `UDP adapter N` reports the kernel's drop counter of the Ethernet adapter's socket
-(`/proc/net/udp`). The socket is matched by local port and, when `hw_ip_address` is
-set, by local address, so adapters sharing a port on different addresses each get
-their own counters; the status is `WARN` ("unavailable or ambiguous") only if
-more than one of the process's sockets still matches.
+(`/proc/net/udp`). Only the process's own sockets are considered, matched by local
+port and, when `hw_ip_address` is set, by local address; the status is `WARN`
+("unavailable or ambiguous") only if more than one socket still matches. The SDK
+(3.13.0) accepts one Ethernet adapter per process: a second one fails SDK
+initialization ("Only one ETH iface is allowed").
 
 ## Launch files
 
