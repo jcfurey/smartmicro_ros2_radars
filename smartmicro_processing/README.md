@@ -444,6 +444,62 @@ does not supply those calibrations. Keep the experimental topic separate from th
 navigation estimator until controlled motion has been compared against an
 independent reference.
 
+### Fusing `experimental_velocity` with robot_localization
+
+Prerequisites: a verified `doppler_sign` (a wrong sign negates the twist; O14)
+and a measured `base_link -> umrr96` transform. Then, for an EKF node:
+
+```yaml
+ekf_filter_node:
+  ros__parameters:
+    two_d_mode: true              # ground robot: vz, roll and pitch are not fused
+    smooth_lagged_data: true      # the twist arrives ~10 ms after its stamp
+    history_length: 1.0
+    twist0: /umrr96_processing/experimental_velocity
+    twist0_config: [false, false, false,
+                    false, false, false,
+                    true,  true,  false,   # vx, vy; vz optional and weak
+                    false, false, false,   # angular: zero placeholders, variance 1e6
+                    false, false, false]
+    twist0_queue_size: 5
+    twist0_rejection_threshold: 3.0   # Mahalanobis distance of the innovation
+    imu0: /imu/data               # supplies the yaw rate for the lever-arm term
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+```
+
+- **Frame.** The twist is the velocity of the radar origin relative to the
+  static scene, in `umrr96` axes (`header.frame_id`). robot_localization looks
+  up `base_link <- umrr96` at the message stamp, rotates the velocity, the
+  update mask and the covariance into `base_link`, and removes the lever-arm
+  term with the **filter's** angular velocity
+  (`v_base = R v_radar + t × ω_filter`): fuse a gyro (IMU yaw rate) so ω is
+  right during turns. The URDF in `smartmicro_description` is nominal, not a
+  measured extrinsic.
+- **Axes.** Fuse vx and vy. vz is about five times noisier than x/y on the
+  static capture and elevation is unreliable on this sensor; enable it only
+  without `two_d_mode` and with care. Never fuse the angular terms. With a
+  pitched mount the rotated mask also updates `base_link` vz unless
+  `two_d_mode` is set; the covariance is rotated with it.
+- **Rejection.** A dominant mover or coherent multipath can produce a wrong
+  accepted fit; `twist0_rejection_threshold` rejects a twist whose innovation
+  Mahalanobis distance (filter and reported covariance together) exceeds it, so
+  shrinking the reported σ tightens the gate. Failed fits publish no twist, so the filter simply gets
+  no update; it must not reuse an old one.
+- **Time.** Stamps are the driver's receive time (the sensor's internal latency
+  is not modelled) and processing adds about 10 ms (p95 11.5 ms on 2026-10-09).
+  The driver's planned `stamp_offset_s` latency parameter (O6) will shift the
+  stamps toward acquisition time; until then a turning robot sees an
+  unmodelled lag.
+- **Covariance.** The reported σ is about 0.05 m/s on every axis: the
+  `velocity_std_floor`, not the data. On the 2026-10-09 static capture the
+  scan-to-scan spread of the fit was 1.0, 1.0 and 4.8 mm/s (x, y, z), about
+  50× smaller in x/y. Keep the floor (it is conservative on purpose) until a
+  moving calibration measures speed-, multipath- and timing-dependent errors.
+
 Run the synthetic and ROS integration checks:
 
 ```bash
