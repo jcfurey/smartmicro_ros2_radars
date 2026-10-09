@@ -239,6 +239,9 @@ if(BUILD_TESTING)
     target_include_directories(test_umrr96_tuning PRIVATE include)
     ament_add_gtest(test_service_parsing test/test_service_parsing.cpp)
     target_include_directories(test_service_parsing PRIVATE include)
+    target_compile_definitions(test_service_parsing PRIVATE
+      SMARTMICRO_MODEL_CATALOGUE="${CMAKE_CURRENT_SOURCE_DIR}/param/model_uif_catalogue.yaml"
+      SMARTMICRO_SDK_INCLUDE_DIR="${SMARTMICRO_SDK_DIR}/include")
     ament_add_gtest(test_udp_socket_health test/test_udp_socket_health.cpp)
     target_include_directories(test_udp_socket_health PRIVATE include)
     ament_add_gtest(test_instruction_reply test/test_instruction_reply.cpp)

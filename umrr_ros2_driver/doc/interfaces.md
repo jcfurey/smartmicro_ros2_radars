@@ -101,6 +101,14 @@ differs from its adapter's `hw_type`, or a `frame_id` starts with `/` (tf2
 rejects such frames). Each of these previously started a node that published
 nothing for that sensor.
 
+`uifname`, `uifmajorv`, `uifminorv` and `uifpatchv` must name the user interface
+of the sensor's `model` (see `param/model_uif_catalogue.yaml`; the version is the
+model suffix, e.g. `umrr96_v1_2_2` → `umrr96_t153_automotive` 1.2.2). A different
+name or version is rejected with the parameter named; before 2026-10-09 the node
+started, but the SDK decoded the stream with another interface and the callbacks
+never fired. Leaving all four unset (empty name, zero versions) takes them from the
+model.
+
 ### Diagnostics
 
 Both nodes publish `/diagnostics` at about 1 Hz through `diagnostic_updater`.

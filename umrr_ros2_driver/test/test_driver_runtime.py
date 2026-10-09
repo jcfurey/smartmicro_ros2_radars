@@ -121,6 +121,9 @@ def test_driver_runtime():
                             'publisher': {'reliability': 'best_effort', 'depth': 3}}}
                     # An explicit value wins over the namespaced default (C57).
                     parameters['diagnostic_updater'] = {'use_fqn': False}
+                    # An unset user interface is taken from the model (C64).
+                    for key in ('uifname', 'uifmajorv', 'uifminorv', 'uifpatchv'):
+                        del parameters['sensors']['sensor_0'][key]
                 params = run / f'{name}.yaml'
                 params.write_text(yaml.safe_dump({'/**': {'ros__parameters': parameters}}))
                 driver_processes.append(launch([
@@ -140,6 +143,10 @@ def test_driver_runtime():
             assert {json.loads((p / 'hw_inventory.json').read_text())['hwItems'][0]['port']
                     for p in dirs} == {port_a, port_b}
             for path in dirs:
+                client = json.loads((path / 'routing_table.json').read_text())['clients'][0]
+                assert [client['user_interface_name'], client['user_interface_major_v'],
+                        client['user_interface_minor_v'], client['user_interface_patch_v']] == [
+                    'umrr96_t153_automotive', 1, 2, 2], client
                 sdk_config = json.loads((path / 'smart_access_config.json').read_text())
                 assert sdk_config['config_path'] == str(path)
                 assert sdk_config['shared_lib_path'] == str(path / 'sdk-lib')
@@ -398,6 +405,12 @@ def _eth_sensor(**overrides):
     ({'sensor_0': _eth_sensor(link_type='can', model='umrr96_can_v1_2_2')}, {},
      "does not match the 'eth' adapter"),
     ({'sensor_0': _eth_sensor()}, {'instruction_timeout_ms': 50}, 'instruction_timeout_ms'),
+    ({'sensor_0': _eth_sensor(uifname='umrra4_automotive', uifmajorv=1, uifminorv=6,
+                              uifpatchv=0)}, {},
+     "sensor_0.uifname 'umrra4_automotive' does not match model 'umrr96_v1_2_2'"),
+    ({'sensor_0': _eth_sensor(uifname='umrr96_t153_automotive', uifmajorv=1, uifminorv=2,
+                              uifpatchv=1)}, {},
+     "sensor_0.uifpatchv 1 does not match model 'umrr96_v1_2_2' (expects 2)"),
 ])
 def test_invalid_startup_configuration_is_rejected(sensors, extra, message):
     """Configurations that would silently deliver nothing fail at startup instead."""
@@ -407,3 +420,31 @@ def test_invalid_startup_configuration_is_rejected(sensors, extra, message):
                                     'port': unused_port()}},
             sensors=sensors, **extra), directory)
         assert message in output, output
+
+
+def _shipped_sensors():
+    """Yield the file name and sensors of every shipped driver parameter file."""
+    for path in sorted((Path(__file__).resolve().parents[1] / 'param').rglob('*.yaml')):
+        for section in yaml.safe_load(path.read_text()).values():
+            if not isinstance(section, dict):
+                continue  # model_uif_catalogue.yaml
+            sensors = (section.get('ros__parameters') or {}).get('sensors')
+            if isinstance(sensors, dict):
+                yield path.name, sensors
+
+
+def test_shipped_parameter_files_match_the_model_catalogue():
+    """Every shipped sensor names its model's user interface and version (C64)."""
+    catalogue = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / 'param/model_uif_catalogue.yaml').read_text())
+    interfaces = {entry['model']: entry['uifname']
+                  for entry in catalogue['entries_can'] + catalogue['entries_port']}
+    checked = 0
+    for name, sensors in _shipped_sensors():
+        for key, sensor in sensors.items():
+            version = [int(part) for part in sensor['model'].rsplit('_v', 1)[1].split('_')]
+            assert sensor['uifname'] == interfaces[sensor['model']], (name, key)
+            assert [sensor['uifmajorv'], sensor['uifminorv'], sensor['uifpatchv']] == version, (
+                name, key)
+            checked += 1
+    assert checked >= 10, checked

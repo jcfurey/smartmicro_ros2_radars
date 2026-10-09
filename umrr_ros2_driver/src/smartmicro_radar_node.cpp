@@ -80,6 +80,7 @@ using smartmicro::drivers::radar::kEthLinkType;
 using smartmicro::drivers::radar::kEthernetModels;
 using smartmicro::drivers::radar::kMsePubType;
 using smartmicro::drivers::radar::kTargetPubType;
+using smartmicro::drivers::radar::resolve_user_interface;
 using smartmicro::drivers::radar::validate_sensor_config;
 
 constexpr auto kDefaultClientId = 0;
@@ -1384,6 +1385,13 @@ void SmartmicroRadarNode::update_config_files_from_params()
       sensor.link_type = startup_parameter(*this, prefix_3 + ".link_type", kDefaultHwLinkType);
       sensor.pub_type = startup_parameter(*this, prefix_3 + ".pub_type", "");
       validate_sensor_config(prefix_3, sensor.link_type, sensor.model, sensor.pub_type);
+      const auto interface = resolve_user_interface(
+        prefix_3, sensor.model, sensor.uifname, sensor.uifmajorv, sensor.uifminorv,
+        sensor.uifpatchv);
+      sensor.uifname = interface.name;
+      sensor.uifmajorv = interface.major;
+      sensor.uifminorv = interface.minor;
+      sensor.uifpatchv = interface.patch;
       if (sensor.port > 65535 || (sensor.link_type == "eth" && sensor.port == 0) ||
         sensor.history_size == 0 || sensor.frame_id.empty())
       {
