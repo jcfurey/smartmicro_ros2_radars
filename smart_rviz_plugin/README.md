@@ -55,7 +55,9 @@ Included in `ros2 launch umrr_ros2_driver umrr96_live.launch.py`, or add
   button stages restoration of the first advanced profile read for that sensor.
 - **Filtering and density history** selects Off, Quality only, Stable mapping, or Moving returns,
   with adjustable minimum SNR, radial speed, and density decay (0.1–30 s).
-  **Apply view settings** changes the host view parameters atomically. Filter
+  **Apply view settings** changes the host view parameters atomically and sends
+  only the fields that differ from the view node's current values, at full
+  precision (an unedited 0.125 m/s is not resent as a rounded value). Filter
   changes clear accumulated history; decay-only edits preserve existing hits
   and apply the new decay rate from that moment onward. It sends no sensor
   commands. Current mode and accepted/rejected counts are displayed separately
@@ -85,12 +87,22 @@ separate RGB **Radar fan image** display included in the saved RViz configuratio
   (for example with `umrr96_live.launch.py`) are offered. Only the selected
   topic is subscribed.
 - **Recording limit** (default 1,000,000 rows, saved in the RViz config) bounds
-  memory: recording stops at the limit and offers Save/Discard.
+  memory: recording stops before the first frame that would exceed the limit
+  (only whole frames are kept) and offers Save/Discard.
+- Units follow the driver: `rcs` is m² for port and CAN targets (shown with six
+  significant digits), object `heading` is radians and shown/exported in degrees.
 - The subscription holds up to ten pending clouds. Catch-up is limited by
   callback cost; a long GUI stall can still overflow that queue.
+- Recorder, Status and Fault Reports subscribe best effort (sensor-data QoS,
+  depth 10), so they receive both the driver's default reliable publishers and a
+  `qos_overrides.<topic>.publisher.reliability: best_effort` override.
 
 ### Smart Command Configurator
-- Sends commands and mode/config related service calls.
+- Sends commands and mode/config related service calls to `/smart_radar/...`.
+  Under `umrr96_live.launch.py` the parameter and status calls reach the UMRR-96
+  readback node, which accepts only its own sensor ID and the UMRR-96 tuning
+  parameters; commands still reach the data node (see
+  [service routing](../umrr_ros2_driver/doc/interfaces.md#service-routing)).
 - Sensor IDs and integer values accept decimal or `0x` hexadecimal; values are
   checked against the selected type before sending, and parse errors are shown
   in the response area. Command values are sent as float32 unchanged.

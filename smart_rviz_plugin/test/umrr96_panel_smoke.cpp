@@ -16,6 +16,7 @@
 #include <map>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 #include <pluginlib/class_loader.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rcl_interfaces/srv/set_parameters_atomically.hpp>
@@ -126,9 +127,15 @@ int main(int argc, char ** argv)
     bool reject_filter = false;
     bool report_decay = true;
     double actual_decay = 2.001234;
+    std::string actual_mode = "off";
+    double actual_snr = 6.0, actual_speed = .25;
+    std::vector<std::string> filter_names;  // Parameter names of the last request.
     auto filter_publisher = node->create_publisher<std_msgs::msg::String>(
       "/smart_radar/filter_status", rclcpp::QoS(1).transient_local());
     auto publish_filter = [&](const std::string & mode, double snr, double speed) {
+        actual_mode = mode;
+        actual_snr = snr;
+        actual_speed = speed;
         std_msgs::msg::String message;
         QJsonObject values{{"mode", QString::fromStdString(mode)},
           {"min_snr_db", snr}, {"min_abs_speed", speed}, {"input", 12}, {"accepted", 9},
@@ -139,23 +146,36 @@ int main(int argc, char ** argv)
       };
     auto filter_service = node->create_service<FilterService>("/umrr96_views/set_parameters_atomically",
       [&](FilterService::Request::SharedPtr request, FilterService::Response::SharedPtr response) {
-        check(request->parameters.size() == (report_decay ? 4u : 3u),
-          "View settings must be atomic and compatible with the view node");
-        if (report_decay) {
-          check(request->parameters[3].name == "decay_seconds" &&
-            request->parameters[3].value.type == rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE,
-            "Wrong decay parameter or type");
+        // C68: only the changed fields, in one atomic request, all at full precision.
+        check(!request->parameters.empty(), "Empty view settings request");
+        filter_names.clear();
+        auto mode = actual_mode;
+        auto snr = actual_snr, speed = actual_speed, decay_value = actual_decay;
+        for (const auto & parameter : request->parameters) {
+          filter_names.push_back(parameter.name);
+          using Type = rcl_interfaces::msg::ParameterType;
+          if (parameter.name == "filter_mode") {
+            check(parameter.value.type == Type::PARAMETER_STRING, "Wrong filter mode type");
+            mode = parameter.value.string_value;
+          } else {
+            check(parameter.value.type == Type::PARAMETER_DOUBLE, "Wrong view parameter type");
+            const auto value = parameter.value.double_value;
+            if (parameter.name == "filter_min_snr_db") {snr = value;}
+            else if (parameter.name == "filter_min_abs_speed") {speed = value;}
+            else if (parameter.name == "decay_seconds" && report_decay) {decay_value = value;}
+            else {throw std::runtime_error("Unexpected view parameter " + parameter.name);}
+          }
         }
         ++filter_writes;
         response->result.successful = !reject_filter;
         response->result.reason = reject_filter ? "Fixture rejection" : "";
         if (!reject_filter) {
-          if (report_decay) {actual_decay = request->parameters[3].value.double_value;}
-          publish_filter(request->parameters[0].value.string_value,
-            request->parameters[1].value.double_value, request->parameters[2].value.double_value);
+          actual_decay = decay_value;
+          publish_filter(mode, snr, speed);
         }
       });
-    publish_filter("off", 6.0, .25);
+    // Values the spin boxes cannot show exactly: they must survive unrelated edits.
+    publish_filter("off", 6.125, .1234);
     bool spin_server = true;
     auto publisher = node->create_publisher<umrr_ros2_msgs::msg::PortTargetHeader>(
       "/smart_radar/port_targetheader_0", rclcpp::SensorDataQoS());
@@ -209,8 +229,14 @@ int main(int argc, char ** argv)
       button("filter_apply")->click();
       wait([&] {return filter_writes == count + 1 && filter_feedback->text().contains("View settings applied");});
       wait([&] {return button("filter_apply")->isEnabled();});
+      check(filter_names == std::vector<std::string>{"filter_mode"}, "Mode edit sent unchanged fields");
     }
-    check(actual_decay == 2.001234, "Filter edits rounded an unchanged decay value");
+    check(actual_decay == 2.001234 && actual_snr == 6.125 && actual_speed == .1234,
+      "Filter edits rounded unchanged view values");
+    const auto before_unchanged = filter_writes;
+    button("filter_apply")->click();
+    wait([&] {return filter_feedback->text().contains("No view setting changes");});
+    check(filter_writes == before_unchanged, "Apply without changes sent a request");
     const auto before_decay = filter_writes;
     decay->setValue(.5);
     app.processEvents();
@@ -220,6 +246,20 @@ int main(int argc, char ** argv)
         filter_feedback->text().contains("View settings applied") &&
         filter_actual->text().contains("Density decay: 0.50 s");});
     wait([&] {return button("filter_apply")->isEnabled();});
+    // A decay-only edit must not resend (rounded) filter values: the view node would
+    // treat 0.123 != 0.1234 as a filter change and clear the history.
+    check(filter_names == std::vector<std::string>{"decay_seconds"} && actual_speed == .1234 &&
+      actual_snr == 6.125, "Decay-only edit sent filter values");
+    auto speed_box = panel->findChild<QDoubleSpinBox *>("filter_speed");
+    check(speed_box != nullptr, "Speed control missing");
+    speed_box->setValue(.5);
+    filter_feedback->clear();
+    button("filter_apply")->click();
+    wait([&] {return filter_writes == before_decay + 2 &&
+        filter_feedback->text().contains("View settings applied");});
+    wait([&] {return button("filter_apply")->isEnabled();});
+    check(filter_names == std::vector<std::string>{"filter_min_abs_speed"} && actual_speed == .5,
+      "Speed edit not sent alone");
     check(writes == 0, "Host filtering sent a sensor write");
     reject_filter = true;
     filter_mode->setCurrentIndex(filter_mode->findData("mapping"));
@@ -234,8 +274,9 @@ int main(int argc, char ** argv)
     report_decay = false;
     publish_filter("off", 6.0, .25);
     wait([&] {return !decay->isEnabled() && button("filter_apply")->isEnabled();});
-    button("filter_apply")->click();
+    button("filter_apply")->click();  // The rejected mapping edit is still staged.
     wait([&] {return filter_feedback->text().contains("View settings applied");});
+    check(filter_names == std::vector<std::string>{"filter_mode"}, "Read-only decay was sent");
     report_decay = true;
     publish_filter("mapping", 6.0, .25);
     wait([&] {return decay->isEnabled() && decay->value() == .5;});
@@ -382,6 +423,7 @@ int main(int argc, char ** argv)
     QObject::connect(&heartbeat, &QTimer::timeout, [&] {++heartbeats;});
     heartbeat.start(10);
     spin_server = false;
+    filter_mode->setCurrentIndex(filter_mode->findData("quality"));
     button("filter_apply")->click();
     button("refresh")->click();
     wait([&] {return feedback->text().contains("timed out");}, 7);
@@ -392,6 +434,7 @@ int main(int argc, char ** argv)
     wait([&] {return button("preset")->isEnabled();});
     spin_server = false;
     button("advanced_refresh")->click();
+    filter_mode->setCurrentIndex(filter_mode->findData("moving"));
     button("filter_apply")->click();
     panel.reset();  // Destroy with an outstanding request; no worker may hang.
     executor.spin_some();  // Deliver the late reply after destruction.

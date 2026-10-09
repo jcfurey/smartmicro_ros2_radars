@@ -31,6 +31,7 @@ void SmartFaultReports::initialize()
   topic_dropdown_->addItem("Select a Fault Report Topic");
 
   header_table_ = new QTableWidget();
+  header_table_->setObjectName("fault_header_table");
   header_table_->setColumnCount(1);
   header_table_->setRowCount(14);
   header_table_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -169,7 +170,7 @@ void SmartFaultReports::subscribe_to_selected_topic()
   }
 
   subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::PortFaultReportsMsg>(
-    selected_topic_, 10,
+    selected_topic_, panel_util::data_qos(),
     [this](const umrr_ros2_msgs::msg::PortFaultReportsMsg::SharedPtr msg) {
       fault_report_callback(msg);
     });

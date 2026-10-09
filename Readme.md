@@ -50,13 +50,15 @@ python custom_can_sender.py
 ## Prerequisites
 
 ### Supported ROS distributions:
-- ROS2 lyrical *(driver + Qt 6 RViz panels; see [native build and verification](docs/lyrical.md))*
-- ROS2 foxy *(recommended — full stack: driver + RViz plugins)*
-- ROS2 humble *(driver node only)*
-- ROS2 jazzy *(driver node only)*
+| Distribution | Status |
+| :----------- | :----- |
+| Lyrical | Driver, RViz panels (Qt 6), description and processing; built and tested natively ([build and verification](docs/lyrical.md)) |
+| Jazzy | Full workspace (RViz panels on Qt 5) in the Docker CI matrix |
+| Humble | Full workspace in the Docker CI matrix; two known test failures (`umrr96_panel_smoke`, description runtime test) are allowed there |
+| Foxy and older | Not supported: the driver's QoS overrides (`rclcpp::QosOverridingOptions`) and the panels' asynchronous service calls (`FutureAndRequestId`) need Galactic or newer, and CI no longer builds Foxy |
 
-> The RViz plugins (`smart_rviz_plugin`) are verified here on **ROS2 Lyrical**.
-> The upstream support statement covers Foxy; Humble and Jazzy remain driver-only.
+The CI matrix is defined in [`.github/workflows/dockerbuild.yml`](.github/workflows/dockerbuild.yml).
+Galactic, Iron and Kilted are not tested.
 
 ### UMRR radars and Smart Access API version
 A [smartmicro](https://www.smartmicro.com/automotive-radar) UMRR96, UMRR11, DRVEGRD 171, DRVEGRD 152, DRVEGRD 169, DRVEGRD 169 MSE or DRVEGRD 171 MSE radar is 
@@ -126,7 +128,9 @@ These inputs are processed through the Smart Access C++ API and trigger a callba
 callback is triggered a new point cloud message is created and published.
 
 ### The outputs:
-The driver publishes the following topics per sensor, where `<N>` is the sensor index (0-based, up to 9 sensors):
+The driver publishes the following topics per sensor, where `<N>` is the sensor index
+(`sensors.sensor_<N>`, 0–9: up to 10 sensors). Field units, stamps and QoS are in
+[`umrr_ros2_driver/doc/interfaces.md`](umrr_ros2_driver/doc/interfaces.md):
 
 | Topic                               | Message Type                         | Description                                 |
 | :---------------------------------- | :----------------------------------- | :------------------------------------------ |
@@ -140,6 +144,17 @@ The driver publishes the following topics per sensor, where `<N>` is the sensor 
 | `smart_radar/can_objects_<N>`       | `sensor_msgs/PointCloud2`            | CAN-based object point cloud (MSE models)   |
 | `smart_radar/can_objectheader_<N>`  | `umrr_ros2_msgs/CanObjectHeader`     | CAN-based object list header                |
 | `smart_radar/port_faultreport_<N>`  | `umrr_ros2_msgs/PortFaultReportsMsg` | Fault reports (supported models only)       |
+| `smart_radar/timing_<N>`            | `umrr_ros2_msgs/RadarTiming`         | Device timestamp and receive time of each target/object/fault frame |
+| `smart_radar/radar_scan_<N>`        | `radar_msgs/RadarScan`               | Optional: built with `radar_msgs` and `publish_radar_scan: true` |
+
+The driver also reports stream, SDK and UDP health on `/diagnostics`.
+
+Derived topics come from other nodes: `umrr96_live.launch.py` starts the
+`umrr96_views` node (`smart_radar/filtered_targets_0`, `density_grid`,
+`density_cells`, `fan_targets`, `fan_image`, `fan_guides`, `filter_status`; see the
+[UMRR-96 bring-up](docs/umrr96-bringup.md#view-parameters-and-topics)), and
+[`smartmicro_processing`](smartmicro_processing/README.md) publishes Doppler,
+classification and tracking outputs.
 
 **Fault reporting** is available for models: `umrra4_mse_v3_0_0`, `umrr9f_mse_v2_0_0`, `umrr9f_v3_2_0`, `umrr9d_v1_7_0`, `umrra4_v1_6_0`. Message types used by the driver are defined in `umrr_ros2_msgs/msg/` — see `PortTargetHeader`, `CanTargetHeader`, `PortObjectHeader`, `CanObjectHeader`, and `PortFaultReportsMsg` for full field definitions.
 
@@ -220,6 +235,30 @@ To set up the ***adapters***, configure the following parameters:
 The smartmicro radars come equipped with numerous features and modes of operation. Using the ros2 services provided one
 may access these modes and send commands to the sensor. A list of available sensor operations is under umrr_ros2_driver/smartmicro/user_interfaces/ after running ./smart_extract.sh.
 
+### Which node answers
+The service names are the same in both launch files, but not the node behind them:
+
+| Service | `radar.launch.py` | `umrr96_live.launch.py` |
+| :------ | :---------------- | :---------------------- |
+| `smart_radar/set_radar_mode`, `get_radar_mode`, `get_radar_status` | data node | UMRR-96 readback node `smart_radar_readback` |
+| `smart_radar/data_receiver/set_radar_mode`, `get_radar_mode`, `get_radar_status` | — | data node (remapped) |
+| `smart_radar/send_command`, `set_ip_address`, `firmware_download` | data node | data node |
+
+The data node accepts any configured sensor (`sensors.sensor_<N>.id`) and any
+section of its interface, and replies when the sensor answers. The readback node
+(also used by `smartmicro_processing`'s `umrr96_tracking.launch.py`) answers
+synchronously, within `smart_radar_readback.timeout_ms` (default 2 s), and only
+for its own `smart_radar_readback.sensor_id`; it reads `auto_interface_0dim`
+parameters and `auto_interface` statuses and writes only the UMRR-96 tuning
+parameters listed in the [bring-up notes](docs/umrr96-bringup.md#temporary-tuning).
+Requests for other sensor IDs or sections are rejected. Both reply with the same
+JSON (see [interfaces](umrr_ros2_driver/doc/interfaces.md#service-routing)).
+
+The examples below use `radar.launch.py` with the template parameters (UMRR-A4,
+sensor ID 100). With `umrr96_live.launch.py`, call the `smart_radar/data_receiver/...`
+names for these requests, or use the readback node's sensor ID (230739 in the
+bench file) at the usual names.
+
 A ros2 `SetMode` service should be called to implement these mode changes. These are the inputs to a ros2 `SetMode` service call:
 - `params`: name/names of the mode instructions (specific to the sensor).
 - `values`: the mode of operation (specific to sensor where the modes are same).
@@ -238,6 +277,9 @@ A ros2 'GetMode' service can be called to get the actual sensor modes. The input
 
 For instance, getting the `Index of center frequency (center_frequency_idx)` of a UMRR-A4 sensor to `(1)` mode would require the following call:
 `ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode "{section_name: auto_interface_0dim, sensor_id: 100, params: ['center_frequency_idx'], param_types: [3]}"`
+
+With `umrr96_live.launch.py` and the bench file, the readback node reads the UMRR-96 sweep:
+`ros2 service call /smart_radar/get_radar_mode umrr_ros2_msgs/srv/GetMode "{section_name: auto_interface_0dim, sensor_id: 230739, params: ['frequency_sweep_idx'], param_types: [3]}"`
 
 Similarly, a ros2 `SendCommand` service could be used to send commands to the sensors. There are three inputs for sending a command:
 - `command`: name of the command (specific to the sensor interface)
@@ -258,7 +300,7 @@ The call would be like follows:
 `ros2 service call /smart_radar/get_radar_status umrr_ros2_msgs/srv/GetStatus "{section_name: auto_interface, sensor_id: 100, statuses: ["sw_version_major", "sw_version_minor"], status_types: [1, 1]}"`
 
 ## Configuration of the sensors
-In order to use multiple sensors (maximum of up to eight sensors) with the node the sensors should be configured separately.
+In order to use multiple sensors (up to 10 sensors and 6 adapters per node) with the node the sensors should be configured separately.
 The IP addresses of the sensors could be assigned using:
 - The smartmicro tool `DriveRecorder`.
 - Using the `Smart Access C++ API`
@@ -304,7 +346,8 @@ The sensor services respond with certain value codes. The following is a lookup 
 | 8     | Value out of maximal bounds |
 
 ## RVIZ plugins and custom CAN sender
-The following RViz plugins are provided (foxy only):
+The following RViz plugins are provided (see [smart_rviz_plugin](smart_rviz_plugin/README.md), which
+also covers the UMRR-96 Configuration panel):
 
 - **Smart Recorder** — view and record target/object point cloud data per topic; export to CSV.
 - **Smart Command Configurator** — send parameter writes/reads, commands, and status queries to sensors via the ROS2 service interface.
@@ -314,7 +357,7 @@ The following RViz plugins are provided (foxy only):
 
 A config file is available to load all plugins in one go:
 ```
-rviz2 -d smartmicro_ros2_radars/umrr_ros2_driver/config/rviz/rviz_plugin.rviz
+rviz2 -d umrr_ros2_driver/config/rviz/rviz_config.rviz
 ```
 
 Separately, a python GUI is also provided with which it is possible to send custom CAN messages. 

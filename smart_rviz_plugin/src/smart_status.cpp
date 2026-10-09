@@ -227,22 +227,26 @@ void SmartRadarStatus::update_table()
     const auto topic = selected_topic_;
     if (selected_type_ == kPortTarget) {
       subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::PortTargetHeader>(
-        topic, 10, [this, topic](const umrr_ros2_msgs::msg::PortTargetHeader::SharedPtr msg) {
+        topic, panel_util::data_qos(),
+        [this, topic](const umrr_ros2_msgs::msg::PortTargetHeader::SharedPtr msg) {
           port_targetheader_callback(msg, topic);
         });
     } else if (selected_type_ == kCanTarget) {
       subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::CanTargetHeader>(
-        topic, 10, [this, topic](const umrr_ros2_msgs::msg::CanTargetHeader::SharedPtr msg) {
+        topic, panel_util::data_qos(),
+        [this, topic](const umrr_ros2_msgs::msg::CanTargetHeader::SharedPtr msg) {
           can_targetheader_callback(msg, topic);
         });
     } else if (selected_type_ == kPortObject) {
       subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::PortObjectHeader>(
-        topic, 10, [this, topic](const umrr_ros2_msgs::msg::PortObjectHeader::SharedPtr msg) {
+        topic, panel_util::data_qos(),
+        [this, topic](const umrr_ros2_msgs::msg::PortObjectHeader::SharedPtr msg) {
           port_objectheader_callback(msg, topic);
         });
     } else {
       subscription_ = node_->create_subscription<umrr_ros2_msgs::msg::CanObjectHeader>(
-        topic, 10, [this, topic](const umrr_ros2_msgs::msg::CanObjectHeader::SharedPtr msg) {
+        topic, panel_util::data_qos(),
+        [this, topic](const umrr_ros2_msgs::msg::CanObjectHeader::SharedPtr msg) {
           can_objectheader_callback(msg, topic);
         });
     }

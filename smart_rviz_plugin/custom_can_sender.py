@@ -19,9 +19,15 @@ def parse_frame(can_id_text, payload_texts):
     can_id = int(can_id_text, 16)
     if can_id > EXTENDED_ID_MAX:
         raise ValueError(f'CAN ID 0x{can_id:X} exceeds 29 bits')
-    # Leave empty trailing bytes out, so shorter frames (DLC < 8) can be sent.
-    data = [int(text, 16) for text in payload_texts if text]
-    if any(byte > 0xFF for byte in data):
+    # Empty trailing bytes shorten the frame (DLC < 8). An empty byte before a filled
+    # one would shift every later byte to a lower index, so it is an error.
+    texts = [text.strip() for text in payload_texts]
+    while texts and not texts[-1]:
+        texts.pop()
+    if '' in texts:
+        raise ValueError(f'payload byte {texts.index("")} is empty before a filled byte')
+    data = [int(text, 16) for text in texts]
+    if any(not 0 <= byte <= 0xFF for byte in data):
         raise ValueError('payload bytes must be 00..FF')
     return can_id, can_id > STANDARD_ID_MAX, data
 

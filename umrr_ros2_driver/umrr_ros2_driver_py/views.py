@@ -428,8 +428,12 @@ class RadarViews(Node):
         return response
 
     def guides(self):
-        header = self.header()
-        lines = Marker(header=header, ns='fan_guides', id=0, type=Marker.LINE_LIST)
+        # Latched once: a zero stamp and frame_locked make RViz use the latest sensor
+        # pose, so the guides follow a moving sensor in an odom/map fixed frame instead
+        # of a startup-time TF lookup that fails once it leaves the TF cache.
+        header = Header(frame_id=self.frame)
+        lines = Marker(header=header, ns='fan_guides', id=0, type=Marker.LINE_LIST,
+                       frame_locked=True)
         lines.pose.orientation.w = 1.0
         lines.scale.x = .025
         lines.color = ColorRGBA(r=.25, g=.5, b=.6, a=.65)
@@ -437,7 +441,7 @@ class RadarViews(Node):
 
         def label(text, x, y):
             marker = Marker(header=header, ns='fan_guides', id=len(markers),
-                            type=Marker.TEXT_VIEW_FACING, text=text)
+                            type=Marker.TEXT_VIEW_FACING, text=text, frame_locked=True)
             marker.pose.orientation.w = 1.0
             marker.pose.position = Point(x=float(x), y=float(y), z=.1)
             marker.scale.z = .35

@@ -8,10 +8,11 @@
 #include <QJsonObject>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
-#include <atomic>
 #include <cmath>
 #include <stdexcept>
 #include <pluginlib/class_list_macros.hpp>
+
+#include "panel_util.hpp"
 
 namespace smart_rviz_plugin
 {
@@ -159,7 +160,7 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   filter_speed_ = new QDoubleSpinBox(filtering);
   filter_speed_->setObjectName("filter_speed");
   filter_speed_->setRange(0, 30);
-  filter_speed_->setDecimals(2);
+  filter_speed_->setDecimals(3);
   filter_speed_->setSingleStep(.05);
   filter_speed_->setSuffix(" m/s");
   filter_speed_->setToolTip("Minimum absolute radial speed in Moving returns mode only.");
@@ -197,17 +198,16 @@ Umrr96Config::Umrr96Config(QWidget * parent) : rviz_common::Panel(parent)
   connect(filter_mode_, QOverload<int>::of(&QComboBox::currentIndexChanged),
     this, [this] {filter_dirty_ = true;});
   connect(filter_snr_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-    this, [this] {filter_dirty_ = true;});
+    this, [this](double value) {staged_snr_ = value; filter_dirty_ = true;});
   connect(filter_speed_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-    this, [this] {filter_dirty_ = true;});
+    this, [this](double value) {staged_speed_ = value; filter_dirty_ = true;});
   connect(decay_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
     this, [this](double value) {staged_decay_ = value; filter_dirty_ = true;});
   connect(filter_apply_, &QPushButton::clicked, this, &Umrr96Config::apply_filter);
   filter_apply_->setEnabled(false);
   layout->addStretch();
 
-  static std::atomic<unsigned> instance{0};
-  node_ = std::make_shared<rclcpp::Node>("umrr96_config_" + std::to_string(instance++),
+  node_ = std::make_shared<rclcpp::Node>(panel_util::unique_node_name("umrr96_config"),
     rclcpp::NodeOptions().use_global_arguments(false));
   getter_ = node_->create_client<GetMode>("/smart_radar/get_radar_mode");
   status_ = node_->create_client<GetStatus>("/smart_radar/get_radar_status");
@@ -318,6 +318,7 @@ void Umrr96Config::filter_status(const std::string & text)
   if (index < 0 || !data.value("min_snr_db").isDouble() ||
     !data.value("min_abs_speed").isDouble()) {return;}
   const auto decay = data.value("density_decay_seconds");
+  const bool decay_was_ready = decay_ready_;
   decay_ready_ = decay.isDouble() && std::isfinite(decay.toDouble()) &&
     decay.toDouble() >= .1 && decay.toDouble() <= 30;
   filter_actual_->setText(QString("Current: %1 · kept %2 / %3\nRejected: quality %4 · motion %5 · persistence %6")
@@ -327,17 +328,34 @@ void Umrr96Config::filter_status(const std::string & text)
   filter_actual_->setText(filter_actual_->text() + (decay_ready_ ?
     QString("\nDensity decay: %1 s").arg(decay.toDouble(), 0, 'f', 2) :
     "\nLive decay control needs the updated view node."));
-  if (!filter_ready_ || (!filter_dirty_ && !filter_pending_)) {
-    const QSignalBlocker mode_block(filter_mode_), snr_block(filter_snr_), speed_block(filter_speed_),
-      decay_block(decay_);
+  // Without pending edits every control shows the view node's values. With edits, the
+  // fields still equal to the previous report follow the node, so Apply never resends a
+  // stale value the user did not change.
+  const bool refresh = !filter_ready_ || (!filter_dirty_ && !filter_pending_);
+  const QSignalBlocker mode_block(filter_mode_), snr_block(filter_snr_), speed_block(filter_speed_),
+    decay_block(decay_);
+  if (refresh || filter_mode_->currentData().toString() == actual_filter_mode_) {
     filter_mode_->setCurrentIndex(index);
-    filter_snr_->setValue(data.value("min_snr_db").toDouble());
-    filter_speed_->setValue(data.value("min_abs_speed").toDouble());
-    if (decay_ready_) {
-      staged_decay_ = decay.toDouble();
-      decay_->setValue(staged_decay_);
-    }
   }
+  const double snr = data.value("min_snr_db").toDouble();
+  if (refresh || staged_snr_ == actual_snr_) {
+    staged_snr_ = snr;
+    filter_snr_->setValue(staged_snr_);
+  }
+  const double speed = data.value("min_abs_speed").toDouble();
+  if (refresh || staged_speed_ == actual_speed_) {
+    staged_speed_ = speed;
+    filter_speed_->setValue(staged_speed_);
+  }
+  // Decay cannot be edited while unsupported, so a newly supported value is taken as is.
+  if (decay_ready_ && (refresh || !decay_was_ready || staged_decay_ == actual_decay_)) {
+    staged_decay_ = decay.toDouble();
+    decay_->setValue(staged_decay_);
+  }
+  actual_filter_mode_ = mode;
+  actual_snr_ = snr;
+  actual_speed_ = speed;
+  if (decay_ready_) {actual_decay_ = decay.toDouble();}
   filter_ready_ = true;
 }
 
@@ -346,12 +364,28 @@ void Umrr96Config::apply_filter()
   if (filter_pending_ || !filter_setter_->service_is_ready()) {return;}
   using Service = rcl_interfaces::srv::SetParametersAtomically;
   auto request = std::make_shared<Service::Request>();
-  request->parameters = {
-    rclcpp::Parameter("filter_mode", filter_mode_->currentData().toString().toStdString()).to_parameter_msg(),
-    rclcpp::Parameter("filter_min_snr_db", filter_snr_->value()).to_parameter_msg(),
-    rclcpp::Parameter("filter_min_abs_speed", filter_speed_->value()).to_parameter_msg()};
-  if (decay_ready_) {
+  // Send only what was changed: a rounded copy of an unchanged filter value would look
+  // like a filter change to the view node and clear the history a decay edit keeps.
+  const auto mode = filter_mode_->currentData().toString();
+  if (mode != actual_filter_mode_) {
+    request->parameters.push_back(
+      rclcpp::Parameter("filter_mode", mode.toStdString()).to_parameter_msg());
+  }
+  if (staged_snr_ != actual_snr_) {
+    request->parameters.push_back(
+      rclcpp::Parameter("filter_min_snr_db", staged_snr_).to_parameter_msg());
+  }
+  if (staged_speed_ != actual_speed_) {
+    request->parameters.push_back(
+      rclcpp::Parameter("filter_min_abs_speed", staged_speed_).to_parameter_msg());
+  }
+  if (decay_ready_ && staged_decay_ != actual_decay_) {
     request->parameters.push_back(rclcpp::Parameter("decay_seconds", staged_decay_).to_parameter_msg());
+  }
+  if (request->parameters.empty()) {
+    filter_dirty_ = false;
+    filter_feedback_->setText("No view setting changes to apply.");
+    return;
   }
   filter_pending_ = true;
   filter_deadline_ = Clock::now() + std::chrono::seconds(3);

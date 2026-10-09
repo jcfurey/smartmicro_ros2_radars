@@ -21,6 +21,9 @@ SmartRadarRecorder::SmartRadarRecorder(QWidget * parent) : rviz_common::Panel(pa
 namespace
 {
 const char * const kSelect = "Select a Topic";
+// RCS is m^2 for every target cloud (CAN converted from dBsm since C47): values such as
+// 0.0032 m^2 need significant digits, not two decimals.
+QString rcs_text(float rcs) {return QString::number(rcs, 'g', 6);}
 bool is_radar_cloud(const std::string & name)
 {
   for (const char * kind : {"port_targets", "can_targets", "port_objects", "can_objects"}) {
@@ -182,7 +185,8 @@ void SmartRadarRecorder::subscribe_selected()
   if (selected_topic_.empty()) {return;}
   const std::string topic = selected_topic_;
   subscription_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
-    topic, 10, [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+    topic, panel_util::data_qos(),
+    [this, topic](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
       try {
         if (topic.find("port_targets") != std::string::npos) {
           port_target_callback(msg, topic);
@@ -202,42 +206,43 @@ void SmartRadarRecorder::subscribe_selected()
     });
 }
 
-bool SmartRadarRecorder::has_capacity()
+bool SmartRadarRecorder::has_capacity(std::size_t frame_rows)
 {
   const auto rows = target_recorded_data.size() + object_recorded_data.size();
-  if (rows < static_cast<std::size_t>(max_rows_->value())) {return true;}
-  finish_recording(QString("Recording stopped at the limit of %1 rows. Save or discard it.")
-    .arg(max_rows_->value()));
+  if (rows + frame_rows <= static_cast<std::size_t>(max_rows_->value())) {return true;}
+  finish_recording(QString("Recording stopped at the limit of %1 rows (whole frames only). "
+    "Save or discard it.").arg(max_rows_->value()));
   return false;
 }
 
-bool SmartRadarRecorder::update_target_recorded_data(
+bool SmartRadarRecorder::record_frame(const std::string & topic_name, std::size_t frame_rows)
+{
+  return recording_active_ && topic_name == recording_topic_ && has_capacity(frame_rows);
+}
+
+void SmartRadarRecorder::update_target_recorded_data(
   float range, float power, float azimuth_deg,
   float elevation_deg, float rcs, float noise, float snr, float radial_speed,
   float azimuth_angle, float elevation_angle, float variance_range, float variance_speed,
   float variance_azimuth_angle, float variance_elevation_angle, float false_alarm_probability,
   uint32_t flags, uint16_t peak_idx, uint32_t timestamp_sec, uint32_t timestamp_nanosec)
 {
-  if (!has_capacity()) {return false;}
   target_recorded_data.push_back(TargetData{
     range, power, azimuth_deg, elevation_deg, rcs, noise, snr, radial_speed, azimuth_angle,
     elevation_angle, variance_range, variance_speed, variance_azimuth_angle,
     variance_elevation_angle, false_alarm_probability, flags, peak_idx, timestamp_sec,
     timestamp_nanosec});
-  return true;
 }
 
-bool SmartRadarRecorder::update_object_recorded_data(
+void SmartRadarRecorder::update_object_recorded_data(
   float x_pos, float y_pos, float z_pos, float speed_abs,
   float heading, float length, float mileage, float quality, float acceleration,
   int16_t object_id, uint16_t idle_cycles, uint16_t spline_idx, uint8_t object_class,
   uint16_t status, uint32_t timestamp_sec, uint32_t timestamp_nanosec)
 {
-  if (!has_capacity()) {return false;}
   object_recorded_data.push_back(ObjectData{
     x_pos, y_pos, z_pos, speed_abs, heading, length, mileage, quality, acceleration, object_id,
     idle_cycles, spline_idx, object_class, status, timestamp_sec, timestamp_nanosec});
-  return true;
 }
 
 void SmartRadarRecorder::port_target_callback(
@@ -271,6 +276,8 @@ void SmartRadarRecorder::port_target_callback(
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_peak_idx(*msg, "peak_idx");
 
     const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    // Record whole frames only, so a capped CSV never ends with a partial frame.
+    const bool record = record_frame(topic_name, num_points);
     table_data_->setUpdatesEnabled(false);
     table_data_->setRowCount(static_cast<int>(num_points));
 
@@ -284,7 +291,7 @@ void SmartRadarRecorder::port_target_callback(
       double elevation_deg = *iter_elevation_angle * radToDeg;
 
       // Update the recorded data
-      if (recording_active_ && topic_name == recording_topic_) {
+      if (record) {
         update_target_recorded_data(
           *iter_range, *iter_power, azimuth_deg, elevation_deg, *iter_rcs,
           *iter_noise, *iter_snr, *iter_radial_speed, *iter_azimuth_angle,
@@ -302,7 +309,7 @@ void SmartRadarRecorder::port_target_callback(
         row_index, 3, new QTableWidgetItem(QString::number(*iter_radial_speed, 'f', 2)));
       table_data_->setItem(
         row_index, 4, new QTableWidgetItem(QString::number(*iter_power, 'f', 2)));
-      table_data_->setItem(row_index, 5, new QTableWidgetItem(QString::number(*iter_rcs, 'f', 2)));
+      table_data_->setItem(row_index, 5, new QTableWidgetItem(rcs_text(*iter_rcs)));
       table_data_->setItem(
         row_index, 6, new QTableWidgetItem(QString::number(*iter_noise, 'f', 2)));
       table_data_->setItem(row_index, 7, new QTableWidgetItem(QString::number(*iter_snr, 'f', 2)));
@@ -371,6 +378,8 @@ void SmartRadarRecorder::can_target_callback(
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_peak_idx(*msg, "peak_idx");
 
     const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    // Record whole frames only, so a capped CSV never ends with a partial frame.
+    const bool record = record_frame(topic_name, num_points);
     table_data_->setUpdatesEnabled(false);
     table_data_->setRowCount(static_cast<int>(num_points));
 
@@ -384,7 +393,7 @@ void SmartRadarRecorder::can_target_callback(
       double elevation_deg = *iter_elevation_angle * radToDeg;
 
       // Update the recorded data
-      if (recording_active_ && topic_name == recording_topic_) {
+      if (record) {
         update_target_recorded_data(
           *iter_range, *iter_power, azimuth_deg, elevation_deg, *iter_rcs,
           *iter_noise, *iter_snr, *iter_radial_speed, *iter_azimuth_angle,
@@ -402,7 +411,7 @@ void SmartRadarRecorder::can_target_callback(
         row_index, 3, new QTableWidgetItem(QString::number(*iter_radial_speed, 'f', 2)));
       table_data_->setItem(
         row_index, 4, new QTableWidgetItem(QString::number(*iter_power, 'f', 2)));
-      table_data_->setItem(row_index, 5, new QTableWidgetItem(QString::number(*iter_rcs, 'f', 2)));
+      table_data_->setItem(row_index, 5, new QTableWidgetItem(rcs_text(*iter_rcs)));
       table_data_->setItem(
         row_index, 6, new QTableWidgetItem(QString::number(*iter_noise, 'f', 2)));
       table_data_->setItem(row_index, 7, new QTableWidgetItem(QString::number(*iter_snr, 'f', 2)));
@@ -465,6 +474,8 @@ void SmartRadarRecorder::port_object_callback(
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_status(*msg, "status");
 
     const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    // Record whole frames only, so a capped CSV never ends with a partial frame.
+    const bool record = record_frame(topic_name, num_points);
     table_data_->setUpdatesEnabled(false);
     table_data_->setRowCount(static_cast<int>(num_points));
 
@@ -475,7 +486,7 @@ void SmartRadarRecorder::port_object_callback(
       double heading_deg = *iter_heading * radToDeg;
 
       // Update the recorded data
-      if (recording_active_ && topic_name == recording_topic_) {
+      if (record) {
         update_object_recorded_data(
           *iter_x, *iter_y, *iter_z, *iter_speed_absolute, *iter_heading,
           *iter_length, *iter_mileage, *iter_quality, *iter_acceleration,
@@ -539,6 +550,8 @@ void SmartRadarRecorder::can_object_callback(
     sensor_msgs::PointCloud2ConstIterator<uint16_t> iter_status(*msg, "status");
 
     const size_t num_points = static_cast<size_t>(msg->height) * msg->width;
+    // Record whole frames only, so a capped CSV never ends with a partial frame.
+    const bool record = record_frame(topic_name, num_points);
     table_data_->setUpdatesEnabled(false);
     table_data_->setRowCount(static_cast<int>(num_points));
 
@@ -546,8 +559,11 @@ void SmartRadarRecorder::can_object_callback(
                 ++iter_heading, ++iter_length, ++iter_quality, ++iter_acceleration,
                 ++iter_object_id, ++iter_mileage, ++iter_idle_cycles, ++iter_spline_idx,
                 ++iter_object_class, ++iter_status) {
+      // heading is rad for CAN objects too (converted by the driver since C2).
+      double heading_deg = *iter_heading * radToDeg;
+
       // Update the recorded data
-      if (recording_active_ && topic_name == recording_topic_) {
+      if (record) {
         update_object_recorded_data(
           *iter_x, *iter_y, *iter_z, *iter_speed_abs, *iter_heading, *iter_length,
           *iter_mileage, *iter_quality, *iter_acceleration, *iter_object_id, *iter_idle_cycles,
@@ -562,7 +578,7 @@ void SmartRadarRecorder::can_object_callback(
       table_data_->setItem(
         row_index, 3, new QTableWidgetItem(QString::number(*iter_speed_abs, 'f', 2)));
       table_data_->setItem(
-        row_index, 4, new QTableWidgetItem(QString::number(*iter_heading, 'f', 2)));
+        row_index, 4, new QTableWidgetItem(QString::number(heading_deg, 'f', 2)));
       table_data_->setItem(
         row_index, 5, new QTableWidgetItem(QString::number(*iter_length, 'f', 2)));
       table_data_->setItem(
@@ -608,7 +624,7 @@ void SmartRadarRecorder::update_table()
   } else if (selected_topic_.find("can_targets") != std::string::npos) {
     table_data_->setRowCount(0);
     table_data_->setHorizontalHeaderLabels(
-      {"X_pos [m]", "Y_pos [m]", "Z_pos [m]", "RadialSpeed [m/s]", "Power [dB]", "RCS [dB]",
+      {"X_pos [m]", "Y_pos [m]", "Z_pos [m]", "RadialSpeed [m/s]", "Power [dB]", "RCS [m^2]",
        "Noise [dB]", "SNR [dB]", "AzimuthAngle [Deg]", "ElevationAngle [Deg]", "Range [m]",
        "AzimuthAngle [rad]", "ElevationAngle [rad]", "VarRange", "VarSpeed",
        "VarAzimuthAngle", "VarElevationAngle", "FalseAlarmProb", "Flags", "PeakIdx"});
@@ -735,9 +751,13 @@ void SmartRadarRecorder::save_data()
 {
   bool data_saved = false;
   if (!target_recorded_data.empty() || !object_recorded_data.empty()) {
-    QFileDialog file_dialog;
-    QString file_path =
-      file_dialog.getSaveFileName(this, "Save Data", "", "CSV Files (*.csv);;All Files (*)");
+    // Tests set the "save_path" property to bypass the modal dialog.
+    QString file_path = property("save_path").toString();
+    if (file_path.isEmpty()) {
+      QFileDialog file_dialog;
+      file_path =
+        file_dialog.getSaveFileName(this, "Save Data", "", "CSV Files (*.csv);;All Files (*)");
+    }
 
     if (!file_path.isEmpty()) {
       QFile csvfile(file_path);
@@ -753,7 +773,7 @@ void SmartRadarRecorder::save_data()
             if (!wrote_port_target_header) {
               csv_writer
                 << "Type, Topic, Range [m], Power [dB], AzimuthAngle [Deg], ElevationAngle [Deg], "
-                   "RCS [dB], Noise [dB], SNR [dB], RadialSpeed [m/s], AzimuthAngle [rad], "
+                   "RCS [m^2], Noise [dB], SNR [dB], RadialSpeed [m/s], AzimuthAngle [rad], "
                    "ElevationAngle [rad], VarianceRange, VarianceSpeed, VarianceAzimuthAngle, "
                    "VarianceElevationAngle, FalseAlarmProbability, Flags, PeakIdx, "
                    "TimestampSec, TimestampNanoSec\n";
@@ -763,7 +783,7 @@ void SmartRadarRecorder::save_data()
             if (!wrote_can_target_header) {
               csv_writer
                 << "Type, Topic, Range [m], Power [dB], AzimuthAngle [Deg], ElevationAngle [Deg], "
-                   "RCS [dB], Noise [dB], SNR [dB], RadialSpeed [m/s], AzimuthAngle [rad], "
+                   "RCS [m^2], Noise [dB], SNR [dB], RadialSpeed [m/s], AzimuthAngle [rad], "
                    "ElevationAngle [rad], TimestampSec, TimestampNanoSec\n";
               wrote_can_target_header = true;
             }
@@ -776,7 +796,7 @@ void SmartRadarRecorder::save_data()
           data_str_list << QString::number(data_row.power, 'f', 2);
           data_str_list << QString::number(data_row.azimuth_angle * 180.0 / M_PI, 'f', 2);
           data_str_list << QString::number(data_row.elevation_angle * 180.0 / M_PI, 'f', 2);
-          data_str_list << QString::number(data_row.rcs, 'f', 2);
+          data_str_list << rcs_text(data_row.rcs);
           data_str_list << QString::number(data_row.noise, 'f', 2);
           data_str_list << QString::number(data_row.snr, 'f', 2);
           data_str_list << QString::number(data_row.radial_speed, 'f', 2);

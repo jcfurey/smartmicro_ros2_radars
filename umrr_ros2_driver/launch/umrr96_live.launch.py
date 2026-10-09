@@ -12,7 +12,8 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
-    DeclareLaunchArgument, EmitEvent, IncludeLaunchDescription, RegisterEventHandler)
+    DeclareLaunchArgument, EmitEvent, GroupAction, IncludeLaunchDescription,
+    RegisterEventHandler)
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
@@ -131,13 +132,15 @@ def generate_launch_description():
             target_action=rviz,
             on_exit=[EmitEvent(event=Shutdown(reason='RViz closed'))],
         )),
-        IncludeLaunchDescription(
+        # Scoped: include arguments become launch configurations of the enclosing
+        # context, so an unscoped rviz:=false would also switch off this file's RViz.
+        GroupAction(scoped=True, actions=[IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 FindPackageShare('smartmicro_description'),
                 'launch', 'umrr96_description.launch.py'])),
             condition=IfCondition(LaunchConfiguration('publish_description')),
-            # Explicit rviz:=false: launch arguments are shared with this unscoped include,
-            # so this file's rviz:=true would otherwise open a second, unmanaged RViz.
+            # Explicit rviz:=false: the scope still forwards this file's rviz:=true,
+            # which would otherwise open a second, unmanaged RViz.
             launch_arguments={
                 'frame_id': LaunchConfiguration('description_frame_id'),
                 'sensor_name': LaunchConfiguration('description_sensor_name'),
@@ -145,7 +148,7 @@ def generate_launch_description():
                 'use_sim_time': LaunchConfiguration('use_sim_time'),
                 'rviz': 'false',
             }.items(),
-        ),
+        )]),
         radar,
         readback,
         views,

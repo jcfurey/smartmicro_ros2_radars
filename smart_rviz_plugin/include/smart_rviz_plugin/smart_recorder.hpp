@@ -161,7 +161,7 @@ private:
   ///
   /// @brief      Function to handle the data recording for target topics.
   ///
-  bool update_target_recorded_data(
+  void update_target_recorded_data(
     float range, float power, float azimuth_deg,
     float elevation_deg, float rcs, float noise, float snr, float radial_speed,
     float azimuth_angle, float elevation_angle, float variance_range, float variance_speed,
@@ -171,7 +171,7 @@ private:
   ///
   /// @brief      Function to handle the data recording for objects topics.
   ///
-  bool update_object_recorded_data(
+  void update_object_recorded_data(
     float x_pos, float y_pos, float z_pos, float speed_abs,
     float heading, float length, float mileage, float quality, float acceleration,
     int16_t object_id, uint16_t idle_cycles, uint16_t spline_idx, uint8_t object_class,
@@ -183,8 +183,11 @@ private:
   /// Stop recording without a modal prompt and offer save/discard.
   void finish_recording(const QString & reason);
 
-  /// True while the recording is below the row cap; stops the recording at the cap.
-  bool has_capacity();
+  /// True if a frame of frame_rows fits under the row cap; otherwise stops the recording.
+  bool has_capacity(std::size_t frame_rows);
+
+  /// True if a frame on topic_name is to be recorded: recording it, and the whole frame fits.
+  bool record_frame(const std::string & topic_name, std::size_t frame_rows);
 
   /// (Re-)subscribe to the selected topic only.
   void subscribe_selected();
