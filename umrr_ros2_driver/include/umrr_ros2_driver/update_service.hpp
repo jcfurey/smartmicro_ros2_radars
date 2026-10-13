@@ -59,7 +59,9 @@ public:
   ///
   /// @brief  Constructs a firmware update service.
   ///
-  UpdateService();
+  /// @param[in]  timeout  Longest wait for a final status; the update is aborted after it.
+  ///
+  explicit UpdateService(std::chrono::seconds timeout = std::chrono::minutes(5));
   ~UpdateService() {callback_gate_.close();}
   ///
   /// @brief  Starts a firmware update and blocks until the sensor reports a
@@ -106,6 +108,7 @@ private:
   bool update_in_progress_{false};
   bool cancelled_{false};
   std::chrono::steady_clock::time_point last_progress_log_{};
+  std::chrono::seconds timeout_;
 };
 
 #endif  // UMRR_ROS2_DRIVER__UPDATE_SERVICE_HPP_

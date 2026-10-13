@@ -440,6 +440,7 @@ def _eth_adapter(**overrides):
     ({'sensor_0': _eth_sensor(link_type='can', model='umrr96_can_v1_2_2')}, {},
      "does not match the 'eth' adapter"),
     ({'sensor_0': _eth_sensor()}, {'instruction_timeout_ms': 50}, 'instruction_timeout_ms'),
+    ({'sensor_0': _eth_sensor()}, {'firmware_update_timeout_s': 30}, 'firmware_update_timeout_s'),
     ({'sensor_0': _eth_sensor(stamp_offset_s=-.01)}, {},
      'sensors.sensor_0.stamp_offset_s must be within 0..1 s'),
     ({'sensor_0': _eth_sensor(stamp_offset_s=1.5)}, {},

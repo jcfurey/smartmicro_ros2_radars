@@ -23,7 +23,8 @@
 
 using com::master::CommunicationServicesIface;
 
-UpdateService::UpdateService()
+UpdateService::UpdateService(std::chrono::seconds timeout)
+: timeout_(timeout)
 {
   callback_gate_.set_error_handler([](const std::string & message) {
       RCLCPP_ERROR(rclcpp::get_logger("FirmwareUpdater"), "%s", message.c_str());
@@ -116,13 +117,12 @@ UpdateResult UpdateService::StartSoftwareUpdate(
 
   // All bytes may be transferred while the sensor is still flashing: only a
   // non-RUNNING status ends the update, so the busy flag covers the flash phase.
-  constexpr auto kUpdateTimeout = std::chrono::minutes(5);
   bool finished = false;
   bool cancelled = false;
   {
     std::unique_lock<std::mutex> lock(mutex_);
     finished = cv_.wait_for(
-      lock, kUpdateTimeout, [this] {
+      lock, timeout_, [this] {
         return cancelled_ || updateInfo_.GetUpdateStatus() != com::types::RUNNING;
       });
     cancelled = cancelled_ && updateInfo_.GetUpdateStatus() == com::types::RUNNING;

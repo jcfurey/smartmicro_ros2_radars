@@ -426,6 +426,7 @@ private:
   uint64_t next_instruction_id_{};
   uint64_t instruction_timeouts_{};
   std::chrono::milliseconds instruction_timeout_{3000};
+  std::chrono::seconds firmware_update_timeout_{300};
   rclcpp::TimerBase::SharedPtr instruction_timer_;
   uint64_t reported_callback_exceptions_{};
 

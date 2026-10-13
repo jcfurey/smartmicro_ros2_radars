@@ -180,7 +180,7 @@ SmartmicroRadarNode::SmartmicroRadarNode(
     });
   try {
     update_config_files_from_params();
-    update_service = std::make_shared<UpdateService>();
+    update_service = std::make_shared<UpdateService>(firmware_update_timeout_);
 
     runtime_config_->activate();
     setup_diagnostics();
@@ -1345,6 +1345,23 @@ void SmartmicroRadarNode::update_config_files_from_params()
     throw std::invalid_argument("instruction_timeout_ms must be within 100..60000");
   }
   instruction_timeout_ = std::chrono::milliseconds(timeout_ms);
+
+  auto firmware_descriptor = startup_descriptor();
+  firmware_descriptor.description =
+    "Longest firmware_download wait for the sensor's final status [s]; the update is "
+    "aborted after it. Restart to change.";
+  rcl_interfaces::msg::IntegerRange firmware_range;
+  firmware_range.from_value = 60;
+  firmware_range.to_value = 3600;
+  firmware_descriptor.integer_range.push_back(firmware_range);
+  const auto firmware_timeout_s =
+    declare_parameter<int64_t>("firmware_update_timeout_s", 300, firmware_descriptor);
+  if (firmware_timeout_s < firmware_range.from_value ||
+    firmware_timeout_s > firmware_range.to_value)
+  {
+    throw std::invalid_argument("firmware_update_timeout_s must be within 60..3600");
+  }
+  firmware_update_timeout_ = std::chrono::seconds(firmware_timeout_s);
 
   const auto master_inst_serial_type = startup_parameter(*this, kInstSerialTypeTag, std::string{});
   const auto master_data_serial_type = startup_parameter(*this, kDataSerialTypeTag, std::string{});

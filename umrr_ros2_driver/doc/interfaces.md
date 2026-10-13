@@ -88,7 +88,9 @@ apply in any namespace. Individual topics can still be remapped, for example
 `-r smart_radar/port_targets_0:=points`.
 
 This and the next paragraphs describe the data node's services.
-`firmware_download` replies when the sensor reports a final status (minutes);
+`firmware_download` replies when the sensor reports a final status (minutes), or
+aborts the update after the startup parameter `firmware_update_timeout_s`
+(default 300, 60..3600);
 the update runs on a worker thread, so diagnostics and the other services keep
 running meanwhile. Service requests are validated completely before anything is
 sent: unknown sensor ids (including 0), non-numeric, negative, out-of-range or
