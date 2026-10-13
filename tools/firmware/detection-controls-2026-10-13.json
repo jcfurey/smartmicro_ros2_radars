@@ -1,0 +1,321 @@
+{
+  "date": "2026-10-13",
+  "firmware": "5.2.4",
+  "sensor_serial": 230739,
+  "scope": "Remaining detection-control map, corroborated by GET-only readback; behavioral names inferred from code, not recovered vendor names",
+  "source": {
+    "file": "results/umrr96-rea-20261013/decrypted-private/block-3-01076000.bin",
+    "sha256": "b72b5a5c1bc25952e07b7b5484e9c8dd68f3f357278d779c96d3d68ecd0a306e",
+    "descriptor_address_hex": "0x010bb66c",
+    "section": 3014,
+    "dimensions": 1,
+    "dimension_element_counts": [
+      1
+    ],
+    "parameter_row_count": 16,
+    "parameter_row_bytes": 28
+  },
+  "section3014_parameters": [
+    {
+      "id": 0,
+      "type": "u16",
+      "minimum": 1,
+      "maximum": 3,
+      "behavior_label_inferred_from_code": "Noise-method selector",
+      "observed_static_behavior": "direct dispatch 1/2/3 to 010969bc/01096e08/01097364",
+      "consumer_addresses": "0108e960",
+      "confidence": "high",
+      "current_value": 1,
+      "external_get_verified": true,
+      "external_set_verified": true
+    },
+    {
+      "id": 1,
+      "type": "u16",
+      "minimum": 0,
+      "maximum": 64,
+      "behavior_label_inferred_from_code": "Spectrum-edge exclusion count",
+      "observed_static_behavior": "Starts spectral-bin loop at this value and ends at N minus this value; default0 includes circular neighbors at both ends",
+      "consumer_addresses": "0108e5d4 -> 010952d4",
+      "confidence": "high",
+      "current_value": 0,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 2,
+      "type": "u16",
+      "minimum": 1,
+      "maximum": 8,
+      "behavior_label_inferred_from_code": "Spectrum sample stride for noise estimation",
+      "observed_static_behavior": "Noise estimators subsample spectral bins using this stride; sample count floor(N/stride)",
+      "consumer_addresses": "0108e5d4 -> 010969bc / 01096cdc / 01097198",
+      "confidence": "high",
+      "current_value": 2,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 3,
+      "type": "u16",
+      "minimum": 32,
+      "maximum": 1024,
+      "behavior_label_inferred_from_code": "Noise-order rank denominator",
+      "observed_static_behavior": "Rank numerator ID4 times subsampled count divided by ID3; also used by method3 extra rank ID5",
+      "consumer_addresses": "0108e5d4 -> 010969bc / 01096cdc / 01097198",
+      "confidence": "high",
+      "current_value": 64,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 4,
+      "type": "u16",
+      "minimum": 8,
+      "maximum": 1024,
+      "behavior_label_inferred_from_code": "Primary noise-order rank numerator",
+      "observed_static_behavior": "Method1 selected rank=max(1,min(n,floor(n*ID4/ID3)))-1; shared by methods2/3",
+      "consumer_addresses": "0108e5d4 -> 010969bc / 01096cdc / 01097198",
+      "confidence": "high",
+      "current_value": 25,
+      "external_get_verified": true,
+      "external_set_verified": true
+    },
+    {
+      "id": 5,
+      "type": "u16",
+      "minimum": 8,
+      "maximum": 1024,
+      "behavior_label_inferred_from_code": "Secondary noise-order rank numerator for method3",
+      "observed_static_behavior": "Used in method3 paired order statistics; method1 does not consume it, but shared builder validates it",
+      "consumer_addresses": "0108e5d4 -> 01097198",
+      "confidence": "high",
+      "current_value": 10,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 6,
+      "type": "u16",
+      "minimum": 2,
+      "maximum": 16,
+      "behavior_label_inferred_from_code": "Range-gate sampling/interpolation spacing",
+      "observed_static_behavior": "Method1 estimates every ID6 range gates and interpolates intermediate gates; methods2/3 reduce any value>=2 to step2",
+      "consumer_addresses": "0108e5d4 -> 010969bc / 01096e08 / 01097364",
+      "confidence": "high",
+      "current_value": 4,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 7,
+      "type": "u16",
+      "minimum": 1,
+      "maximum": 64,
+      "behavior_label_inferred_from_code": "First range gate used by method3",
+      "observed_static_behavior": "Method3 starts per-gate noise calculation at configword7; method1 does not consume it",
+      "consumer_addresses": "0108e5d4 -> 01097364",
+      "confidence": "high",
+      "current_value": 1,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 8,
+      "type": "u16",
+      "minimum": 1,
+      "maximum": 1024,
+      "behavior_label_inferred_from_code": "Mean-noise selection first range gate",
+      "observed_static_behavior": "Wrapper converts configured gate to offset relative to descriptor first gate; used by methods2/3, not method1",
+      "consumer_addresses": "0108e960 -> 01096e08 / 01097364",
+      "confidence": "high",
+      "current_value": 50,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 9,
+      "type": "u16",
+      "minimum": 1,
+      "maximum": 2048,
+      "behavior_label_inferred_from_code": "Mean-noise selection last range gate",
+      "observed_static_behavior": "Wrapper converts configured gate to bounded relative offset; used by methods2/3, not method1",
+      "consumer_addresses": "0108e960 -> 01096e08 / 01097364",
+      "confidence": "high",
+      "current_value": 100,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 10,
+      "type": "u16",
+      "minimum": 0,
+      "maximum": 2,
+      "behavior_label_inferred_from_code": "Unresolved selector",
+      "observed_static_behavior": "Registered metadata only; no clear consumer in reviewed builder, wrapper, noise algorithms or local-max worker",
+      "consumer_addresses": "metadata at 010bb4a8 + 10*28",
+      "confidence": "unresolved",
+      "current_value": 1,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 11,
+      "type": "u16",
+      "minimum": 0,
+      "maximum": 32000,
+      "behavior_label_inferred_from_code": "Zero spectral-bin range cutoff",
+      "observed_static_behavior": "When spectral-bin index==0, keeps peak only if actualRangeGate<ID11. Default1024 exceeds at most200 range-gate path. This is not candidate-capacity parameter",
+      "consumer_addresses": "0108e5d4 -> 010952d4",
+      "confidence": "high",
+      "current_value": 1024,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 101,
+      "type": "f32",
+      "minimum": 0.009999999776482582,
+      "maximum": 9.0,
+      "behavior_label_inferred_from_code": "Noise-estimate scalar",
+      "observed_static_behavior": "Q=trunc(128*ID101); scales order-statistic noise branch before per-range factors and independent floor",
+      "consumer_addresses": "0108e960 -> 010969bc",
+      "confidence": "high",
+      "current_value": 1.0,
+      "external_get_verified": true,
+      "external_set_verified": true
+    },
+    {
+      "id": 102,
+      "type": "f32",
+      "minimum": 9.999999747378752e-06,
+      "maximum": 35000.0,
+      "behavior_label_inferred_from_code": "Absolute threshold-floor factor",
+      "observed_static_behavior": "Truncated to unsigned integer before multiplication by spectrum scale; independent floor is floorf(trunc(ID102)*scale+0.5)",
+      "consumer_addresses": "0108e5d4 -> 010969bc -> 010b7630 / 010b2724",
+      "confidence": "high",
+      "current_value": 2.0,
+      "external_get_verified": true,
+      "external_set_verified": true
+    },
+    {
+      "id": 103,
+      "type": "f32",
+      "minimum": 0.0,
+      "maximum": 35000.0,
+      "behavior_label_inferred_from_code": "Optional maximum-spectrum divisor",
+      "observed_static_behavior": "Clamped to at least1.0. If resulting value>1.5, method1 floor=max(absoluteFloor, maximumSpectrum/trunc(value))",
+      "consumer_addresses": "0108e5d4 -> 010969bc",
+      "confidence": "high",
+      "current_value": 0.0,
+      "external_get_verified": true,
+      "external_set_verified": false
+    },
+    {
+      "id": 104,
+      "type": "f32",
+      "minimum": 0.10000000149011612,
+      "maximum": 35000.0,
+      "behavior_label_inferred_from_code": "Unresolved floating-point control",
+      "observed_static_behavior": "Registered metadata only; naming this a range-factor control is unsupported. Per-range factors are constructed from descriptor-supplied controlpoints by 0108e4c0, which never reads this field",
+      "consumer_addresses": "metadata; focused 0108e4c0 export",
+      "confidence": "unresolved",
+      "current_value": 5.0,
+      "external_get_verified": true,
+      "external_set_verified": false
+    }
+  ],
+  "coupled_validation": [
+    "ID5 < ID4",
+    "ID4 + ID5 <= ID3",
+    "The public metadata bounds alone are not sufficient for every combination.",
+    "Mean-noise gate selection in methods2/3 must span enough valid gates; existing guard functions reject unsuitable descriptors/range selections."
+  ],
+  "candidate_capacity": {
+    "proven": true,
+    "numeric_capacity": "unresolved descriptor-derived value",
+    "allocation_formula": "20*capacity + 0x24 bytes",
+    "append_order": "ascending range gates, then ascending spectrum bins",
+    "guard": "010952d4 while peakHeader.count<context.capacity",
+    "possible_explanation": "Lower threshold may fill candidates earlier and leave fewer usable targets after later validation; no observed candidate-overflow evidence yet."
+  },
+  "next_experiments": [
+    {
+      "priority": 1,
+      "parameters": [
+        "3014/6"
+      ],
+      "current_value": 4,
+      "purpose": "Investigate method1 range-noise sampling/interpolation; external SET access not yet tested"
+    }
+  ],
+  "public_sdk": {
+    "named_parameter_count": 29,
+    "no_filter_off_control_in_shipped_umrr96_interface": true,
+    "current_acquisition": {
+      "tx_antenna_idx": 0,
+      "frequency_sweep_idx": 2,
+      "prf_selector_manual": 0,
+      "range_toggle_mode": 0,
+      "velocity_gate_mps": [
+        -20,
+        20
+      ]
+    },
+    "remaining_acquisition_comparisons": [
+      "Manual PRF indices0,1,2 vs automatic",
+      "Range waveforms/toggling: coverage-resolution tradeoff"
+    ],
+    "limits": [
+      "Short-range1536MHz sweep is alreadyselected",
+      "Velocity-gate widening doesnotexplainlossofnearzerovelocitypoints",
+      "prf_set_selector onlysupportsset0",
+      "2010/4 angular_separation insharedmanualisdocumentedforUMRR11Type132, notthisUMRR96Type153"
+    ],
+    "antenna_comparisons_excluded_by_user": true
+  },
+  "unresolved": [
+    "Actual peakcandidatecapacity andlive saturation",
+    "3014/10 and3014/104 behavioralconsumer",
+    "Externalenablementofnoise/threshold/spectrumdiagnosticports",
+    "All-peaks/rawADCexportmode"
+  ],
+  "readback_evidence": "results/umrr96-rea-20261013/density-all-controls-readback.json",
+  "readback_sha256": "5edb13c55b0aa6760aab86457a0999facb90711d1deb93ce7d3f07db561ac4c1",
+  "all_settings_restored": {
+    "3014/0": 1,
+    "3014/101": 1.0,
+    "3014/102": 2.0,
+    "3014/103": 0.0
+  },
+  "user_constraints": [
+    "No antenna parameter changes; live writes restricted to verified internal detection controls"
+  ],
+  "completed_experiments": [
+    {
+      "parameters": [
+        "3014/0"
+      ],
+      "values": [
+        1,
+        2,
+        3
+      ],
+      "outcome": "Both writable; neither produced a clear density improvement over method1"
+    },
+    {
+      "parameters": [
+        "3014/4"
+      ],
+      "values": [
+        25,
+        16,
+        11
+      ],
+      "outcome": "Both writable; rank16 showed a small change within baseline variation, rank11 no gain"
+    }
+  ],
+  "latest_live_results": "tools/firmware/noise-estimator-results-2026-10-13.json",
+  "latest_final_readback": "results/umrr96-rea-20261013/noise-final-all-controls-readback.json",
+  "all16_internal_values_restored": true
+}

@@ -1,0 +1,175 @@
+{
+  "date": "2026-10-13",
+  "sensor_serial": 230739,
+  "firmware": "5.2.4",
+  "adapter": "Vector VN1630A CH1",
+  "interface": "can0",
+  "bitrate": 500000,
+  "scope": "Temporary internal threshold comparison with verified restoration; no save-to-flash, reset or firmware update",
+  "observed_internal_values": {
+    "3014/0": 1,
+    "3014/101": 1.0,
+    "3014/102": 2.0,
+    "3014/103": 0.0
+  },
+  "externally_verified_read_write_parameter": "3014/101, F32, dimension index0",
+  "written_candidate_values": [
+    0.9,
+    0.75,
+    0.5,
+    0.25
+  ],
+  "measured_scans": 1459,
+  "public_parameters_checked": 29,
+  "public_parameters_unchanged": true,
+  "runs": [
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/density-comparison-20261013T203926Z",
+      "capture_sha256": "9ffda66c29632b90d0aebf9322c91a267dfcd0667f48a997a98401ca5954b6cc",
+      "original_threshold": 1.0,
+      "restored_threshold": 1.0,
+      "restored_value_bits_hex": "0x3f800000",
+      "rx_errors_delta": 0,
+      "rx_drops_delta": 0,
+      "windows": [
+        {
+          "label": "baseline",
+          "threshold": 1.0,
+          "scans": 147,
+          "minimum": 21,
+          "median": 29,
+          "mean": 28.496598639455783,
+          "maximum": 34,
+          "scan_rate_hz": 18.158986517294274,
+          "complete_scans": 147
+        },
+        {
+          "label": "lower_0.9",
+          "threshold": 0.8999999761581421,
+          "scans": 146,
+          "minimum": 26,
+          "median": 30.0,
+          "mean": 30.589041095890412,
+          "maximum": 37,
+          "scan_rate_hz": 18.181396607210388,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_between",
+          "threshold": 1.0,
+          "scans": 146,
+          "minimum": 25,
+          "median": 31.0,
+          "mean": 31.36986301369863,
+          "maximum": 38,
+          "scan_rate_hz": 18.181577605775207,
+          "complete_scans": 146
+        },
+        {
+          "label": "lower_0.75",
+          "threshold": 0.75,
+          "scans": 146,
+          "minimum": 24,
+          "median": 31.0,
+          "mean": 30.45205479452055,
+          "maximum": 36,
+          "scan_rate_hz": 18.181295510481505,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_final",
+          "threshold": 1.0,
+          "scans": 146,
+          "minimum": 26,
+          "median": 32.0,
+          "mean": 31.568493150684933,
+          "maximum": 38,
+          "scan_rate_hz": 18.181400411947944,
+          "complete_scans": 145
+        }
+      ]
+    },
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/density-comparison-20261013T204103Z",
+      "capture_sha256": "a2513a1bfe1f939e179121f327754127ae93eb360e0de5fb242ad36405bf15d8",
+      "original_threshold": 1.0,
+      "restored_threshold": 1.0,
+      "restored_value_bits_hex": "0x3f800000",
+      "rx_errors_delta": 0,
+      "rx_drops_delta": 0,
+      "windows": [
+        {
+          "label": "baseline",
+          "threshold": 1.0,
+          "scans": 146,
+          "minimum": 24,
+          "median": 31.0,
+          "mean": 31.10958904109589,
+          "maximum": 38,
+          "scan_rate_hz": 18.18143900294742,
+          "complete_scans": 146
+        },
+        {
+          "label": "lower_0.5",
+          "threshold": 0.5,
+          "scans": 146,
+          "minimum": 26,
+          "median": 31.0,
+          "mean": 30.80821917808219,
+          "maximum": 38,
+          "scan_rate_hz": 18.181507488786448,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_between",
+          "threshold": 1.0,
+          "scans": 145,
+          "minimum": 24,
+          "median": 29,
+          "mean": 29.52413793103448,
+          "maximum": 36,
+          "scan_rate_hz": 18.09907652362993,
+          "complete_scans": 145
+        },
+        {
+          "label": "lower_0.25",
+          "threshold": 0.25,
+          "scans": 145,
+          "minimum": 17,
+          "median": 23,
+          "mean": 23.186206896551724,
+          "maximum": 30,
+          "scan_rate_hz": 18.042648154369463,
+          "complete_scans": 145
+        },
+        {
+          "label": "restored_final",
+          "threshold": 1.0,
+          "scans": 146,
+          "minimum": 24,
+          "median": 30.0,
+          "mean": 30.363013698630137,
+          "maximum": 37,
+          "scan_rate_hz": 18.181435198193714,
+          "complete_scans": 145
+        }
+      ]
+    }
+  ],
+  "outcome": "No clear density increase from tested scalar reductions; 0.25 produced fewer points in the observed scene",
+  "limits": [
+    "Eight-second sequential scene observations, not controlled target tests",
+    "Last scan of each raw capture ends during target frames; all other measured scans complete",
+    "Independent threshold floors and local maximum selection remain active",
+    "Floor parameters 3014/102 and 3014/103 were read only",
+    "No ADC or all-peaks output mode established",
+    "Internal replies must not be delivered to the current SDK hardware decoder"
+  ],
+  "protocol_evidence": {
+    "response_version": 5,
+    "response_success_code": 0,
+    "sdk_success_code": 1,
+    "response_crc": "CRC16-CCITT, initFFFF, three body frames only, little-endian field",
+    "sdk_sha256": "d114fec43c13c383d2e528124cca96cd5083503b4bbfd25d6896736c49198096"
+  }
+}

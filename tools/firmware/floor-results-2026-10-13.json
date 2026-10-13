@@ -1,0 +1,287 @@
+{
+  "date": "2026-10-13",
+  "sensor_serial": 230739,
+  "firmware": "5.2.4",
+  "interface": "can0",
+  "adapter": "Vector VN1630A CH1",
+  "bitrate": 500000,
+  "scope": "Temporary floor-only and combined floor/scalar comparisons with exact readback and restoration; no save-to-flash/reset/update",
+  "externally_verified_read_write": [
+    "3014/101",
+    "3014/102"
+  ],
+  "original_and_final_values": {
+    "3014/0": 1,
+    "3014/101": 1.0,
+    "3014/102": 2.0,
+    "3014/103": 0.0
+  },
+  "floor_metadata": {
+    "section": 3014,
+    "id": 102,
+    "type": "F32",
+    "dimension_index": 0,
+    "minimum": 9.999999747378752e-06,
+    "maximum": 35000.0,
+    "signature_hex": "0x1bf8c337"
+  },
+  "static_floor_semantics": "Processor truncatesF32 to unsignedinteger.0.5 givesinteger0, and floorf(integer*spectrum_scale+0.5) giveszero absolute-floor term. Noise-estimate branch and localmaximum selection remain.",
+  "floor_only_outcome": "No clear density increase at1.0 or0.5 withscalar1.0",
+  "combined_outcome": "Floor0.5/scalar0.5 medians31and32 vs surrounding original baselines29,30,30; about5\u20136% higher mean relative to neighboring baselines in this scene",
+  "measured_scans": 2188,
+  "all_measured_scans_complete": true,
+  "public_parameters_checked": 29,
+  "public_parameters_unchanged": true,
+  "runs": [
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/floor-comparison-20261013T204759Z",
+      "capture_sha256": "f0c1c4eb6eca007148fa49da6f489f62b20af8955aee65b1a200f92c70f85235",
+      "changed_parameters": [
+        "3014/102"
+      ],
+      "original_values": {
+        "3014/101": 1.0,
+        "3014/102": 2.0
+      },
+      "restored_values": {
+        "3014/101": 1.0,
+        "3014/102": 2.0
+      },
+      "rx_errors_delta": 0,
+      "rx_drops_delta": 0,
+      "windows": [
+        {
+          "label": "baseline",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 22,
+          "median": 29.0,
+          "mean": 29.102739726027398,
+          "maximum": 36,
+          "scan_rate_hz": 18.181370517624334,
+          "complete_scans": 146
+        },
+        {
+          "label": "lower_first",
+          "floor": 1.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 23,
+          "median": 30.0,
+          "mean": 29.883561643835616,
+          "maximum": 39,
+          "scan_rate_hz": 18.181424871013107,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_between",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 25,
+          "median": 31.0,
+          "mean": 32.02739726027397,
+          "maximum": 42,
+          "scan_rate_hz": 18.181418892124434,
+          "complete_scans": 146
+        },
+        {
+          "label": "lower_repeat",
+          "floor": 1.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 23,
+          "median": 30.0,
+          "mean": 30.226027397260275,
+          "maximum": 37,
+          "scan_rate_hz": 18.18148031180445,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_final",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 26,
+          "median": 32.0,
+          "mean": 31.931506849315067,
+          "maximum": 38,
+          "scan_rate_hz": 18.145068336458035,
+          "complete_scans": 146
+        }
+      ]
+    },
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/floor-comparison-20261013T204907Z",
+      "capture_sha256": "a03f58b33172b0f5273fa786707a612780a294de09b932bcad0b9c6b91d2baff",
+      "changed_parameters": [
+        "3014/102"
+      ],
+      "original_values": {
+        "3014/101": 1.0,
+        "3014/102": 2.0
+      },
+      "restored_values": {
+        "3014/101": 1.0,
+        "3014/102": 2.0
+      },
+      "rx_errors_delta": 0,
+      "rx_drops_delta": 0,
+      "windows": [
+        {
+          "label": "baseline",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 24,
+          "median": 31.0,
+          "mean": 31.28082191780822,
+          "maximum": 40,
+          "scan_rate_hz": 18.181484660116112,
+          "complete_scans": 146
+        },
+        {
+          "label": "lower_first",
+          "floor": 0.5,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 22,
+          "median": 31.0,
+          "mean": 31.30821917808219,
+          "maximum": 41,
+          "scan_rate_hz": 18.181416717984074,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_between",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 24,
+          "median": 31.0,
+          "mean": 30.746575342465754,
+          "maximum": 37,
+          "scan_rate_hz": 18.181425414548634,
+          "complete_scans": 146
+        },
+        {
+          "label": "lower_repeat",
+          "floor": 0.5,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 23,
+          "median": 30.0,
+          "mean": 29.91780821917808,
+          "maximum": 36,
+          "scan_rate_hz": 18.181458570277353,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_final",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 145,
+          "minimum": 25,
+          "median": 30,
+          "mean": 30.324137931034482,
+          "maximum": 37,
+          "scan_rate_hz": 18.05156578517182,
+          "complete_scans": 145
+        }
+      ]
+    },
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/floor-scalar-comparison-20261013T205046Z",
+      "capture_sha256": "52ca972fcb3b0a1feefe5515cc085cfab84f8bcacf82cadfbbc5239eba8d86d9",
+      "changed_parameters": [
+        "3014/102",
+        "3014/101"
+      ],
+      "original_values": {
+        "3014/101": 1.0,
+        "3014/102": 2.0
+      },
+      "restored_values": {
+        "3014/101": 1.0,
+        "3014/102": 2.0
+      },
+      "rx_errors_delta": 0,
+      "rx_drops_delta": 0,
+      "windows": [
+        {
+          "label": "baseline",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 145,
+          "minimum": 23,
+          "median": 29,
+          "mean": 28.70344827586207,
+          "maximum": 35,
+          "scan_rate_hz": 18.060599166684757,
+          "complete_scans": 145
+        },
+        {
+          "label": "lower_first",
+          "floor": 0.5,
+          "scalar": 0.5,
+          "scans": 146,
+          "minimum": 26,
+          "median": 31.0,
+          "mean": 31.21917808219178,
+          "maximum": 39,
+          "scan_rate_hz": 18.181487377811955,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_between",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 23,
+          "median": 30.0,
+          "mean": 30.26027397260274,
+          "maximum": 38,
+          "scan_rate_hz": 18.18142432747761,
+          "complete_scans": 146
+        },
+        {
+          "label": "lower_repeat",
+          "floor": 0.5,
+          "scalar": 0.5,
+          "scans": 146,
+          "minimum": 24,
+          "median": 32.0,
+          "mean": 31.58219178082192,
+          "maximum": 38,
+          "scan_rate_hz": 18.18149335674567,
+          "complete_scans": 146
+        },
+        {
+          "label": "restored_final",
+          "floor": 2.0,
+          "scalar": 1.0,
+          "scans": 146,
+          "minimum": 22,
+          "median": 30.0,
+          "mean": 29.78767123287671,
+          "maximum": 35,
+          "scan_rate_hz": 18.18143900294742,
+          "complete_scans": 146
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Eight-second sequential observations, not controlled target tests",
+    "Small combined change doesnot establish a substantial density gain",
+    "Independent noise threshold and local maximum selection remain active",
+    "No raw-ADC or all-peaks mode established"
+  ],
+  "static_evidence_paths": [
+    "results/umrr96-rea-20261013/density-control-pass/0108e5d4.asm.txt",
+    "results/umrr96-rea-20261013/density-analysis-20261013/010969bc.asm.txt",
+    "results/umrr96-rea-20261013/floor-helper-pass/010b7630.asm.txt",
+    "results/umrr96-rea-20261013/floor-helper-pass/truncation-callee/010b2724.asm.txt"
+  ]
+}

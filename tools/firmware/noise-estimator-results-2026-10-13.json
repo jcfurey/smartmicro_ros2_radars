@@ -1,0 +1,807 @@
+{
+  "date": "2026-10-13",
+  "firmware": "5.2.4",
+  "serial": 230739,
+  "interface": "can0",
+  "adapter": "Vector VN1630A CH1",
+  "bitrate": 500000,
+  "scope": "Temporary noise-algorithm, primary-rank and combined comparisons with original values restored; antenna changes explicitly excluded",
+  "user_constraint": "Do not change antenna parameters",
+  "antenna_writes": 0,
+  "all_acquisition_headers_unchanged": true,
+  "acquisition_setup_word": 49,
+  "acquisition_setup": {
+    "valid": true,
+    "tx_antenna_idx": 0,
+    "frequency_sweep_idx": 2,
+    "center_frequency_idx": 1
+  },
+  "original_and_final_values": {
+    "3014/0": 1,
+    "3014/3": 64,
+    "3014/4": 25,
+    "3014/5": 10,
+    "3014/101": 1.0,
+    "3014/102": 2.0,
+    "3014/103": 0.0
+  },
+  "internal_parameters_verified_restored": 16,
+  "public_parameters_verified_unchanged": 29,
+  "measured_scans": 2189,
+  "all_measured_scans_complete": true,
+  "rx_errors_delta": 0,
+  "rx_drops_delta": 0,
+  "outcome": {
+    "methods2_and3": "Both writable; neither produced a clear density improvement over method1",
+    "rank16_and11": "Both writable; rank16 showed a small change within baseline variation, rank11 no gain",
+    "combined_rank16_scalar0_5_floor0_5": "Small increase of about4\u20137% by mean compared with neighboring baseline windows; no major density gain or demonstrated improvement over prior scalar/floor combination"
+  },
+  "combined_paired_mean_changes": [
+    {
+      "label": "combined_first",
+      "mean": 31.34013605442177,
+      "neighboring_baseline_mean": 30.104511100614076,
+      "percent_increase": 4.104451155768785
+    },
+    {
+      "label": "combined_repeat",
+      "mean": 32.49315068493151,
+      "neighboring_baseline_mean": 30.284246575342465,
+      "percent_increase": 7.293904783444538
+    }
+  ],
+  "runs": [
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/method-comparison-20261013T211233Z",
+      "capture_sha256": "8c1b2be210a003644f06a890bc6bd85db953a82fd949625057c504874843f090",
+      "set_parameters": [
+        0
+      ],
+      "restored": true,
+      "acquisition_setup": 49,
+      "antenna_writes": 0,
+      "verified_set_values": [
+        {
+          "id": 0,
+          "value": 2
+        },
+        {
+          "id": 0,
+          "value": 1
+        },
+        {
+          "id": 0,
+          "value": 3
+        },
+        {
+          "id": 0,
+          "value": 1
+        }
+      ],
+      "windows": [
+        {
+          "label": "baseline",
+          "method": 1,
+          "scans": 145,
+          "minimum": 26,
+          "median": 31,
+          "mean": 31.66896551724138,
+          "maximum": 37,
+          "scan_rate_hz": 18.098950153822255,
+          "complete_scans": 145,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.56,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.3200000000000074,
+              "median": 0.0,
+              "maximum": 0.3199999999999932
+            },
+            "power": {
+              "minimum": 112,
+              "median": 127.0,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 91.5,
+              "median": 94.5,
+              "maximum": 96.5
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -2.3999999999999986,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0
+        },
+        {
+          "label": "method_2",
+          "method": 2,
+          "scans": 146,
+          "minimum": 26,
+          "median": 30.0,
+          "mean": 30.404109589041095,
+          "maximum": 36,
+          "scan_rate_hz": 18.181394976609067,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.56,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.04000000000000625,
+              "median": 0.0,
+              "maximum": 0.0
+            },
+            "power": {
+              "minimum": 112,
+              "median": 127,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 87.5,
+              "median": 94.5,
+              "maximum": 97.5
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.0,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0
+        },
+        {
+          "label": "restored_between",
+          "method": 1,
+          "scans": 146,
+          "minimum": 25,
+          "median": 32.0,
+          "mean": 31.89041095890411,
+          "maximum": 40,
+          "scan_rate_hz": 18.181492813206077,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.56,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.35999999999999943,
+              "median": 0.0,
+              "maximum": 1.3999999999999915
+            },
+            "power": {
+              "minimum": 112,
+              "median": 127.0,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 91.5,
+              "median": 94.5,
+              "maximum": 96.5
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -2.3999999999999986,
+              "maximum": 30.6
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0
+        },
+        {
+          "label": "method_3",
+          "method": 3,
+          "scans": 146,
+          "minimum": 21,
+          "median": 32.0,
+          "mean": 32.14383561643836,
+          "maximum": 38,
+          "scan_rate_hz": 18.17902765198167,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 8.88,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.3200000000000074,
+              "median": 0.0,
+              "maximum": 0.35999999999999943
+            },
+            "power": {
+              "minimum": 111,
+              "median": 127,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 87.5,
+              "median": 95.0,
+              "maximum": 97.5
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -2.5999999999999996,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0
+        },
+        {
+          "label": "restored_final",
+          "method": 1,
+          "scans": 146,
+          "minimum": 27,
+          "median": 34.0,
+          "mean": 34.23972602739726,
+          "maximum": 41,
+          "scan_rate_hz": 18.18144878660712,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 8.88,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.1600000000000108,
+              "median": 0.0,
+              "maximum": 0.19999999999998863
+            },
+            "power": {
+              "minimum": 112,
+              "median": 127,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 91.0,
+              "median": 95.0,
+              "maximum": 97.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -2.0,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0
+        }
+      ]
+    },
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/rank-comparison-20261013T211523Z",
+      "capture_sha256": "c78cc745f204ad4afd687be7268db8fa2c348d4e9983326c674775214f51c94e",
+      "set_parameters": [
+        4
+      ],
+      "restored": true,
+      "acquisition_setup": 49,
+      "antenna_writes": 0,
+      "verified_set_values": [
+        {
+          "id": 4,
+          "value": 16
+        },
+        {
+          "id": 4,
+          "value": 25
+        },
+        {
+          "id": 4,
+          "value": 11
+        },
+        {
+          "id": 4,
+          "value": 25
+        }
+      ],
+      "windows": [
+        {
+          "label": "baseline",
+          "method": 1,
+          "scans": 146,
+          "minimum": 24,
+          "median": 30.0,
+          "mean": 30.301369863013697,
+          "maximum": 36,
+          "scan_rate_hz": 18.181459113814896,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.56,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.20000000000000284,
+              "median": 0.0,
+              "maximum": 0.03999999999999204
+            },
+            "power": {
+              "minimum": 112,
+              "median": 125.0,
+              "maximum": 158
+            },
+            "noise": {
+              "minimum": 91.5,
+              "median": 94.5,
+              "maximum": 96.5
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -2.799999999999999,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 25,
+          "denominator": 64
+        },
+        {
+          "label": "rank_16",
+          "method": 1,
+          "scans": 146,
+          "minimum": 25,
+          "median": 33.0,
+          "mean": 32.294520547945204,
+          "maximum": 37,
+          "scan_rate_hz": 18.181397694278097,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 10.24,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": 0.0,
+              "median": 0.0,
+              "maximum": 0.0
+            },
+            "power": {
+              "minimum": 112,
+              "median": 125,
+              "maximum": 158
+            },
+            "noise": {
+              "minimum": 90.5,
+              "median": 93.5,
+              "maximum": 95.5
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.3999999999999986,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 16,
+          "denominator": 64
+        },
+        {
+          "label": "restored_between",
+          "method": 1,
+          "scans": 145,
+          "minimum": 25,
+          "median": 32,
+          "mean": 32.4551724137931,
+          "maximum": 39,
+          "scan_rate_hz": 18.090083726346574,
+          "complete_scans": 145,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.64,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.4000000000000057,
+              "median": 0.0,
+              "maximum": 0.4399999999999977
+            },
+            "power": {
+              "minimum": 111,
+              "median": 125.0,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 91.0,
+              "median": 94.5,
+              "maximum": 96.5
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.3999999999999986,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 25,
+          "denominator": 64
+        },
+        {
+          "label": "rank_11",
+          "method": 1,
+          "scans": 147,
+          "minimum": 22,
+          "median": 30,
+          "mean": 29.74829931972789,
+          "maximum": 36,
+          "scan_rate_hz": 18.18140852028828,
+          "complete_scans": 147,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.24,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -1.0799999999999983,
+              "median": 0.0,
+              "maximum": 0.3199999999999932
+            },
+            "power": {
+              "minimum": 111,
+              "median": 125,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 89.0,
+              "median": 93.0,
+              "maximum": 95.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.5999999999999996,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 11,
+          "denominator": 64
+        },
+        {
+          "label": "restored_final",
+          "method": 1,
+          "scans": 146,
+          "minimum": 23,
+          "median": 30.0,
+          "mean": 29.753424657534246,
+          "maximum": 37,
+          "scan_rate_hz": 18.181684141149812,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.56,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.0799999999999983,
+              "median": 0.0,
+              "maximum": 0.3199999999999932
+            },
+            "power": {
+              "minimum": 112,
+              "median": 125.0,
+              "maximum": 161
+            },
+            "noise": {
+              "minimum": 91.0,
+              "median": 95.0,
+              "maximum": 97.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.5999999999999996,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 25,
+          "denominator": 64
+        }
+      ]
+    },
+    {
+      "evidence_directory": "results/umrr96-rea-20261013/rank-combined-comparison-20261013T211744Z",
+      "capture_sha256": "315d5d174b0245b30ed5ec8deef80249f2ccb8ee8bf84305c4ae9c88876dfc27",
+      "set_parameters": [
+        4,
+        101,
+        102
+      ],
+      "restored": true,
+      "acquisition_setup": 49,
+      "antenna_writes": 0,
+      "verified_set_values": [
+        {
+          "id": 4,
+          "value": 16
+        },
+        {
+          "id": 102,
+          "value": 0.5
+        },
+        {
+          "id": 101,
+          "value": 0.5
+        },
+        {
+          "id": 4,
+          "value": 25
+        },
+        {
+          "id": 102,
+          "value": 2.0
+        },
+        {
+          "id": 101,
+          "value": 1.0
+        },
+        {
+          "id": 4,
+          "value": 16
+        },
+        {
+          "id": 102,
+          "value": 0.5
+        },
+        {
+          "id": 101,
+          "value": 0.5
+        },
+        {
+          "id": 101,
+          "value": 1.0
+        },
+        {
+          "id": 102,
+          "value": 2.0
+        },
+        {
+          "id": 4,
+          "value": 25
+        }
+      ],
+      "windows": [
+        {
+          "label": "baseline",
+          "method": 1,
+          "scans": 145,
+          "minimum": 26,
+          "median": 31,
+          "mean": 30.517241379310345,
+          "maximum": 36,
+          "scan_rate_hz": 18.112812532950528,
+          "complete_scans": 145,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.52,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.20000000000000284,
+              "median": 0.0,
+              "maximum": 0.47999999999998977
+            },
+            "power": {
+              "minimum": 112,
+              "median": 127,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 91.0,
+              "median": 95.0,
+              "maximum": 97.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.3999999999999986,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 25,
+          "denominator": 64
+        },
+        {
+          "label": "combined_first",
+          "method": 1,
+          "scans": 147,
+          "minimum": 25,
+          "median": 31,
+          "mean": 31.34013605442177,
+          "maximum": 37,
+          "scan_rate_hz": 18.158870744599287,
+          "complete_scans": 147,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.52,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.0799999999999983,
+              "median": 0.0,
+              "maximum": 0.5600000000000023
+            },
+            "power": {
+              "minimum": 105,
+              "median": 126,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 84.0,
+              "median": 88.0,
+              "maximum": 90.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.0,
+              "maximum": 36.0
+            }
+          },
+          "floor": 0.5,
+          "scalar": 0.5,
+          "rank": 16,
+          "denominator": 64
+        },
+        {
+          "label": "restored_between",
+          "method": 1,
+          "scans": 146,
+          "minimum": 24,
+          "median": 29.0,
+          "mean": 29.69178082191781,
+          "maximum": 38,
+          "scan_rate_hz": 18.181394433075358,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.76,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.5200000000000102,
+              "median": 0.0,
+              "maximum": 0.519999999999996
+            },
+            "power": {
+              "minimum": 112,
+              "median": 126,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 91.0,
+              "median": 94.5,
+              "maximum": 97.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -2.1999999999999993,
+              "maximum": 36.0
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 25,
+          "denominator": 64
+        },
+        {
+          "label": "combined_repeat",
+          "method": 1,
+          "scans": 146,
+          "minimum": 26,
+          "median": 32.0,
+          "mean": 32.49315068493151,
+          "maximum": 40,
+          "scan_rate_hz": 18.18140747789334,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.52,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -1.7199999999999989,
+              "median": 0.0,
+              "maximum": 1.759999999999991
+            },
+            "power": {
+              "minimum": 105,
+              "median": 126.0,
+              "maximum": 160
+            },
+            "noise": {
+              "minimum": 84.0,
+              "median": 88.0,
+              "maximum": 90.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -3.799999999999999,
+              "maximum": 36.0
+            }
+          },
+          "floor": 0.5,
+          "scalar": 0.5,
+          "rank": 16,
+          "denominator": 64
+        },
+        {
+          "label": "restored_final",
+          "method": 1,
+          "scans": 146,
+          "minimum": 24,
+          "median": 31.0,
+          "mean": 30.876712328767123,
+          "maximum": 38,
+          "scan_rate_hz": 18.181452591366515,
+          "complete_scans": 146,
+          "quality": {
+            "range_m": {
+              "minimum": 0.4,
+              "median": 9.84,
+              "maximum": 19.2
+            },
+            "radial_speed_mps": {
+              "minimum": -0.35999999999999943,
+              "median": 0.0,
+              "maximum": 0.9200000000000017
+            },
+            "power": {
+              "minimum": 111,
+              "median": 126.0,
+              "maximum": 159
+            },
+            "noise": {
+              "minimum": 91.0,
+              "median": 95.0,
+              "maximum": 97.0
+            },
+            "rcs": {
+              "minimum": -15.0,
+              "median": -4.199999999999999,
+              "maximum": 31.6
+            }
+          },
+          "floor": 2.0,
+          "scalar": 1.0,
+          "rank": 25,
+          "denominator": 64
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Eight-second sequential scene observations, not controlled target experiments",
+    "No raw-ADC/all-peaks mode established",
+    "No save-to-flash, reboot or firmware-update command was sent",
+    "Peakcandidatecapacity is descriptor-defined; its numeric value and saturation remainunresolved"
+  ],
+  "final_internal_readback": "results/umrr96-rea-20261013/noise-final-all-controls-readback.json",
+  "final_public_snapshot": "results/umrr96-rea-20261013/noise-public-after/snapshot-before.json"
+}

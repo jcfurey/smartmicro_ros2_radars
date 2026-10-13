@@ -9,8 +9,10 @@ attempt refuses a current application version other than 5.2.2.
 The original SDK handles the download protocol, encryption and flash operation.
 No vendor library is modified. The runner requires the original XML SHA-256
 `a1b98c9149868d3b3dbb853bdb6b4d2d222bb0390562f3e29d713ca6f6cc7f61`.
-Firmware images, packet captures, recovered firmware and Ghidra projects stay
-under the repository's Git-ignored `results/` directory.
+Firmware images, packet captures, recovered firmware and exported analysis stay
+under the repository's Git-ignored `results/` directory. The Ghidra installation
+and saved project are stored outside the workspace; their current locations
+are documented in [the analysis notes](../../docs/umrr96-firmware-update-20261013.md#ghidra-workspace-cleanup).
 
 Run from this repository root, after extracting the Smart Access SDK:
 
@@ -71,3 +73,12 @@ The successful evidence is in
 The compact, versioned [verification result](results-2026-10-13.json) records the
 image digest, all segment lengths, unchanged settings and post-update checks.
 See [the update and analysis](../../docs/umrr96-firmware-update-20261013.md).
+
+The subsequent detection-tuning experiments are recorded separately in
+[the control map](detection-controls-2026-10-13.json),
+[scalar results](density-results-2026-10-13.json),
+[floor results](floor-results-2026-10-13.json) and
+[noise-estimator results](noise-estimator-results-2026-10-13.json).
+All tested values were restored; antenna changes are excluded by the operator.
+The private serializer sources, raw CAN captures and exact instruction
+transcripts remain inside the repository's ignored `results/` directory.

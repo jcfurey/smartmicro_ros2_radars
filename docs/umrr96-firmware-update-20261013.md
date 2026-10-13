@@ -244,6 +244,214 @@ check.
 
 ## Outcome and remaining checks
 
+### Internal detection controls found in a further decompile pass
+
+The absence of threshold controls in the public SDK does not establish their
+absence inside the firmware. A further read-only saved-project analysis found
+section **3014**, registered by the `peak_det.c` initialization path. Its
+descriptor is at `0x010bb66c`, with 16 parameter rows at `0x010bb4a8` and one
+array dimension containing one element (index 0).
+
+| Internal parameter | Type | Binary default | Declared bounds | Confirmed consumer |
+| --- | --- | --- | --- | --- |
+| 3014 / 0 | U16 | 1 | 1–3 | `0x0108e960` selects one of the three noise-threshold routines |
+| 3014 / 101 | F32 | 1.0 | approximately 0.01–9.0 | The same function scales this value by 128 and supplies it to noise/peak processing |
+
+These defaults were recovered from flash. The subsequent live tests below
+confirmed the current values and external access. The threshold scalar does
+not establish a command to disable all detection filtering or export
+ADC/spectrum data.
+
+A fixed GET-only CAN probe first verified public reads, then received a raw
+reply for internal section 3016 / parameter 1 with value 2 (matching the sweep).
+Following that internal reply, both the probe and live SDK ROS decoder exited
+with SIGSEGV; the exact crash location was not traced. Section 3014 was not
+queried. The CAN driver was restored and verified receiving 56 raw clouds and
+55 fan clouds in three seconds. Raw CAN capture and MCAP recording continued
+through the decoder outage, then were finalized when the operator powered the
+radar off. No parameter writes were sent.
+
+Detailed source hashes, rows, decompilation and remaining questions are retained
+in `results/umrr96-rea-20261013/density-findings.json` and its adjacent exports.
+That initial failure required a response path that avoids unknown sections in
+the SDK decoder.
+
+### Live internal-control comparison after power-up
+
+The follow-up used the original SDK only on localhost to serialize fixed
+requests. A separate Python SocketCAN process sent those frames on `can0` and
+validated the raw replies, with all SDK hardware receivers stopped. Reads
+verified serial 230739, firmware patch 4, section 3014 / 0 = **1**, and
+3014 / 101 = **1.0**. The wire success status is 0, mapped by the SDK to success
+1. The version-5 response CRC covers the three body frames, excludes the header,
+and uses CRC16-CCITT with initial value `0xffff`, stored little-endian.
+
+Two bounded comparisons temporarily wrote only section 3014 / 101. Every SET
+returned success and was followed by a GET confirming the exact F32 bits. Each
+measurement covered eight seconds after a one-second settling interval; the
+original value was restored between candidates and at the end of each run.
+
+| Run | Threshold sequence | Median detections per scan, in sequence |
+| --- | --- | --- |
+| First | 1.0 → 0.9 → 1.0 → 0.75 → 1.0 | 29 → 30 → 31 → 31 → 32 |
+| Second | 1.0 → 0.5 → 1.0 → 0.25 → 1.0 | 31 → 31 → 29 → 23 → 30 |
+
+Across **1,459 measured scans**, no tested reduction produced a clear density
+increase over the surrounding baseline windows. The 0.25 window had fewer
+reported detections. These are short sequential observations of the current
+scene, not a controlled target experiment. The output noise field also changed,
+so this control should not be treated as a pure export filter.
+
+Capture checks found no CAN errors or interface drops, consecutive scan
+counters, and approximately 18 Hz acquisition. All measurement scans were
+complete except the last scan in each raw capture, where recording stopped
+during its target frames. Both final GETs confirmed **1.0 (`0x3f800000`)**.
+All 29 public parameters matched the post-update snapshot; no save-to-flash,
+reboot or firmware-update command was sent during these comparisons.
+
+A further static check explains why lowering 101 need not lower every final
+threshold. In method 1, `0x0108e5d4` converts **3014 / 102** to an unsigned
+integer; `0x010969bc` uses it to build a separate absolute floor. Parameter
+**3014 / 103**, internally clamped to at least 1.0, can impose an additional
+maximum-spectrum floor above 1.5. The final threshold takes the maximum of the
+noise branch times a range factor and that floor. Final readbacks were **102 =
+2.0** and **103 = 0.0**; neither was written. Local-maximum selection still
+follows threshold generation. Which stage limits density in this scene remains
+unresolved.
+
+The compact [live result](../tools/firmware/density-results-2026-10-13.json)
+records restoration, window statistics and capture hashes. Full raw CAN,
+instruction transcripts, offline serializer sources and analysis are retained
+under `results/umrr96-rea-20261013/density-comparison-20261013T203926Z/` and
+`density-comparison-20261013T204103Z/`, alongside the earlier decompile exports.
+External read/write access to this internal scalar is now established; a
+configuration that yields substantially more points, or delegates all radar
+filtering to ROS, is not established by these tests.
+
+### Separate floor and combined controls
+
+The next live pass confirmed external read/write access to **3014 / 102**.
+Its F32 metadata bounds are approximately 0.00001–35000, signature
+`0x1bf8c337`, and initial value 2.0. The processing builder truncates this
+parameter to an unsigned integer. Focused read-only exports of `0x010b7630`
+and `0x010b2724` confirmed the floor/float-truncation helpers: setting 102 to
+0.5 produces integer zero and a zero absolute-floor term, while the independent
+noise-estimate threshold remains active.
+
+The measurements held method 1 and the additional floor control 103 = 0.0.
+Each window again covered eight seconds after settling, with exact SET/GET
+readback and restoration between candidates.
+
+| Test | (floor 102, scalar 101) sequence | Median detections per scan |
+| --- | --- | --- |
+| Reduced floor | (2, 1) → (1, 1) → (2, 1) → (1, 1) → (2, 1) | 29 → 30 → 31 → 30 → 32 |
+| Zero absolute-floor term | (2, 1) → (0.5, 1) → (2, 1) → (0.5, 1) → (2, 1) | 31 → 31 → 31 → 30 → 30 |
+| Combined reduction | (2, 1) → (0.5, 0.5) → (2, 1) → (0.5, 0.5) → (2, 1) | 29 → 31 → 30 → 32 → 30 |
+
+The floor-only tests produced no clear density gain. The combined test yielded
+approximately 5–6% more detections by mean than each window's neighboring
+baseline means. This is a small observed improvement in the current scene,
+not a demonstrated substantial increase or an all-detections mode.
+
+All **2,188 measured scans** were complete, with consecutive scan counters,
+approximately 18 Hz acquisition and zero CAN errors/drops. Final independent
+reads verified **102 = 2.0** and **101 = 1.0**, plus method 1 and 103 = 0.0.
+All 29 public parameters matched the preceding snapshot. No save-to-flash,
+reset or update command was sent. See the compact
+[floor result](../tools/firmware/floor-results-2026-10-13.json); raw captures,
+serializer sources, instruction transcripts and analysis remain under
+`results/umrr96-rea-20261013/floor-comparison-*` and
+`floor-scalar-comparison-*`.
+
+### Remaining SDK and internal tuning leads
+
+A subsequent GET-only snapshot successfully read **all 16 section-3014
+parameters**, confirming their current values rather than assuming the flash
+defaults. The remaining useful leads are behavioral descriptions inferred from
+actual consumers, not recovered vendor parameter names:
+
+| Control | Current value | Established behavior |
+| --- | --- | --- |
+| 3014 / 0 | 1 | Selects three distinct noise-estimation algorithms; subsequent live comparisons are recorded below |
+| 3014 / 3 and 4 | 64 and 25 | Denominator and primary numerator for the selected noise-order rank |
+| 3014 / 6 | 4 | Method-1 range sampling interval, with interpolation between noise estimates |
+| 3014 / 8 and 9 | 50 and 100 | Mean-noise range window used by methods 2 and 3 |
+
+The rank settings are coupled: ID5 must be less than ID4, and ID4 + ID5 must
+not exceed ID3. All 16 parameters are readable over CAN. The follow-up
+comparisons below additionally establish SET access for method 0 and primary
+rank 4, alongside scalar 101 and floor 102.
+
+Two apparent extra filters are already unrestrictive: ID1 = 0 excludes no
+spectrum-edge bins, and ID11 = 1024 does not reject spectral-bin-zero peaks
+within the reviewed ≤200-range-gate path. **ID11 is not a candidate-count
+limit.** The actual local-maximum worker at `0x010952d4` stops appending when
+the descriptor-defined peak buffer is full. Its initializer at `0x01092444`
+checks `20 * capacity + 0x24` bytes. The numeric capacity and live saturation
+remain unresolved; this is a possible explanation for non-monotonic final
+point counts, not an observed overflow.
+
+The user has excluded antenna changes from further experiments. The public
+SDK's 29 named parameters also offer manual PRF indices 0–2. The current
+1536 MHz short-range waveform is already the highest-bandwidth option in the
+shipped UIF. Widening the ±20 m/s validation interval does not explain missing
+near-stationary returns. The shared manual's `angular_separation` setting is
+documented for Type 132, not this Type 153. There is no named filter-off control
+in the delivered Type-153 interface.
+
+IDs 10 and 104 remain unmapped; in particular, the reviewed range-factor
+interpolation helper does **not** establish that ID104 controls that factor.
+See [the control map](../tools/firmware/detection-controls-2026-10-13.json) for
+current values, confidence, constraints and remaining experiments. These final
+reads sent no writes; method 1, scalar 1.0 and floor 2.0 remain restored.
+
+### Noise-algorithm and rank comparisons with antenna settings fixed
+
+The next authorized pass explicitly excluded antenna changes. Fixed SDK
+requests were again serialized on localhost and sent through the independent
+raw-CAN path. The first comparison wrote only **3014 / 0**, confirming that
+methods 2 and 3 are externally writable. The second wrote only **3014 / 4**,
+confirming primary-rank values 16 and 11 while denominator 3 = 64 and secondary
+numerator 5 = 10 stayed fixed. Both candidates satisfy the coupled validation
+constraints. Each experiment restored its original value between candidates.
+
+| Test | Setting sequence | Median detections per scan |
+| --- | --- | --- |
+| Noise algorithm | 1 → 2 → 1 → 3 → 1 | 31 → 30 → 32 → 32 → 34 |
+| Primary rank, denominator 64 | 25 → 16 → 25 → 11 → 25 | 30 → 33 → 32 → 30 → 30 |
+| (rank, scalar, floor) | (25, 1, 2) → (16, 0.5, 0.5) → (25, 1, 2) → (16, 0.5, 0.5) → (25, 1, 2) | 31 → 31 → 29 → 32 → 31 |
+
+Neither alternative algorithm showed a clear density gain. Rank 16 showed a
+small increase within the variation seen in the surrounding baseline windows;
+rank 11 showed no gain. The combined change produced approximately 4.1% and
+7.3% more detections by mean than the respective neighboring baseline means.
+This remains a modest scene-specific change and does not establish an
+improvement over the earlier scalar/floor combination alone.
+
+All **2,189 measured scans** were complete with consecutive counters and zero
+CAN errors/drops. Every acquisition-setup word remained **49**: valid, antenna
+0, sweep 2, center-frequency index 1. Auditing the instruction transcripts
+confirmed **zero antenna writes**: every SET was in section 3014 and restricted
+to IDs 0, 4, 101 and 102. Final independent reads matched all 16 original
+internal values, and all 29 public parameters matched the preceding snapshot.
+Method 1, rank 25, scalar 1.0 and floor 2.0 are restored; no save, reset or
+firmware-update command was sent.
+
+See the compact
+[noise-estimator results](../tools/firmware/noise-estimator-results-2026-10-13.json)
+for window statistics, exact writes, acquisition checks and capture hashes.
+Full evidence remains under `results/umrr96-rea-20261013/method-comparison-*`,
+`rank-comparison-*` and `rank-combined-comparison-*`.
+
+A bounded capacity follow-up confirmed that the peak limit comes from an
+input-port descriptor at packet offset `0x20`, rather than a demonstrated SDK
+parameter. Its numeric value and saturation remain unresolved; see
+`results/umrr96-rea-20261013/capacity-followup.json`. Range-noise sampling
+control 3014 / 6 remains untested live. Antenna changes remain excluded from
+future experiments.
+
+### Verified update outcome
+
 The attempted Smart Access update path did not start an update on this unit
 from 5.2.2 over Ethernet: its start request was not answered, so nothing was
 written in those Ethernet attempts (C75). The CAN bootloader procedure completed
@@ -259,3 +467,24 @@ capture before claiming it is resolved.
 For an application-mode sensor, arm the CAN updater before the single planned
 power cycle needed to enter the vendor's bootloader phase. Once a transfer has
 started, keep power connected; a partial transfer cannot be assumed harmless.
+
+## Ghidra workspace cleanup
+
+The Ghidra installation and saved database were relocated outside the workspace
+on 2026-10-13. Analysis exports, source hashes, firmware inputs, CAN captures and
+tuning results remain in this repository's ignored `results/` directory.
+
+| Item | Current local path |
+| --- | --- |
+| Ghidra 12.1.4 installation | `/home/jcfurey/.local/opt/ghidra_12.1.4_PUBLIC` |
+| Saved project directory | `/home/jcfurey/GhidraProjects/umrr96_v524` |
+| Project name | `umrr96_v524` |
+| REA launcher | `/home/jcfurey/.local/bin/rea-radar` |
+
+The launcher and retained `rea-session.mjs` now use the relocated installation.
+The empty workspace `.local-tools/` directory was removed and is ignored to
+prevent future tool installations appearing as repository content. All saved
+project-file hashes and the installation inventory were verified after the
+move. The relocation manifest is
+`results/umrr96-rea-20261013/ghidra-workspace-cleanup.json`; historical logs keep
+the paths that were valid when those records were created.
