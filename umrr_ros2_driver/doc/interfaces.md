@@ -90,8 +90,11 @@ apply in any namespace. Individual topics can still be remapped, for example
 This and the next paragraphs describe the data node's services.
 `firmware_download` replies when the sensor reports a final status (minutes), or
 aborts the update after the startup parameter `firmware_update_timeout_s`
-(default 300, 60..3600);
-the update runs on a worker thread, so diagnostics and the other services keep
+(default 300, 60..3600). On a UMRR-96 with firmware 5.2.2 the update cannot
+start over Ethernet: the sensor does not answer the SDK's start request, and the
+service reports a timeout after about a minute without writing anything (see
+[firmware update attempt](../../docs/umrr96-firmware-update-20261013.md)).
+The update runs on a worker thread, so diagnostics and the other services keep
 running meanwhile. Service requests are validated completely before anything is
 sent: unknown sensor ids (including 0), non-numeric, negative, out-of-range or
 non-finite values, empty name lists and names or types the sensor's interface
@@ -234,7 +237,9 @@ timestamp anomaly (repeated, backwards or zero) and `OK` otherwise. Before
 still reported `OK`.
 
 The device timestamp behind these checks and `RadarTiming.device_timestamp_us` is
-the generic port header timestamp for Ethernet lists. For CAN lists the SDK fills
+the generic port header timestamp for Ethernet lists: per the vendor's Ethernet
+interface manual, the start of data acquisition in µs of the sensor clock, which
+starts at 0 at power-up unless a smartmicro time master sets it. For CAN lists the SDK fills
 the port header with its own host receive time (`system_clock` µs, written when it
 assembles the port; no CAN signal maps to it), so CAN target lists use the
 acquisition time of their list header instead: `TimeStamp` [s] +
@@ -407,6 +412,11 @@ non-number is rejected at startup with the parameter named.
 | `flags` | uint32 | Vendor bit field; UINT32_MAX where unavailable. |
 | `peak_idx` | uint16 | Index into the vendor peak list; UINT16_MAX where unavailable. |
 | `intensity` | float32 | Only with `intensity_field` set: a second name for that field (below). |
+
+For UMRR-96 Ethernet targets the vendor's Ethernet interface manual (V07)
+documents range, speed, angles, RCS, power and noise; the positions decoded as
+the four variances, `false_alarm_probability`, `flags` and `peak_idx` are marked
+Reserved there, so treat them as unverified raw values.
 
 `sensors.sensor_N.intensity_field` (startup, default empty: no alias) set to
 `power`, `rcs`, `snr` or `noise` adds a field named `intensity` to the target

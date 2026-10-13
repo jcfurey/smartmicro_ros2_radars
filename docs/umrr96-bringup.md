@@ -480,8 +480,11 @@ Invalid requests, sensor rejections, and timeouts return `success: false` with a
 error description. The default reply timeout is two seconds, controlled by
 `/smart_radar_readback.timeout_ms`. Calls are handled sequentially.
 
-This firmware responds to **CAN-format instructions over Ethernet**. Port-format
-instructions did not receive replies. However, configuring the same SDK client
+With Smart Access 3.13.0, this firmware (5.2.2) is usable through **CAN-format
+instructions over Ethernet**. Port-format instructions are answered (about 65 ms)
+but the SDK rejects the replies and reports a timeout; the 5.2.4 changelog's
+instruction-port sequence-counter change addresses this (captured 2026-10-13, see
+[firmware update attempt](umrr96-firmware-update-20261013.md)). However, configuring the same SDK client
 for CAN instructions prevented it from decoding target-list port 66. The launch
 file therefore runs a separate readback process on host UDP port 55556, with its
 own temporary SDK configuration. The original data process keeps port-format

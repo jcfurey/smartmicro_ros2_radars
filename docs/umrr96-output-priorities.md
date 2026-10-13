@@ -157,6 +157,27 @@ Vendor questions to resolve before implementing native optional outputs:
 5. What is the acquisition timestamp epoch/unit and relation to target processing
    latency? How are synchronization lock, loss and clock reset reported?
 
+Partial answers from the vendor manuals in the 5.2.4 firmware bundle (Ethernet
+Interface V07, Radar Synchronization V01; see the
+[firmware update attempt](umrr96-firmware-update-20261013.md)), 2026-10-13:
+
+- (2, 5) The port-header timestamp is the start of data acquisition (start of the
+  radar ramp) in microseconds of the sensor's global time. Without a time master
+  that clock starts at 0 at power-up; a master's time can be set with section 1000
+  commands 350 (seconds) and 351 (fraction), applied with an uncompensated delay.
+  Time synchronization is smartmicro's own protocol (master multicast or CAN
+  every 5 s, firmware 5.0.0 or later), not PTP. Disturbances interrupt radar
+  operation for 0.5 s or more; no explicit lock or loss status was found.
+  Processing latency is not specified.
+- (4) Acquisition-setup bits: bit 0 valid (bits 1–6 only meaningful when set),
+  bits 1–2 TX antenna index, 3–4 sweep index, 5–6 centre-frequency index, 7–31
+  reserved. The documented Ethernet target list defines range, speed, azimuth,
+  elevation, RCS (m²), power and noise (dB); the positions the SDK interface
+  decodes as variances, false-alarm probability, flags and peak index are
+  **Reserved** in the vendor manual. They stay unverified, as published.
+- The radial-speed sign is not stated in either manual (O14).
+- Questions 1 and 3 remain open.
+
 ## 3. Raw quality without invented confidence
 
 The optional `smart_radar/umrr96_raw_quality_N` topic contains
