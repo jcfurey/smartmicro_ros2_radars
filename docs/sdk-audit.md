@@ -247,6 +247,27 @@ still need vendor or hardware validation.
 5. Explore optional sensor-clock synchronization as a separate hardware experiment
    with explicit quality/fallback reporting.
 
+## Offline firmware follow-up (2026-10-13)
+
+REA/Ghidra inspection and isolated SDK replay confirmed that the observed 5.2.2
+port-format instruction timeout comes from the reply's sequence-counter byte
+order. Correcting only that counter changes the captured reply from a timeout
+to `SUCCESS`, without changing the SDK. The existing CAN-format readback process
+remains the workaround; the unanswered update-start request is a separate issue.
+
+The recovered 5.2.4 firmware also confirms the documented acquisition-setup
+packing and writes constant zero into the target field that the SDK exposes as
+false-alarm probability. That output path provides no per-target Pfa confidence.
+Variance calibration and flag meanings remain unresolved, and these static
+5.2.4 findings do not establish every runtime path. The sensor was subsequently
+updated from 5.2.2 to 5.2.4 over the CAN bootloader, preserving all 29 saved
+parameters. Unmodified SDK Ethernet `port_based` reads then returned all 14
+statuses and 29 parameters successfully; the earlier instruction-correlation
+failure no longer occurs in that verification. The separate readback process
+remains in the launch files pending a combined data/control check. See the
+[firmware analysis](umrr96-firmware-update-20261013.md#offline-sdk-and-firmware-analysis)
+for exact addresses, reproduction results and artifact provenance.
+
 ## Primary evidence
 
 - [Installed bundle lockfile](../umrr_ros2_driver/smartmicro/SmartAccessAutomotivelinux.lock)

@@ -3,6 +3,7 @@ smart_rviz_plugin/include/smart_rviz_plugin/smart_session_recorder.hpp
 build
 install
 log
+/results/
 *.pyc
 umrr_ros2_driver/__pycache__
 simulator/simulation/build_dir

@@ -14,7 +14,7 @@ showed it repeatedly requesting its receiver address via ARP.
 | Wire client ID | `0x00038553` (`230739` decimal), matching label suffix `8553` |
 | Target-list port version | `2.1` |
 | Readback receiver | `192.168.11.17:55556` |
-| Firmware readback | `5.2.2` |
+| Firmware readback | `5.2.2` at bringup; updated to `5.2.4` on 2026-10-13 |
 
 ## Start the driver
 
@@ -147,6 +147,48 @@ The [ROS 2 improvement plan](ros2-improvements.md) tracks validation and remaini
 optimization, namespace, lifecycle and integration work.
 
 ## Live RViz view
+
+### CAN capture with 2D and 3D views (2026-10-13)
+
+VN1630A hardware CH1 is SocketCAN `can0`, configured at 500 kbit/s. The bench
+profile [`radar.params.umrr96_38553_can.yaml`](../umrr_ros2_driver/param/radar.params.umrr96_38553_can.yaml)
+selects `umrr96_can_v1_2_2`, serial 230739 and CAN-format data/instructions. CAN
+network ID 0 comes from the driver routing template. Run one data driver:
+
+```bash
+ros2 launch umrr_ros2_driver radar.launch.py \
+  params_file:="$PWD/src/smartmicro_ros2_radars/umrr_ros2_driver/param/radar.params.umrr96_38553_can.yaml"
+```
+
+With the Ethernet driver/readback stopped, the CAN run delivered finite 3D
+clouds at 18.18 Hz, continuous scan counters, and the derived fan image at 10 Hz.
+No host CAN frames were transmitted, and receive error/drop counters did not
+increase. Two RViz instances show the top-down fan and an oblique 3D cloud.
+The views node must consume `smart_radar/can_targets_0`, and each raw-cloud
+display must use that topic instead of `smart_radar/port_targets_0`.
+
+The active session's configurations, screenshots, raw SocketCAN log and MCAP
+recording are inside this repository at `results/umrr96-can-live-20261013/`.
+It starts no Ethernet readback node and sends no configuration writes. Record
+only the CAN-derived ROS messages and sensor transforms on ROS 2 Lyrical with:
+
+```bash
+ros2 bag record -s mcap -o /path/to/new_bag --topics \
+  /smart_radar/can_targets_0 /smart_radar/can_targetheader_0 \
+  /smart_radar/timing_0 /tf /tf_static
+```
+
+For the corresponding wire capture:
+
+```bash
+candump -L -d -r 1048576 can0,0:0,#FFFFFFFF > /path/to/can-frames.log
+```
+
+CAN carries position, radial speed, signal level, noise and RCS. The shared
+cloud layout still contains the variance/probability/flags fields, but CAN
+does not provide those values; their sentinels are not measured quality.
+
+### Ethernet live view
 
 After adding the secondary host address and sourcing the workspace as above,
 start the data driver, parameter readback node, derived views, and RViz together:
@@ -480,16 +522,26 @@ Invalid requests, sensor rejections, and timeouts return `success: false` with a
 error description. The default reply timeout is two seconds, controlled by
 `/smart_radar_readback.timeout_ms`. Calls are handled sequentially.
 
-With Smart Access 3.13.0, this firmware (5.2.2) is usable through **CAN-format
+With Smart Access 3.13.0, firmware 5.2.2 is usable through **CAN-format
 instructions over Ethernet**. Port-format instructions are answered (about 65 ms)
 but the SDK rejects the replies and reports a timeout; the 5.2.4 changelog's
-instruction-port sequence-counter change addresses this (captured 2026-10-13, see
+instruction-port sequence-counter change addresses this. Offline SDK replay
+isolated the 5.2.2 reply's incorrect sequence-counter byte order: correcting
+only that counter changes a timeout into a successful callback (2026-10-13, see
 [firmware update attempt](umrr96-firmware-update-20261013.md)). However, configuring the same SDK client
 for CAN instructions prevented it from decoding target-list port 66. The launch
 file therefore runs a separate readback process on host UDP port 55556, with its
 own temporary SDK configuration. The original data process keeps port-format
 decoding on UDP port 55555. Instruction replies return to the readback socket;
 the sensor's data destination does not change.
+
+On 2026-10-13, the original vendor 5.2.4 firmware was installed over VN1630A
+CH1 (`can0`) during the bootloader phase. The SDK needed the host transmit queue
+increased from 10 to 4096 frames. CAN and Ethernet port-format reads then
+confirmed 5.2.4 and all 29 saved parameters unchanged; CAN target output
+continued at 18.18 Hz. See the [update and verification](umrr96-firmware-update-20261013.md#can-bootloader-attempt).
+The launch still uses the separate control process; combined data/control
+operation has not been rechecked on 5.2.4.
 
 The readback node supports UMRR-96 Type 153 interface 1.2.2 and one sensor per
 process. Its host interface, addresses, ports, sensor ID, and timeout are set in

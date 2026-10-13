@@ -1,0 +1,106 @@
+{
+  "sensor_serial": 230739,
+  "original_firmware": "5.2.2",
+  "verified_firmware": "5.2.4",
+  "transport": "VN1630A CH1 / can0",
+  "bitrate": 500000,
+  "can_network_id": 0,
+  "original_xml_sha256": "a1b98c9149868d3b3dbb853bdb6b4d2d222bb0390562f3e29d713ca6f6cc7f61",
+  "image_bytes": 817704,
+  "segments": [
+    {
+      "segment": 1,
+      "declared_bytes": 393336,
+      "acknowledged_bytes": 393336
+    },
+    {
+      "segment": 2,
+      "declared_bytes": 200,
+      "acknowledged_bytes": 200
+    },
+    {
+      "segment": 3,
+      "declared_bytes": 49504,
+      "acknowledged_bytes": 49504
+    },
+    {
+      "segment": 4,
+      "declared_bytes": 298600,
+      "acknowledged_bytes": 298600
+    },
+    {
+      "segment": 5,
+      "declared_bytes": 216,
+      "acknowledged_bytes": 216
+    },
+    {
+      "segment": 6,
+      "declared_bytes": 7392,
+      "acknowledged_bytes": 7392
+    },
+    {
+      "segment": 7,
+      "declared_bytes": 63240,
+      "acknowledged_bytes": 63240
+    },
+    {
+      "segment": 8,
+      "declared_bytes": 216,
+      "acknowledged_bytes": 216
+    },
+    {
+      "segment": 9,
+      "declared_bytes": 5000,
+      "acknowledged_bytes": 5000
+    }
+  ],
+  "initial_can_attempt": {
+    "status": "STOPPED_BY_ERROR_TIMEOUT",
+    "elapsed_s": 32.930239985,
+    "first_block_transmitted_frames": 28,
+    "acknowledged_bytes": 0,
+    "host_txqueuelen": 10
+  },
+  "successful_can_attempt": {
+    "status": "READY_SUCCESS",
+    "elapsed_s": 122.8223936,
+    "host_txqueuelen": 4096,
+    "sdk_write_errors": 0,
+    "parameters_preserved": 29,
+    "parameter_changes": {},
+    "ethernet_port_based_readback": {
+      "success": true,
+      "parameters_checked": 29,
+      "statuses_checked": 14,
+      "parameters_match_can_snapshot": true,
+      "unmodified_sdk": true
+    },
+    "interface": {
+      "bus_error_delta": 16,
+      "final_state": "ERROR-ACTIVE",
+      "final_error_counters": {
+        "tx": 0,
+        "rx": 0
+      },
+      "tx_drops_delta": 0
+    }
+  },
+  "post_update_can": {
+    "frames": 15710,
+    "scans": 218,
+    "complete_scans": 217,
+    "target_detections": 7498,
+    "acquisition_rate_hz": 18.181411442250823,
+    "counter_steps": {
+      "1": 217
+    },
+    "error_frames": 0,
+    "interface_rx_drops_delta": 0,
+    "interface_rx_errors_delta": 0,
+    "incomplete_scan_indices": [
+      217
+    ]
+  },
+  "evidence_directory": "results/umrr96-can-update-20261013/attempt-20261013T173635Z",
+  "private_artifacts_in_git": false
+}

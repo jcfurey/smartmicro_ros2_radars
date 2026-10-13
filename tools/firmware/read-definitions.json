@@ -1,0 +1,178 @@
+{
+  "parameters": [
+    {
+      "name": "tx_antenna_idx",
+      "type": "u8"
+    },
+    {
+      "name": "center_frequency_idx",
+      "type": "u8"
+    },
+    {
+      "name": "frequency_sweep_idx",
+      "type": "u8"
+    },
+    {
+      "name": "range_toggle_mode",
+      "type": "u8"
+    },
+    {
+      "name": "prf_selector_manual",
+      "type": "u8"
+    },
+    {
+      "name": "prf_set_selector",
+      "type": "u8"
+    },
+    {
+      "name": "prf_manual_value_idx",
+      "type": "u8"
+    },
+    {
+      "name": "tv_min_speed_sweep_idx_0",
+      "type": "f32"
+    },
+    {
+      "name": "tv_min_speed_sweep_idx_1",
+      "type": "f32"
+    },
+    {
+      "name": "tv_min_speed_sweep_idx_2",
+      "type": "f32"
+    },
+    {
+      "name": "tv_max_speed_sweep_idx_0",
+      "type": "f32"
+    },
+    {
+      "name": "tv_max_speed_sweep_idx_1",
+      "type": "f32"
+    },
+    {
+      "name": "tv_max_speed_sweep_idx_2",
+      "type": "f32"
+    },
+    {
+      "name": "output_control_target_list_can",
+      "type": "u8"
+    },
+    {
+      "name": "output_control_object_list_can",
+      "type": "u8"
+    },
+    {
+      "name": "output_control_target_list_eth",
+      "type": "u8"
+    },
+    {
+      "name": "output_control_object_list_eth",
+      "type": "u8"
+    },
+    {
+      "name": "ip_source_address",
+      "type": "u32"
+    },
+    {
+      "name": "subnet_mask",
+      "type": "u32"
+    },
+    {
+      "name": "ip_dest_address",
+      "type": "u32"
+    },
+    {
+      "name": "ip_dest_port",
+      "type": "u16"
+    },
+    {
+      "name": "sync_mode",
+      "type": "u8"
+    },
+    {
+      "name": "sync_slave_identifier",
+      "type": "u8"
+    },
+    {
+      "name": "sync_group_identifier",
+      "type": "u8"
+    },
+    {
+      "name": "sync_nof_devices_1st_group",
+      "type": "u8"
+    },
+    {
+      "name": "sync_nof_devices_2nd_group",
+      "type": "u8"
+    },
+    {
+      "name": "sync_interface",
+      "type": "u8"
+    },
+    {
+      "name": "time_sync_mode",
+      "type": "u8"
+    },
+    {
+      "name": "time_sync_nof_devices",
+      "type": "u8"
+    }
+  ],
+  "statuses": [
+    {
+      "name": "auto_interface_version_major",
+      "type": "u32"
+    },
+    {
+      "name": "auto_interface_version_minor",
+      "type": "u32"
+    },
+    {
+      "name": "sw_generation",
+      "type": "u16"
+    },
+    {
+      "name": "sw_version_major",
+      "type": "u16"
+    },
+    {
+      "name": "sw_version_minor",
+      "type": "u16"
+    },
+    {
+      "name": "sw_version_patch",
+      "type": "u16"
+    },
+    {
+      "name": "customer_id",
+      "type": "u16"
+    },
+    {
+      "name": "product_serial",
+      "type": "u32"
+    },
+    {
+      "name": "product_gen",
+      "type": "u32"
+    },
+    {
+      "name": "product_mod_high",
+      "type": "u32"
+    },
+    {
+      "name": "product_mod_low",
+      "type": "u32"
+    },
+    {
+      "name": "product_rev",
+      "type": "u32"
+    },
+    {
+      "name": "systime_low_dword",
+      "type": "u32"
+    },
+    {
+      "name": "systime_high_dword",
+      "type": "u32"
+    }
+  ]
+}
